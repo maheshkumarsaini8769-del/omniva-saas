@@ -124,7 +124,7 @@ export const MerchantDashboard = () => {
       settings: 'Store Settings'
     };
     const currentTitle = pageTitles[activeTab] || 'Merchant Dashboard';
-    document.title = `${currentTitle} | Bizora Merchant`;
+    document.title = `${currentTitle} | Omniva Merchant`;
   }, [activeTab]);
   const mainContentRef = useRef(null);
   const [storePreviewDevice, setStorePreviewDevice] = useState('desktop');
@@ -421,8 +421,8 @@ export const MerchantDashboard = () => {
     {
       id: 'msg_welcome',
       sender: 'ai',
-      time: 'Abhi',
-      text: 'Hello Mahesh! I am your **Bizora AI Business Copilot 2.0**. I have analyzed your store **Desi Achar House** across past 30 days revenue (₹54,200), Meta Ads (Instagram vs Facebook), inventory levels, and COD order trends.\n\nYou can ask me questions such as:\n• "Which pickle variety has the highest profit margin?"\n• "Which Meta ad platform delivers the highest ROAS?"\n• "How do I reduce COD order RTO return risk?"\n• "How much stock should we prepare for the festive season?"'
+      time: 'Just now',
+      text: 'Hello Mahesh! I am your **Omniva AI Business Copilot 2.0**. I have analyzed your store **Desi Achar House** across past 30 days revenue (₹54,200), Meta Ads (Instagram vs Facebook), inventory levels, and COD order trends.\n\nYou can ask me questions such as:\n• "Which pickle variety has the highest profit margin?"\n• "Which Meta ad platform delivers the highest ROAS?"\n• "How do I reduce COD order RTO return risk?"\n• "How much stock should we prepare for the festive season?"'
     }
   ]);
 
@@ -2902,16 +2902,19 @@ export const MerchantDashboard = () => {
           setActiveTab(id);
           setMobileSidebarOpen(false);
         }}
-        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium cursor-pointer text-left transition-all duration-150 ${
           isActive
-            ? 'bg-[#5046e5] text-white shadow-md shadow-indigo-600/30 font-semibold'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/90'
+            ? 'bg-indigo-50/90 text-indigo-700 font-semibold border border-indigo-100/80 shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 border border-transparent'
         }`}
       >
         <div className="flex items-center gap-3 truncate">
-          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+          <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
           <span className="truncate">{label}</span>
         </div>
+        {isActive && (
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />
+        )}
       </button>
     );
   };
@@ -2951,15 +2954,15 @@ export const MerchantDashboard = () => {
           />
         )}
 
-        {/* 1. Left Light Sidebar (Bizora MERCHANT WORKSPACE) */}
+        {/* 1. Left Light Sidebar (Omniva MERCHANT WORKSPACE) */}
         <aside className={`${mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl' : 'hidden md:flex'} w-64 bg-white flex-col shrink-0 select-none border-r border-slate-200 z-30 h-full overflow-hidden transition-all`}>
         {/* Brand Header */}
         <div className="p-5 flex items-center gap-3 border-b border-slate-100 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-500/20">
-            B
+            O
           </div>
           <div>
-            <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Bizora</div>
+            <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Omniva</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">MERCHANT WORKSPACE</div>
           </div>
         </div>
@@ -3041,7 +3044,7 @@ export const MerchantDashboard = () => {
             className="flex items-center gap-2.5 overflow-hidden text-left cursor-pointer group"
             title="Manage Subscription & Billing"
           >
-            <div className="w-8 h-8 rounded-full bg-[#5046e5] text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:ring-2 ring-indigo-400 transition">
+            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:ring-2 ring-indigo-400 transition">
               DA
             </div>
             <div className="overflow-hidden">
@@ -3281,7 +3284,7 @@ export const MerchantDashboard = () => {
               <div className="pt-2 flex items-center justify-center gap-2">
                 <button
                   onClick={() => setActiveTab('overview')}
-                  className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer shadow-sm"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition cursor-pointer shadow-sm"
                 >
                   Return to Active Modules
                 </button>
@@ -3307,7 +3310,7 @@ export const MerchantDashboard = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <CalendarIcon className="w-4 h-4 text-[#5046e5]" /> Date Calendar Filter
+                      <CalendarIcon className="w-4 h-4 text-indigo-600" /> Date Calendar Filter
                     </h3>
                     <p className="text-[11px] text-slate-400">Select any custom date range via calendar to filter orders and analytics</p>
                   </div>
@@ -3317,7 +3320,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setShowCalendarModal(true)}
-                      className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition"
                     >
                       <CalendarIcon className="w-4 h-4" />
                       <span>📅 Open Calendar ({startDate} &rarr; {endDate})</span>
@@ -3442,7 +3445,7 @@ export const MerchantDashboard = () => {
                         <div key={idx} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
                           <div
                             style={{ height: `${val}%` }}
-                            className="w-full bg-[#5046e5]/80 group-hover:bg-[#5046e5] rounded-t-lg transition relative"
+                            className="w-full bg-indigo-600/80 group-hover:bg-indigo-600 rounded-t-lg transition relative"
                           >
                             <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
                               ₹{(val * 2700).toLocaleString('en-IN')}
@@ -3484,7 +3487,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('leads')}
-                      className="text-xs text-[#5046e5] font-semibold hover:underline cursor-pointer"
+                      className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
                     >
                       View CRM &rarr;
                     </button>
@@ -3507,7 +3510,7 @@ export const MerchantDashboard = () => {
                         <span className="font-bold text-slate-900">58</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '65%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '65%' }} />
                       </div>
                     </div>
 
@@ -3547,7 +3550,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('orders')}
-                      className="text-xs text-[#5046e5] font-semibold hover:underline cursor-pointer"
+                      className="text-xs text-indigo-600 font-semibold hover:underline cursor-pointer"
                     >
                       View all &rarr;
                     </button>
@@ -3725,7 +3728,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setShowAddLeadModal(true)}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
                     >
                       <Plus className="w-3.5 h-3.5" /> + Add New Lead
                     </button>
@@ -4135,7 +4138,7 @@ export const MerchantDashboard = () => {
                           </div>
 
                           <div>
-                            <label className="text-slate-700 font-bold block mb-1">Lead Source (Kahan se aaya)</label>
+                            <label className="text-slate-700 font-bold block mb-1">Lead Acquisition Channel</label>
                             <select
                               value={newLeadForm.source}
                               onChange={(e) => setNewLeadForm({ ...newLeadForm, source: e.target.value })}
@@ -4178,7 +4181,7 @@ export const MerchantDashboard = () => {
                           <label className="text-slate-700 font-bold block mb-1">Initial Discussion Note / Requirement</label>
                           <textarea
                             rows={2}
-                            placeholder="Customer ne kya bola? (e.g. Sample mangi hai, 2kg bulk rate poocha hai)"
+                            placeholder="Customer requirement details (e.g., Requested product sample, inquired about 5kg bulk catering pricing)"
                             value={newLeadForm.note}
                             onChange={(e) => setNewLeadForm({ ...newLeadForm, note: e.target.value })}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -4195,7 +4198,7 @@ export const MerchantDashboard = () => {
                           </button>
                           <button
                             type="submit"
-                            className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-sm"
+                            className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-sm"
                           >
                             Save & Add Lead
                           </button>
@@ -4329,7 +4332,7 @@ export const MerchantDashboard = () => {
                           <button
                             type="button"
                             onClick={() => handleAddLeadNote(selectedLead._id)}
-                            className="px-4 py-2.5 rounded-xl bg-[#5046e5] text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-sm shrink-0"
+                            className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-sm shrink-0"
                           >
                             Add Note
                           </button>
@@ -4359,7 +4362,7 @@ export const MerchantDashboard = () => {
                   </button>
                   <button
                     onClick={() => setShowAddCustomerModal(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> + Add customer
                   </button>
@@ -4484,7 +4487,7 @@ export const MerchantDashboard = () => {
                   <button
                     type="button"
                     onClick={() => setShowAddProductModal(true)}
-                    className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer transition"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> + Add New Product
                   </button>
@@ -4541,7 +4544,7 @@ export const MerchantDashboard = () => {
                       onClick={() => setSelectedCategoryFilter('ALL')}
                       className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer whitespace-nowrap text-xs ${
                         selectedCategoryFilter === 'ALL'
-                          ? 'bg-[#5046e5] text-white shadow-xs'
+                          ? 'bg-indigo-600 text-white shadow-xs'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
@@ -4556,7 +4559,7 @@ export const MerchantDashboard = () => {
                           onClick={() => setSelectedCategoryFilter(cat.name)}
                           className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer whitespace-nowrap text-xs ${
                             selectedCategoryFilter === cat.name
-                              ? 'bg-[#5046e5] text-white shadow-xs'
+                              ? 'bg-indigo-600 text-white shadow-xs'
                               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                         >
@@ -4724,7 +4727,7 @@ export const MerchantDashboard = () => {
                   <button
                     type="button"
                     onClick={() => setShowAddCategoryModal(true)}
-                    className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer transition"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> + Add New Category
                   </button>
@@ -4774,7 +4777,7 @@ export const MerchantDashboard = () => {
                   <div>
                     <div className="font-extrabold text-indigo-950">Storefront Category Image Slider Active</div>
                     <div className="text-indigo-700 text-[11px]">
-                      Ye high-resolution photos aapke online storefront ke top slider aur Meta ad campaigns me dikhayi jaati hain.
+                      These high-resolution photos are displayed on your customer storefront hero slider and synced with Meta ad campaigns.
                     </div>
                   </div>
                 </div>
@@ -4790,7 +4793,7 @@ export const MerchantDashboard = () => {
                     href={`/store/${businessSlug}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     View on Storefront <ExternalLink className="w-3.5 h-3.5" />
                   </a>
@@ -4921,7 +4924,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setShowCalendarModal(true)}
-                      className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition"
                     >
                       <CalendarIcon className="w-4 h-4" />
                       <span>📅 Open Calendar ({startDate} &rarr; {endDate})</span>
@@ -4964,7 +4967,7 @@ export const MerchantDashboard = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => setShowManualOrderModal(true)}
-                      className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" /> Manual Order
                     </button>
@@ -5066,7 +5069,7 @@ export const MerchantDashboard = () => {
                         orderPipelineTab === tab.key
                           ? tab.isAlert
                             ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-300'
-                            : 'bg-[#5046e5] text-white shadow-sm'
+                            : 'bg-indigo-600 text-white shadow-sm'
                           : tab.isAlert
                             ? 'bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100'
                             : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -5413,7 +5416,7 @@ export const MerchantDashboard = () => {
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black tracking-tight text-white">Bizora AI 2.0 Business Copilot &amp; Growth Engine</h2>
+                        <h2 className="text-xl font-black tracking-tight text-white">Omniva AI 2.0 Business Copilot &amp; Growth Engine</h2>
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                           Online &amp; Synced
@@ -5432,7 +5435,7 @@ export const MerchantDashboard = () => {
                   </span>
                   <button
                     onClick={() => setShowCalendarModal(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-600 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5 transition"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-600 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5 transition"
                   >
                     <CalendarIcon className="w-3.5 h-3.5" />
                     <span>📅 Calendar</span>
@@ -5590,7 +5593,7 @@ export const MerchantDashboard = () => {
                     <div>
                       <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                         <Bot className="w-5 h-5 text-indigo-600" />
-                        Bizora Store Copilot 2.0 (Real-time Business Advisor)
+                        Omniva Store Copilot 2.0 (Real-time Business Advisor)
                       </h3>
                       <p className="text-xs text-slate-500">
                         Ask any question regarding store profits, Meta Ads, best-selling products, or orders
@@ -5611,8 +5614,8 @@ export const MerchantDashboard = () => {
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        'Kaunsa achar sabse zyada bik raha hai aur margin kitna hai?',
-                        'Meta Ads (Insta vs FB) par kitna spend aur ROAS mila?',
+                        'Which pickle variety has the highest sales volume and margin?',
+                        'What is our Meta Ads (Instagram vs Facebook) ad spend and ROAS?',
                         'How to reduce COD order RTO risk?',
                         'How much stock should we prepare for festive demand?'
                       ].map((promptText, idx) => (
@@ -5649,7 +5652,7 @@ export const MerchantDashboard = () => {
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3 text-[10px] font-bold opacity-70 mb-1 border-b border-black/5 pb-1">
-                            <span>{msg.sender === 'user' ? 'You (Merchant)' : 'Bizora Copilot 2.0'}</span>
+                            <span>{msg.sender === 'user' ? 'You (Merchant)' : 'Omniva Copilot 2.0'}</span>
                             <span>{msg.time}</span>
                           </div>
                           <div className="whitespace-pre-line font-normal">
@@ -5672,7 +5675,7 @@ export const MerchantDashboard = () => {
                         </div>
                         <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs text-indigo-700 font-semibold shadow-xs flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
-                          Bizora AI store analytics aur orders data scan kar raha hai...
+                          Omniva AI is analyzing real-time store analytics and order data...
                         </div>
                       </div>
                     )}
@@ -5957,7 +5960,7 @@ export const MerchantDashboard = () => {
                     {/* Textarea */}
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                        Editable Message Preview (Aap ise edit kar sakte hain):
+                        Editable Message Preview (Customizable template with dynamic tags):
                       </label>
                       <textarea
                         rows={9}
@@ -6168,7 +6171,7 @@ export const MerchantDashboard = () => {
                   <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between gap-4">
                     <div className="space-y-0.5">
                       <div className="text-xs font-black flex items-center gap-1.5 text-amber-300">
-                        <Sparkles className="w-4 h-4 text-amber-400" /> Bizora AI Insider Growth Tip
+                        <Sparkles className="w-4 h-4 text-amber-400" /> Omniva AI Growth Insights
                       </div>
                       <p className="text-xs text-slate-300">
                         Converting just 20% of your COD orders to UPI Prepaid saves an average of ₹18,400 per month in courier return penalties.
@@ -6628,7 +6631,7 @@ export const MerchantDashboard = () => {
                     <div className="text-xs">
                       <span className="font-extrabold text-indigo-950 block">⚡ Auto-Send WhatsApp Live Tracking Message</span>
                       <span className="text-[11px] text-indigo-800">
-                        Customer ke mobile ({dispatchModalOrder.phone}) par live tracking ID aur clickable track link automatic chala jayega.
+                        Customer mobile ({dispatchModalOrder.phone}) will automatically receive tracking ID and live tracking link.
                       </span>
                     </div>
                   </label>
@@ -6636,7 +6639,7 @@ export const MerchantDashboard = () => {
                   {/* Message Preview */}
                   <div className="p-3 rounded-2xl bg-slate-900 text-slate-200 text-[11px] space-y-1 font-sans">
                     <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                      <span>💬 Message Preview (Customer ko ye bhejenge):</span>
+                      <span>💬 Message Preview (Customer WhatsApp Notification):</span>
                     </div>
                     <div className="text-slate-300 text-[11px] whitespace-pre-line leading-relaxed font-mono">
                       {generateTrackingMessage(dispatchModalOrder, courierName, trackingNumber || 'DEL-8492014')}
@@ -6738,7 +6741,7 @@ export const MerchantDashboard = () => {
                   <label className="font-bold text-slate-800 block">Choose Photo from Device Gallery or Pickle Presets:</label>
                   
                   {/* Device Upload */}
-                  <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-[#5046e5] font-bold text-xs cursor-pointer transition">
+                  <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
                     <Upload className="w-4 h-4 shrink-0" />
                     <span>📁 Upload from Phone / PC Gallery</span>
                     <input
@@ -6795,7 +6798,7 @@ export const MerchantDashboard = () => {
                   </button>
                   <button
                     onClick={handleSaveCategoryPhoto}
-                    className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm shadow-indigo-500/10 cursor-pointer"
                   >
                     Save Category Photo
                   </button>
@@ -6827,7 +6830,7 @@ export const MerchantDashboard = () => {
                       setNewServiceForm(prev => ({ ...prev, date: '2026-10-15', dayNumber: 15 }));
                       setShowAddServiceBookingModal(true);
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ Booking</span>
@@ -6883,7 +6886,7 @@ export const MerchantDashboard = () => {
                           setTimeout(() => setActionSuccessToast(''), 3000);
                         }}
                         className={`px-2.5 py-1 text-xs rounded-md transition cursor-pointer ${
-                          calendarMonth === 'September 2026' ? 'bg-[#5046e5] text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
+                          calendarMonth === 'September 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
                         }`}
                         title="Previous Month"
                       >
@@ -6896,7 +6899,7 @@ export const MerchantDashboard = () => {
                           setTimeout(() => setActionSuccessToast(''), 3000);
                         }}
                         className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
-                          calendarMonth === 'October 2026' ? 'bg-[#5046e5] text-white font-bold' : 'text-slate-800 hover:bg-slate-200/60'
+                          calendarMonth === 'October 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-200/60'
                         }`}
                       >
                         Today
@@ -6908,7 +6911,7 @@ export const MerchantDashboard = () => {
                           setTimeout(() => setActionSuccessToast(''), 3000);
                         }}
                         className={`px-2.5 py-1 text-xs rounded-md transition cursor-pointer ${
-                          calendarMonth === 'November 2026' ? 'bg-[#5046e5] text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
+                          calendarMonth === 'November 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
                         }`}
                         title="Next Month"
                       >
@@ -6923,7 +6926,7 @@ export const MerchantDashboard = () => {
                         onClick={() => setServiceViewMode('calendar')}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                           serviceViewMode === 'calendar'
-                            ? 'bg-white text-[#5046e5] shadow-xs'
+                            ? 'bg-white text-indigo-600 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
@@ -6933,7 +6936,7 @@ export const MerchantDashboard = () => {
                         onClick={() => setServiceViewMode('list')}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                           serviceViewMode === 'list'
-                            ? 'bg-white text-[#5046e5] shadow-xs'
+                            ? 'bg-white text-indigo-600 shadow-xs'
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
@@ -6946,7 +6949,7 @@ export const MerchantDashboard = () => {
                         setNewServiceForm(prev => ({ ...prev, date: '2026-10-15', dayNumber: 15 }));
                         setShowAddServiceBookingModal(true);
                       }}
-                      className="px-3 py-1 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm cursor-pointer transition flex items-center gap-1"
+                      className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm cursor-pointer transition flex items-center gap-1"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>+ New booking</span>
@@ -7148,7 +7151,7 @@ export const MerchantDashboard = () => {
                   </button>
                   <button
                     onClick={() => setShowAddTourModal(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Booking request
                   </button>
@@ -7229,7 +7232,7 @@ export const MerchantDashboard = () => {
                     onClick={() => setMarketingSubTab('meta-orders')}
                     className={`px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-2 ${
                       marketingSubTab === 'meta-orders'
-                        ? 'bg-[#5046e5] text-white shadow-xs'
+                        ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -7244,7 +7247,7 @@ export const MerchantDashboard = () => {
                     onClick={() => setMarketingSubTab('campaigns')}
                     className={`px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-2 ${
                       marketingSubTab === 'campaigns'
-                        ? 'bg-[#5046e5] text-white shadow-xs'
+                        ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -7256,7 +7259,7 @@ export const MerchantDashboard = () => {
                     onClick={() => setMarketingSubTab('meta-setup')}
                     className={`px-3.5 py-2 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-2 ${
                       marketingSubTab === 'meta-setup'
-                        ? 'bg-[#5046e5] text-white shadow-xs'
+                        ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -7275,7 +7278,7 @@ export const MerchantDashboard = () => {
                       setActionSuccessToast('Meta Ads (Instagram & Facebook) Attribution report exported successfully!');
                       setTimeout(() => setActionSuccessToast(''), 4000);
                     }}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer hover:bg-indigo-700"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer hover:bg-indigo-700"
                   >
                     <Download className="w-3.5 h-3.5" /> Export Attribution Report
                   </button>
@@ -7320,7 +7323,7 @@ export const MerchantDashboard = () => {
                           Instagram &amp; Facebook Ads Order Analytics
                         </h2>
                         <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                          Yahan aap real-time dekh sakte hain ki aapke <strong>Instagram Ads &amp; Reels</strong> aur <strong>Facebook Feed &amp; Carousel Ads</strong> se kitne verified customer orders aaye hain, kitni revenue bani hai, aur har customer ka mobile number kya hai.
+                          Track real-time verified customer purchases generated directly from your <strong>Instagram Reels &amp; Stories</strong> and <strong>Facebook Feed &amp; Carousel</strong> campaigns, with full revenue attribution and customer contacts.
                         </p>
                       </div>
                       <div className="absolute right-6 -bottom-6 opacity-15 pointer-events-none text-9xl">
@@ -7519,7 +7522,7 @@ export const MerchantDashboard = () => {
                             </span>
                           </h3>
                           <p className="text-[11px] text-slate-400">
-                            Har order ke aage ad channel, customer phone number aur 1-click Call/WhatsApp button available hai
+                            Each order includes attributed ad channel, customer phone number, and one-click Call/WhatsApp actions
                           </p>
                         </div>
                       </div>
@@ -7680,7 +7683,7 @@ export const MerchantDashboard = () => {
                   <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
                     {[25, 45, 35, 55, 42, 65, 58, 75, 70, 90].map((h, i) => (
                       <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                        <div style={{ height: `${h}%` }} className="w-full bg-[#5046e5] rounded-t-md" />
+                        <div style={{ height: `${h}%` }} className="w-full bg-indigo-600 rounded-t-md" />
                         <span className="text-[9px] text-slate-400">W{i + 1}</span>
                       </div>
                     ))}
@@ -7711,7 +7714,7 @@ export const MerchantDashboard = () => {
                         <span className="font-bold text-slate-900">2,460</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '51%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '51%' }} />
                       </div>
                     </div>
 
@@ -7808,7 +7811,7 @@ export const MerchantDashboard = () => {
                   <button
                     type="button"
                     onClick={() => setShowAddStaffModal(true)}
-                    className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer transition"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> + Add New Staff Member
                   </button>
@@ -8157,7 +8160,7 @@ export const MerchantDashboard = () => {
                       Role Matrix &amp; Operational Security Guide
                     </h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Merchant Dashboard me har role ke orders alag rakhne se galat orders pack hone se bachte hain:
+                      Segregating order visibility by team role prevents fulfillment errors and protects customer privacy:
                     </p>
                   </div>
                 </div>
@@ -8208,7 +8211,7 @@ export const MerchantDashboard = () => {
                   <span className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-600">
                     Last 30 days
                   </span>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5" /> Export
                   </button>
                 </div>
@@ -8245,7 +8248,7 @@ export const MerchantDashboard = () => {
                   <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
                     {[30, 42, 38, 55, 48, 62, 58, 75, 70, 95].map((val, idx) => (
                       <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                        <div style={{ height: `${val}%` }} className="w-full bg-[#5046e5] rounded-t-lg transition" />
+                        <div style={{ height: `${val}%` }} className="w-full bg-indigo-600 rounded-t-lg transition" />
                         <span className="text-[9px] text-slate-400">W{idx + 1}</span>
                       </div>
                     ))}
@@ -8270,7 +8273,7 @@ export const MerchantDashboard = () => {
                         <span className="font-bold text-slate-900">42</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '13%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '13%' }} />
                       </div>
                     </div>
                     <div>
@@ -8521,7 +8524,7 @@ export const MerchantDashboard = () => {
                         <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
                       </div>
                       <div className="flex-1 bg-slate-100 rounded-lg px-3 py-1 text-[11px] font-mono text-slate-600 flex items-center justify-between border border-slate-200">
-                        <span className="truncate">https://bizora.app/store/{businessSlug}</span>
+                        <span className="truncate">https://omniva.io/store/{businessSlug}</span>
                         <span className="text-emerald-600 font-semibold text-[10px]">🔒 SSL Secured</span>
                       </div>
                     </div>
@@ -8551,7 +8554,7 @@ export const MerchantDashboard = () => {
                     setActionSuccessToast('All settings updated and saved successfully! Storefront synchronized.');
                     setTimeout(() => setActionSuccessToast(''), 4000);
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer flex items-center gap-1.5 transition"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer flex items-center gap-1.5 transition"
                 >
                   <Check className="w-3.5 h-3.5" /> Save changes
                 </button>
@@ -8580,12 +8583,12 @@ export const MerchantDashboard = () => {
                         onClick={() => setSettingsSubTab(item.key)}
                         className={`w-full text-left px-3 py-2.5 rounded-xl transition flex items-center justify-between cursor-pointer ${
                           isActive
-                            ? 'bg-indigo-50 text-[#5046e5] font-bold shadow-xs'
+                            ? 'bg-indigo-50 text-indigo-600 font-bold shadow-xs'
                             : 'text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         <span className="flex items-center gap-2.5">
-                          <Icon className={`w-4 h-4 ${isActive ? 'text-[#5046e5]' : 'text-slate-400'}`} />
+                          <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
                           {item.label}
                         </span>
                         {item.badge && (
@@ -8686,7 +8689,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast('Business profile updated successfully!');
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Profile
                         </button>
@@ -8755,7 +8758,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast('Branding settings updated successfully!');
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Branding
                         </button>
@@ -8791,7 +8794,7 @@ export const MerchantDashboard = () => {
                             type="button"
                             onClick={() => setShowStorePage(!showStorePage)}
                             className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              showStorePage ? 'bg-[#5046e5]' : 'bg-slate-300'
+                              showStorePage ? 'bg-indigo-600' : 'bg-slate-300'
                             }`}
                           >
                             <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${showStorePage ? 'left-5' : 'left-0.5'}`} />
@@ -8807,7 +8810,7 @@ export const MerchantDashboard = () => {
                             type="button"
                             onClick={() => setEnableCod(!enableCod)}
                             className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              enableCod ? 'bg-[#5046e5]' : 'bg-slate-300'
+                              enableCod ? 'bg-indigo-600' : 'bg-slate-300'
                             }`}
                           >
                             <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${enableCod ? 'left-5' : 'left-0.5'}`} />
@@ -8845,7 +8848,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast('Storefront settings updated successfully!');
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Store Settings
                         </button>
@@ -8918,7 +8921,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast('Payment credentials updated and verified!');
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Payment Settings
                         </button>
@@ -8944,7 +8947,7 @@ export const MerchantDashboard = () => {
                             type="button"
                             onClick={() => setWhatsappAlerts(!whatsappAlerts)}
                             className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              whatsappAlerts ? 'bg-[#5046e5]' : 'bg-slate-300'
+                              whatsappAlerts ? 'bg-indigo-600' : 'bg-slate-300'
                             }`}
                           >
                             <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${whatsappAlerts ? 'left-5' : 'left-0.5'}`} />
@@ -8960,7 +8963,7 @@ export const MerchantDashboard = () => {
                             type="button"
                             onClick={() => setSendOrderNotifications(!sendOrderNotifications)}
                             className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              sendOrderNotifications ? 'bg-[#5046e5]' : 'bg-slate-300'
+                              sendOrderNotifications ? 'bg-indigo-600' : 'bg-slate-300'
                             }`}
                           >
                             <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${sendOrderNotifications ? 'left-5' : 'left-0.5'}`} />
@@ -8976,7 +8979,7 @@ export const MerchantDashboard = () => {
                             type="button"
                             onClick={() => setEnableMarketingByDefault(!enableMarketingByDefault)}
                             className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              enableMarketingByDefault ? 'bg-[#5046e5]' : 'bg-slate-300'
+                              enableMarketingByDefault ? 'bg-indigo-600' : 'bg-slate-300'
                             }`}
                           >
                             <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${enableMarketingByDefault ? 'left-5' : 'left-0.5'}`} />
@@ -8991,7 +8994,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast('Notification preferences saved successfully!');
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Notifications
                         </button>
@@ -9010,7 +9013,7 @@ export const MerchantDashboard = () => {
                         <button
                           type="button"
                           onClick={() => setShowAddStaffModal(true)}
-                          className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer hover:bg-indigo-700"
+                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer hover:bg-indigo-700"
                         >
                           <Plus className="w-3.5 h-3.5" /> + Add Staff Member
                         </button>
@@ -9524,7 +9527,7 @@ export const MerchantDashboard = () => {
                             setActionSuccessToast(`Permissions updated successfully for ${selectedStaffForEdit.name}!`);
                             setTimeout(() => setActionSuccessToast(''), 4000);
                           }}
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 cursor-pointer transition flex items-center gap-1.5"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 cursor-pointer transition flex items-center gap-1.5"
                         >
                           <Check className="w-3.5 h-3.5" /> Save Permissions
                         </button>
@@ -9785,7 +9788,7 @@ export const MerchantDashboard = () => {
                         </button>
                         <button
                           type="submit"
-                          className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-md shadow-indigo-600/20"
+                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 cursor-pointer shadow-sm shadow-indigo-500/10"
                         >
                           + Add Staff Account
                         </button>
@@ -9839,7 +9842,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setShowCustomCatInput(!showCustomCatInput)}
-                      className="text-[11px] text-[#5046e5] font-bold hover:underline cursor-pointer"
+                      className="text-[11px] text-indigo-600 font-bold hover:underline cursor-pointer"
                     >
                       {showCustomCatInput ? '← Select existing' : '+ Add new category'}
                     </button>
@@ -10085,7 +10088,7 @@ export const MerchantDashboard = () => {
                 </div>
 
                 {/* 1. Choose from Device Gallery */}
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-[#5046e5] font-bold text-xs cursor-pointer transition">
+                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
                   <Upload className="w-4 h-4 shrink-0" />
                   <span>📁 Choose from Phone / Computer Gallery</span>
                   <input
@@ -10159,7 +10162,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Publish Product
                 </button>
@@ -10214,7 +10217,7 @@ export const MerchantDashboard = () => {
                     <button
                       type="button"
                       onClick={() => setShowEditCustomCatInput(!showEditCustomCatInput)}
-                      className="text-[11px] text-[#5046e5] font-bold hover:underline cursor-pointer"
+                      className="text-[11px] text-indigo-600 font-bold hover:underline cursor-pointer"
                     >
                       {showEditCustomCatInput ? '← Select' : '+ New Category'}
                     </button>
@@ -10476,7 +10479,7 @@ export const MerchantDashboard = () => {
                 </div>
 
                 {/* 1. Device Gallery Upload */}
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-[#5046e5] font-bold text-xs cursor-pointer transition">
+                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
                   <Upload className="w-4 h-4 shrink-0" />
                   <span>📁 Choose from Phone / Computer Gallery</span>
                   <input
@@ -10561,7 +10564,7 @@ export const MerchantDashboard = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-bold hover:bg-indigo-700 cursor-pointer shadow-md text-xs transition"
+                    className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 cursor-pointer shadow-md text-xs transition"
                   >
                     Save Changes
                   </button>
@@ -10641,7 +10644,7 @@ export const MerchantDashboard = () => {
                 </div>
 
                 {/* 1. Choose from Device Gallery */}
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-[#5046e5] font-bold text-xs cursor-pointer transition">
+                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
                   <Upload className="w-4 h-4 shrink-0" />
                   <span>📁 Choose Category Image from Gallery / Phone / PC</span>
                   <input
@@ -10711,7 +10714,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Create Category
                 </button>
@@ -10836,7 +10839,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Create & Accept Order
                 </button>
@@ -10906,7 +10909,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Save Stock Adjustment
                 </button>
@@ -11002,7 +11005,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Confirm Booking
                 </button>
@@ -11083,7 +11086,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Save Customer
                 </button>
@@ -11220,7 +11223,7 @@ export const MerchantDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Confirm &amp; Schedule
                 </button>
@@ -11365,7 +11368,7 @@ export const MerchantDashboard = () => {
                     setActionSuccessToast('Studio availability settings saved successfully!');
                     setTimeout(() => setActionSuccessToast(''), 4000);
                   }}
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Save Availability
                 </button>
@@ -11489,7 +11492,7 @@ export const MerchantDashboard = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-[#5046e5]" />
+                  <CalendarIcon className="w-5 h-5 text-indigo-600" />
                   <span>Interactive Date Range Calendar</span>
                 </h3>
                 <p className="text-xs text-slate-400">Select any Start Date &amp; End Date to auto-arrange all analytics, daily trend bars, and orders</p>
@@ -11600,7 +11603,7 @@ export const MerchantDashboard = () => {
                       onClick={() => handleCalendarDayClick(cell.dateStr)}
                       className={`h-11 rounded-xl flex flex-col items-center justify-center transition cursor-pointer relative font-semibold ${
                         isStart || isEnd
-                          ? 'bg-[#5046e5] text-white font-extrabold shadow-md shadow-indigo-600/30 z-10'
+                          ? 'bg-indigo-600 text-white font-extrabold shadow-sm shadow-indigo-500/10 z-10'
                           : inRange
                           ? 'bg-indigo-50 text-indigo-900 border border-indigo-200 font-bold'
                           : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
@@ -11608,7 +11611,7 @@ export const MerchantDashboard = () => {
                     >
                       <span>{cell.day}</span>
                       {hasOrders && (
-                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isStart || isEnd ? 'bg-amber-300' : 'bg-[#5046e5]'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isStart || isEnd ? 'bg-amber-300' : 'bg-indigo-600'}`} />
                       )}
                     </button>
                   );
@@ -11639,7 +11642,7 @@ export const MerchantDashboard = () => {
                 <button
                   type="button"
                   onClick={handleConfirmCalendarRange}
-                  className="px-5 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 cursor-pointer flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> Auto-Arrange &amp; Apply
                 </button>

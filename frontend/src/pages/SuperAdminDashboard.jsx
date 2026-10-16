@@ -342,11 +342,11 @@ export const SuperAdminDashboard = () => {
   const [defaultCrm, setDefaultCrm] = useState(false);
 
   // Platform Settings State
-  const [platformName, setPlatformName] = useState('Bizora');
+  const [platformName, setPlatformName] = useState('Omniva');
   const [timezone, setTimezone] = useState('Asia/Kolkata (GMT+5:30)');
-  const [platformUrl, setPlatformUrl] = useState('https://app.bizora.com');
+  const [platformUrl, setPlatformUrl] = useState('https://app.omniva.io');
   const [currency, setCurrency] = useState('INR — Indian Rupee');
-  const [supportEmail, setSupportEmail] = useState('support@bizora.com');
+  const [supportEmail, setSupportEmail] = useState('support@omniva.io');
   const [dateFormat, setDateFormat] = useState('DD MMM YYYY');
   const [reqEmailVerify, setReqEmailVerify] = useState(true);
   const [req2FA, setReq2FA] = useState(true);
@@ -366,7 +366,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Growth',
       status: 'Active',
       joinedDate: '12 Oct 2026',
-      domain: 'desiachar.bizora.app',
+      domain: 'desiachar.omniva.io',
       orders: 1245,
       revenue: '₹2,48,500',
       customers: 892,
@@ -385,7 +385,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Pro',
       status: 'Active',
       joinedDate: '11 Oct 2026',
-      domain: 'pixelstudio.bizora.app',
+      domain: 'pixelstudio.omniva.io',
       orders: 430,
       revenue: '₹4,12,000',
       customers: 340,
@@ -404,7 +404,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Growth',
       status: 'Trial',
       joinedDate: '10 Oct 2026',
-      domain: 'rajasthantours.bizora.app',
+      domain: 'rajasthantours.omniva.io',
       orders: 86,
       revenue: '₹1,45,000',
       customers: 120,
@@ -423,7 +423,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Starter',
       status: 'Past due',
       joinedDate: '09 Oct 2026',
-      domain: 'glowsalon.bizora.app',
+      domain: 'glowsalon.omniva.io',
       orders: 210,
       revenue: '₹94,000',
       customers: 195,
@@ -442,7 +442,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Pro',
       status: 'Active',
       joinedDate: '08 Oct 2026',
-      domain: 'freshmart.bizora.app',
+      domain: 'freshmart.omniva.io',
       orders: 3120,
       revenue: '₹8,92,000',
       customers: 2450,
@@ -461,7 +461,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Growth',
       status: 'Suspended',
       joinedDate: '07 Oct 2026',
-      domain: 'eventplanners.bizora.app',
+      domain: 'eventplanners.omniva.io',
       orders: 54,
       revenue: '₹1,20,000',
       customers: 80,
@@ -480,7 +480,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Starter',
       status: 'Pending',
       joinedDate: '06 Oct 2026',
-      domain: 'trendz.bizora.app',
+      domain: 'trendz.omniva.io',
       orders: 12,
       revenue: '₹14,500',
       customers: 22,
@@ -499,7 +499,7 @@ export const SuperAdminDashboard = () => {
       plan: 'Pro',
       status: 'Active',
       joinedDate: '05 Oct 2026',
-      domain: 'desertadv.bizora.app',
+      domain: 'desertadv.omniva.io',
       orders: 320,
       revenue: '₹5,60,000',
       customers: 410,
@@ -550,7 +550,7 @@ export const SuperAdminDashboard = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `bizora_merchants_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `omniva_merchants_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setAdminToast('Merchants CSV report downloaded successfully!');
@@ -618,7 +618,7 @@ export const SuperAdminDashboard = () => {
         }}
         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
           isActive
-            ? 'bg-[#5046e5] text-white shadow-md shadow-indigo-600/30 font-semibold'
+            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/10 font-semibold'
             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/90'
         }`}
       >
@@ -648,15 +648,15 @@ export const SuperAdminDashboard = () => {
 
       {/* Main Flex Body */}
       <div className="flex-1 flex min-w-0 overflow-hidden">
-        {/* 1. Left Light Sidebar (Bizora SAAS PLATFORM) */}
+        {/* 1. Left Light Sidebar (Omniva SAAS PLATFORM) */}
         <aside className="w-64 bg-white flex flex-col shrink-0 select-none border-r border-slate-200 z-30 h-full overflow-hidden">
         {/* Brand Header */}
         <div className="p-5 flex items-center gap-3 border-b border-slate-100 shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-500/20">
-            B
+            O
           </div>
           <div>
-            <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Bizora</div>
+            <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Omniva</div>
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SAAS PLATFORM</div>
           </div>
         </div>
@@ -690,7 +690,7 @@ export const SuperAdminDashboard = () => {
             </div>
             <div className="overflow-hidden">
               <div className="text-xs font-bold text-slate-800 truncate">Platform Admin</div>
-              <div className="text-[10px] text-slate-500 truncate">admin@bizora.com</div>
+              <div className="text-[10px] text-slate-500 truncate">admin@omniva.io</div>
             </div>
           </div>
           <button
@@ -765,7 +765,7 @@ export const SuperAdminDashboard = () => {
                   <span className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-600">
                     Last 30 days
                   </span>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
                     <Download className="w-3.5 h-3.5" /> Export
                   </button>
                 </div>
@@ -852,7 +852,7 @@ export const SuperAdminDashboard = () => {
                       <div key={idx} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
                         <div
                           style={{ height: `${val}%` }}
-                          className="w-full bg-indigo-500/80 group-hover:bg-[#5046e5] rounded-t-lg transition relative"
+                          className="w-full bg-indigo-500/80 group-hover:bg-indigo-600 rounded-t-lg transition relative"
                         >
                           <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
                             ₹{(val * 4500).toLocaleString('en-IN')}
@@ -876,7 +876,7 @@ export const SuperAdminDashboard = () => {
                       <div key={i} className="flex-1 flex flex-col items-center gap-2">
                         <div
                           style={{ height: `${h}%` }}
-                          className="w-full bg-[#5046e5] hover:bg-indigo-600 rounded-t-md transition"
+                          className="w-full bg-indigo-600 hover:bg-indigo-600 rounded-t-md transition"
                         />
                         <span className="text-[9px] text-slate-400">M{i + 1}</span>
                       </div>
@@ -896,7 +896,7 @@ export const SuperAdminDashboard = () => {
                     </div>
                     <button
                       onClick={() => setActiveTab('merchants')}
-                      className="text-xs text-[#5046e5] font-semibold hover:underline"
+                      className="text-xs text-indigo-600 font-semibold hover:underline"
                     >
                       View all &rarr;
                     </button>
@@ -1025,7 +1025,7 @@ export const SuperAdminDashboard = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('add-merchant')}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add merchant
                   </button>
@@ -1102,7 +1102,7 @@ export const SuperAdminDashboard = () => {
                   </div>
                   <button
                     onClick={() => setActiveTab('add-merchant')}
-                    className="px-3 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1 cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add merchant
                   </button>
@@ -1193,7 +1193,7 @@ export const SuperAdminDashboard = () => {
                         onClick={() => setMerchantPage(page)}
                         className={`px-2.5 py-1 rounded text-xs cursor-pointer ${
                           merchantPage === page
-                            ? 'bg-[#5046e5] text-white font-bold shadow-xs'
+                            ? 'bg-indigo-600 text-white font-bold shadow-xs'
                             : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
@@ -1236,7 +1236,7 @@ export const SuperAdminDashboard = () => {
                 <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-5">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-6 text-xs font-semibold">
-                      <span className="text-[#5046e5] border-b-2 border-[#5046e5] pb-3 -mb-3">
+                      <span className="text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-3">
                         1. Business details
                       </span>
                       <span className="text-slate-400">2. Plan & limits</span>
@@ -1354,7 +1354,7 @@ export const SuperAdminDashboard = () => {
                           type="button"
                           onClick={() => setIsolateWorkspace(!isolateWorkspace)}
                           className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                            isolateWorkspace ? 'bg-[#5046e5]' : 'bg-slate-300'
+                            isolateWorkspace ? 'bg-indigo-600' : 'bg-slate-300'
                           }`}
                         >
                           <span
@@ -1374,7 +1374,7 @@ export const SuperAdminDashboard = () => {
                           type="button"
                           onClick={() => setSendInvite(!sendInvite)}
                           className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                            sendInvite ? 'bg-[#5046e5]' : 'bg-slate-300'
+                            sendInvite ? 'bg-indigo-600' : 'bg-slate-300'
                           }`}
                         >
                           <span
@@ -1394,7 +1394,7 @@ export const SuperAdminDashboard = () => {
                           type="button"
                           onClick={() => setDefaultCrm(!defaultCrm)}
                           className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                            defaultCrm ? 'bg-[#5046e5]' : 'bg-slate-300'
+                            defaultCrm ? 'bg-indigo-600' : 'bg-slate-300'
                           }`}
                         >
                           <span
@@ -1420,7 +1420,7 @@ export const SuperAdminDashboard = () => {
                           alert(`Merchant "${newBizName}" created successfully with isolated workspace!`);
                           setActiveTab('merchants');
                         }}
-                        className="px-5 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-semibold shadow-sm cursor-pointer"
+                        className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm cursor-pointer"
                       >
                         Continue to plan &rarr;
                       </button>
@@ -1434,7 +1434,7 @@ export const SuperAdminDashboard = () => {
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
                     <div className="text-xs font-bold text-slate-800">Business logo</div>
                     <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center space-y-2 hover:border-indigo-400 transition bg-slate-50/50">
-                      <div className="w-10 h-10 rounded-full bg-indigo-50 text-[#5046e5] flex items-center justify-center mx-auto">
+                      <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
                         <UploadCloud className="w-5 h-5" />
                       </div>
                       <div className="font-bold text-slate-800 text-xs">Upload logo</div>
@@ -1525,7 +1525,7 @@ export const SuperAdminDashboard = () => {
                   </button>
                   <button
                     onClick={() => handleOpenEditModal(selectedMerchant)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer flex items-center gap-1"
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer flex items-center gap-1"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     Edit merchant
@@ -1585,7 +1585,7 @@ export const SuperAdminDashboard = () => {
                       onClick={() => setMerchantDetailsSubTab(sub.id)}
                       className={`cursor-pointer pb-2 -mb-2 transition ${
                         merchantDetailsSubTab === sub.id
-                          ? 'text-[#5046e5] border-b-2 border-[#5046e5] font-bold'
+                          ? 'text-indigo-600 border-b-2 border-indigo-600 font-bold'
                           : 'text-slate-400 hover:text-slate-700'
                       }`}
                     >
@@ -1694,7 +1694,7 @@ export const SuperAdminDashboard = () => {
                         <span className="font-bold text-slate-900">5 / 10</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '50%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '50%' }} />
                       </div>
                     </div>
 
@@ -1747,7 +1747,7 @@ export const SuperAdminDashboard = () => {
               <div className="bg-white border-2 border-indigo-200/80 rounded-2xl p-6 shadow-md space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/30">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-500/10">
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div>
@@ -1776,7 +1776,7 @@ export const SuperAdminDashboard = () => {
                   {/* Card 1: Product / Achar */}
                   <div
                     onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Product', domain: 'desiachar.bizora.app' } : m));
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Product', domain: 'desiachar.omniva.io' } : m));
                       alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now configured with the Physical Product Selling (Achar Storefront & Order Fulfillment) system!`);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
@@ -1807,7 +1807,7 @@ export const SuperAdminDashboard = () => {
                   {/* Card 2: Travel Bookings */}
                   <div
                     onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Travel', domain: 'rajasthantours.bizora.app' } : m));
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Travel', domain: 'rajasthantours.omniva.io' } : m));
                       alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now switched to the Travel Agency & Tour Booking system!`);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
@@ -1838,7 +1838,7 @@ export const SuperAdminDashboard = () => {
                   {/* Card 3: Service Bookings */}
                   <div
                     onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Service', domain: 'royalstudio.bizora.app' } : m));
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Service', domain: 'royalstudio.omniva.io' } : m));
                       alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now switched to the Photography & Event Studio Booking system!`);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
@@ -1985,7 +1985,7 @@ export const SuperAdminDashboard = () => {
                       setAdminToast(`System configuration and modules synchronized for ${selectedMerchant.name}!`);
                       setTimeout(() => setAdminToast(''), 4000);
                     }}
-                    className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 transition cursor-pointer"
                   >
                     Sync System &amp; Save Changes
                   </button>
@@ -2071,7 +2071,7 @@ export const SuperAdminDashboard = () => {
                         <span className="text-indigo-600">1,245 / 5,000</span>
                       </div>
                       <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '25%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '25%' }} />
                       </div>
                       <span className="text-slate-400 text-[11px]">25% quota utilized this month</span>
                     </div>
@@ -2109,7 +2109,7 @@ export const SuperAdminDashboard = () => {
                         setAdminToast('Staff invite link copied to clipboard!');
                         setTimeout(() => setAdminToast(''), 3000);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-[#5046e5] text-white font-bold hover:bg-indigo-700 cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 cursor-pointer"
                     >
                       + Add Staff Account
                     </button>
@@ -2203,7 +2203,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5" /> Invoices
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> Create
                   </button>
                 </div>
@@ -2271,7 +2271,7 @@ export const SuperAdminDashboard = () => {
                     <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-700">
                       Payment history
                     </button>
-                    <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm">
+                    <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm">
                       + Subscription
                     </button>
                   </div>
@@ -2348,7 +2348,7 @@ export const SuperAdminDashboard = () => {
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">Configure subscription plans, limits and feature access</p>
-                <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
                   <Plus className="w-3.5 h-3.5" /> Create plan
                 </button>
               </div>
@@ -2420,8 +2420,8 @@ export const SuperAdminDashboard = () => {
                 </div>
 
                 {/* Growth - Most Popular */}
-                <div className="bg-white border-2 border-[#5046e5] rounded-3xl p-6 shadow-xl relative flex flex-col justify-between space-y-6">
-                  <div className="absolute -top-3 right-6 bg-[#5046e5] text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-sm">
+                <div className="bg-white border-2 border-indigo-600 rounded-3xl p-6 shadow-xl relative flex flex-col justify-between space-y-6">
+                  <div className="absolute -top-3 right-6 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-sm">
                     MOST POPULAR
                   </div>
 
@@ -2446,7 +2446,7 @@ export const SuperAdminDashboard = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button className="py-2 rounded-xl bg-[#5046e5] text-white text-xs font-semibold shadow-sm hover:bg-indigo-700">Edit plan</button>
+                    <button className="py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700">Edit plan</button>
                     <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Limits</button>
                   </div>
                 </div>
@@ -2529,7 +2529,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
                     Version history
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> Create template
                   </button>
                 </div>
@@ -2602,7 +2602,7 @@ export const SuperAdminDashboard = () => {
                   <div key={i} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-[#5046e5] flex items-center justify-center font-bold text-xs">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
                           <Layers className="w-4 h-4" />
                         </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -2666,7 +2666,7 @@ export const SuperAdminDashboard = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleSaveMerchantApiKeys(selectedApiMerchantId)}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Provision All Keys
                   </button>
@@ -2900,7 +2900,7 @@ export const SuperAdminDashboard = () => {
                           <input
                             type="text"
                             readOnly
-                            value={`https://app.bizora.com/api/webhooks/meta?merchant=${currentApiMerchant.id}`}
+                            value={`https://app.omniva.io/api/webhooks/meta?merchant=${currentApiMerchant.id}`}
                             className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-600 select-all focus:outline-none"
                           />
                         </div>
@@ -3369,7 +3369,7 @@ export const SuperAdminDashboard = () => {
                   <span className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-600">
                     Last 30 days
                   </span>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5" /> Export
                   </button>
                 </div>
@@ -3406,7 +3406,7 @@ export const SuperAdminDashboard = () => {
                   <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
                     {[35, 42, 38, 55, 48, 62, 58, 75, 70, 95].map((val, idx) => (
                       <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                        <div style={{ height: `${val}%` }} className="w-full bg-[#5046e5] rounded-t-lg transition" />
+                        <div style={{ height: `${val}%` }} className="w-full bg-indigo-600 rounded-t-lg transition" />
                         <span className="text-[9px] text-slate-400">W{idx + 1}</span>
                       </div>
                     ))}
@@ -3453,7 +3453,7 @@ export const SuperAdminDashboard = () => {
                         <span>₹2,10,000</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '60%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '60%' }} />
                       </div>
                     </div>
                     <div>
@@ -3509,7 +3509,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
                     SLA settings
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> New ticket
                   </button>
                 </div>
@@ -3604,7 +3604,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
                     Permission matrix
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Plus className="w-3.5 h-3.5" /> Invite staff
                   </button>
                 </div>
@@ -3650,11 +3650,11 @@ export const SuperAdminDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {[
-                        { name: 'Amit Kumar', email: 'amit@bizora.com', role: 'Platform Admin', scope: 'All platform', status: 'Active', last: '2 min ago' },
-                        { name: 'Neha Gupta', email: 'neha@bizora.com', role: 'Support Manager', scope: 'Support tickets', status: 'Active', last: '12 min ago' },
-                        { name: 'Vikas Sharma', email: 'vikas@bizora.com', role: 'Integration Manager', scope: 'Integrations', status: 'Active', last: '1 hour ago' },
-                        { name: 'Ritu Singh', email: 'ritu@bizora.com', role: 'Billing Manager', scope: 'Subscriptions', status: 'Active', last: '2 hours ago' },
-                        { name: 'Anjali Verma', email: 'anjali@bizora.com', role: 'Analyst', scope: 'Read-only reports', status: 'Inactive', last: '7 days ago' }
+                        { name: 'Amit Kumar', email: 'amit@omniva.io', role: 'Platform Admin', scope: 'All platform', status: 'Active', last: '2 min ago' },
+                        { name: 'Neha Gupta', email: 'neha@omniva.io', role: 'Support Manager', scope: 'Support tickets', status: 'Active', last: '12 min ago' },
+                        { name: 'Vikas Sharma', email: 'vikas@omniva.io', role: 'Integration Manager', scope: 'Integrations', status: 'Active', last: '1 hour ago' },
+                        { name: 'Ritu Singh', email: 'ritu@omniva.io', role: 'Billing Manager', scope: 'Subscriptions', status: 'Active', last: '2 hours ago' },
+                        { name: 'Anjali Verma', email: 'anjali@omniva.io', role: 'Analyst', scope: 'Read-only reports', status: 'Inactive', last: '7 days ago' }
                       ].map((s, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 transition">
                           <td className="py-3 px-5">
@@ -3735,7 +3735,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
                     Incident history
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <RefreshCw className="w-3.5 h-3.5" /> Refresh
                   </button>
                 </div>
@@ -3772,7 +3772,7 @@ export const SuperAdminDashboard = () => {
                   <div className="h-44 w-full flex items-end gap-2.5 pt-6 pb-2 px-2 border-b border-slate-100">
                     {[110, 120, 115, 135, 140, 124, 130, 160, 145, 180].map((h, i) => (
                       <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                        <div style={{ height: `${(h / 200) * 100}%` }} className="w-full bg-[#5046e5] rounded-t-md" />
+                        <div style={{ height: `${(h / 200) * 100}%` }} className="w-full bg-indigo-600 rounded-t-md" />
                         <span className="text-[9px] text-slate-400">{i * 2}h</span>
                       </div>
                     ))}
@@ -3847,7 +3847,7 @@ export const SuperAdminDashboard = () => {
                         <span>46%</span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#5046e5] h-full rounded-full" style={{ width: '46%' }} />
+                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '46%' }} />
                       </div>
                     </div>
                     <div>
@@ -3892,7 +3892,7 @@ export const SuperAdminDashboard = () => {
                   <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
                     Retention policy
                   </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5" /> Export logs
                   </button>
                 </div>
@@ -3982,7 +3982,7 @@ export const SuperAdminDashboard = () => {
                 <p className="text-xs text-slate-500">Configure global preferences, security and communication defaults</p>
                 <button
                   onClick={() => alert('Platform settings saved successfully!')}
-                  className="px-4 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                 >
                   Save changes
                 </button>
@@ -4003,7 +4003,7 @@ export const SuperAdminDashboard = () => {
                     <button
                       key={i}
                       className={`w-full text-left px-3 py-2 rounded-xl transition ${
-                        i === 0 ? 'bg-indigo-50 text-[#5046e5]' : 'text-slate-600 hover:bg-slate-50'
+                        i === 0 ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       {cat}
@@ -4088,7 +4088,7 @@ export const SuperAdminDashboard = () => {
                         type="button"
                         onClick={() => setReqEmailVerify(!reqEmailVerify)}
                         className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                          reqEmailVerify ? 'bg-[#5046e5]' : 'bg-slate-300'
+                          reqEmailVerify ? 'bg-indigo-600' : 'bg-slate-300'
                         }`}
                       >
                         <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${reqEmailVerify ? 'left-5' : 'left-0.5'}`} />
@@ -4104,7 +4104,7 @@ export const SuperAdminDashboard = () => {
                         type="button"
                         onClick={() => setReq2FA(!req2FA)}
                         className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                          req2FA ? 'bg-[#5046e5]' : 'bg-slate-300'
+                          req2FA ? 'bg-indigo-600' : 'bg-slate-300'
                         }`}
                       >
                         <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${req2FA ? 'left-5' : 'left-0.5'}`} />
@@ -4120,7 +4120,7 @@ export const SuperAdminDashboard = () => {
                         type="button"
                         onClick={() => setAlertFailures(!alertFailures)}
                         className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                          alertFailures ? 'bg-[#5046e5]' : 'bg-slate-300'
+                          alertFailures ? 'bg-indigo-600' : 'bg-slate-300'
                         }`}
                       >
                         <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${alertFailures ? 'left-5' : 'left-0.5'}`} />
@@ -4136,7 +4136,7 @@ export const SuperAdminDashboard = () => {
                         type="button"
                         onClick={() => setAllowUnverifiedDomains(!allowUnverifiedDomains)}
                         className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                          allowUnverifiedDomains ? 'bg-[#5046e5]' : 'bg-slate-300'
+                          allowUnverifiedDomains ? 'bg-indigo-600' : 'bg-slate-300'
                         }`}
                       >
                         <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${allowUnverifiedDomains ? 'left-5' : 'left-0.5'}`} />
@@ -4147,7 +4147,7 @@ export const SuperAdminDashboard = () => {
                   <div className="pt-2 flex justify-end">
                     <button
                       onClick={() => alert('Platform settings saved successfully!')}
-                      className="px-5 py-2 rounded-xl bg-[#5046e5] text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                      className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                     >
                       Save changes
                     </button>
@@ -4265,7 +4265,7 @@ export const SuperAdminDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white font-bold shadow-md cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md cursor-pointer"
                 >
                   Save Merchant Changes
                 </button>

@@ -89,7 +89,7 @@ export const PortalSwitcherBar = () => {
           disabled={switching}
           className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
             currentPath.startsWith('/merchant')
-              ? 'bg-[#5046e5] text-white shadow-xs'
+              ? 'bg-indigo-600 text-white shadow-xs'
               : 'bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200'
           }`}
           title="Merchant Operating Workspace"

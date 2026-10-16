@@ -381,7 +381,7 @@ export const MetaTrackingSettings = () => {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#5046e5] hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {saving ? 'Saving...' : 'Save & Confirm Meta Settings'}
@@ -411,7 +411,7 @@ export const MetaTrackingSettings = () => {
             type="button"
             onClick={handleTestCapi}
             disabled={testingCapi}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 text-[#5046e5] hover:bg-indigo-100 font-bold text-xs border border-indigo-200 transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-xs border border-indigo-200 transition cursor-pointer disabled:opacity-50"
           >
             <Send className="w-3.5 h-3.5" />
             {testingCapi ? 'Sending Event...' : 'Fire Test Event to Meta'}
