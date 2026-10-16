@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import { PortalSwitcherBar } from '../components/PortalSwitcherBar';
 import {
@@ -509,6 +510,50 @@ export const SuperAdminDashboard = () => {
     }
   ]);
 
+  const [livePlatformStats, setLivePlatformStats] = useState(null);
+
+  // Load real merchants and platform statistics from backend
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        const [merchantsRes, statsRes] = await Promise.all([
+          axios.get('/api/admin/merchants'),
+          axios.get('/api/admin/stats')
+        ]);
+        if (merchantsRes.data.success && Array.isArray(merchantsRes.data.data) && merchantsRes.data.data.length > 0) {
+          const liveList = merchantsRes.data.data.map((t, idx) => ({
+            id: 'SUB-' + (idx + 21).toString().padStart(4, '0'),
+            realDbId: t._id,
+            name: t.businessName,
+            owner: t.ownerName || 'Merchant Owner',
+            email: t.ownerEmail || t.contact?.email || 'owner@example.com',
+            phone: t.contact?.phone || '+91 98765 43210',
+            address: t.contact?.city ? `${t.contact.city}, ${t.contact.state}` : 'Jaipur, Rajasthan',
+            type: t.businessType === 'PRODUCT' ? 'Product' : t.businessType === 'SERVICE' ? 'Service' : t.businessType === 'TRAVEL' ? 'Travel' : 'Product',
+            plan: t.planTier ? t.planTier.charAt(0) + t.planTier.slice(1).toLowerCase() : 'Growth',
+            status: t.status === 'ACTIVE' ? 'Active' : t.status === 'SUSPENDED' ? 'Suspended' : 'Pending',
+            joinedDate: new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            domain: `${t.slug}.omniva.io`,
+            orders: t.ordersCount || 0,
+            revenue: '₹' + ((t.ordersCount || 0) * 850).toLocaleString('en-IN'),
+            customers: (t.leadsCount || 0) + (t.ordersCount || 0),
+            staff: '5 / 10',
+            storage: '2.5 / 10 GB',
+            quota: `${t.ordersCount || 0} / 500 units`,
+            enabledModules: t.enabledModules || {}
+          }));
+          setMerchants(liveList);
+        }
+        if (statsRes.data.success) {
+          setLivePlatformStats(statsRes.data.data);
+        }
+      } catch (err) {
+        console.warn('Live admin data load fallback:', err.message);
+      }
+    };
+    fetchAdminData();
+  }, []);
+
   const selectedMerchant = merchants.find((m) => m.id === selectedMerchantId) || merchants[0];
 
   const filteredMerchants = merchants.filter((m) => {
@@ -529,11 +574,20 @@ export const SuperAdminDashboard = () => {
     }, 400);
   };
 
-  const handleToggleSuspend = (merchantId) => {
+  const handleToggleSuspend = async (merchantId) => {
+    const target = merchants.find((m) => m.id === merchantId);
+    if (!target) return;
+    const newStatus = target.status === 'Suspended' ? 'Active' : 'Suspended';
+    try {
+      if (target.realDbId) {
+        await axios.patch(`/api/admin/merchants/${target.realDbId}/status`, { status: newStatus.toUpperCase() });
+      }
+    } catch (err) {
+      console.warn('Backend status update warning:', err.message);
+    }
     setMerchants((prev) =>
       prev.map((m) => {
         if (m.id === merchantId) {
-          const newStatus = m.status === 'Suspended' ? 'Active' : 'Suspended';
           setAdminToast(`Merchant "${m.name}" is now marked as ${newStatus}!`);
           return { ...m, status: newStatus };
         }
@@ -579,22 +633,33 @@ export const SuperAdminDashboard = () => {
     setTimeout(() => setAdminToast(''), 4000);
   };
 
-  const handleToggleMerchantModule = (merchantId, moduleKey) => {
+  const handleToggleMerchantModule = async (merchantId, moduleKey) => {
+    const target = merchants.find(m => m.id === merchantId);
+    if (!target) return;
+    const defaultModules = {
+      products: target.type === 'Product',
+      serviceBookings: target.type === 'Service',
+      travelBookings: target.type === 'Travel',
+      crmLeads: true,
+      marketingAds: true,
+      automations: true,
+    };
+    const currentModules = target.enabledModules || defaultModules;
+    const updatedModules = {
+      ...currentModules,
+      [moduleKey]: !currentModules[moduleKey]
+    };
+
+    try {
+      if (target.realDbId) {
+        await axios.patch(`/api/admin/merchants/${target.realDbId}/modules`, { enabledModules: updatedModules });
+      }
+    } catch (err) {
+      console.warn('Backend module update warning:', err.message);
+    }
+
     setMerchants(prev => prev.map(m => {
       if (m.id === merchantId) {
-        const defaultModules = {
-          products: m.type === 'Product',
-          serviceBookings: m.type === 'Service',
-          travelBookings: m.type === 'Travel',
-          crmLeads: true,
-          marketingAds: true,
-          automations: true,
-        };
-        const currentModules = m.enabledModules || defaultModules;
-        const updatedModules = {
-          ...currentModules,
-          [moduleKey]: !currentModules[moduleKey]
-        };
         return {
           ...m,
           enabledModules: updatedModules
@@ -602,7 +667,7 @@ export const SuperAdminDashboard = () => {
       }
       return m;
     }));
-    setAdminToast(`Module "${moduleKey}" updated for merchant.`);
+    setAdminToast(`Module "${moduleKey}" updated for ${target.name}.`);
     setTimeout(() => setAdminToast(''), 3000);
   };
 
@@ -1775,9 +1840,17 @@ export const SuperAdminDashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Card 1: Product / Achar */}
                   <div
-                    onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Product', domain: 'desiachar.omniva.io' } : m));
-                      alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now configured with the Physical Product Selling (Achar Storefront & Order Fulfillment) system!`);
+                    onClick={async () => {
+                      if (selectedMerchant.realDbId) {
+                        try {
+                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'PRODUCT', businessType: 'PRODUCT' });
+                        } catch (err) {
+                          console.warn('Backend template update warning:', err.message);
+                        }
+                      }
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Product', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
+                      setAdminToast(`Configured ${selectedMerchant.name} with Physical Product Selling (Achar Storefront & Orders) system!`);
+                      setTimeout(() => setAdminToast(''), 4000);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Product'
@@ -1806,9 +1879,17 @@ export const SuperAdminDashboard = () => {
 
                   {/* Card 2: Travel Bookings */}
                   <div
-                    onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Travel', domain: 'rajasthantours.omniva.io' } : m));
-                      alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now switched to the Travel Agency & Tour Booking system!`);
+                    onClick={async () => {
+                      if (selectedMerchant.realDbId) {
+                        try {
+                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'TRAVEL', businessType: 'TRAVEL' });
+                        } catch (err) {
+                          console.warn('Backend template update warning:', err.message);
+                        }
+                      }
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Travel', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
+                      setAdminToast(`Switched ${selectedMerchant.name} to Travel Agency & Tour Booking system!`);
+                      setTimeout(() => setAdminToast(''), 4000);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Travel'
@@ -1837,9 +1918,17 @@ export const SuperAdminDashboard = () => {
 
                   {/* Card 3: Service Bookings */}
                   <div
-                    onClick={() => {
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Service', domain: 'royalstudio.omniva.io' } : m));
-                      alert(`[SUPER ADMIN SUCCESS] ${selectedMerchant.name} is now switched to the Photography & Event Studio Booking system!`);
+                    onClick={async () => {
+                      if (selectedMerchant.realDbId) {
+                        try {
+                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'SERVICE', businessType: 'SERVICE' });
+                        } catch (err) {
+                          console.warn('Backend template update warning:', err.message);
+                        }
+                      }
+                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Service', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
+                      setAdminToast(`Switched ${selectedMerchant.name} to Photography & Event Studio Booking system!`);
+                      setTimeout(() => setAdminToast(''), 4000);
                     }}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Service'

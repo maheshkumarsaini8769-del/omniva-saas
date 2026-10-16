@@ -2921,7 +2921,34 @@ export const MerchantDashboard = () => {
 
   const isTabAllowedForBusinessType = (tab, mode) => {
     if (tab === 'inventory') return false; // Inventory removed as requested
-    if (tab === 'settings' || tab === 'billing' || tab === 'customer-view') return true;
+    if (tab === 'settings' || tab === 'billing' || tab === 'customer-view' || tab === 'overview') return true;
+
+    // Check dynamic module assignment assigned by Super Admin
+    if (tenant?.enabledModules) {
+      const em = tenant.enabledModules;
+      if (['orders', 'products', 'categories'].includes(tab)) {
+        return Boolean(em.products);
+      }
+      if (tab === 'service-bookings') {
+        return Boolean(em.serviceBookings);
+      }
+      if (tab === 'travel-bookings') {
+        return Boolean(em.travelBookings);
+      }
+      if (tab === 'leads' || tab === 'customers') {
+        return em.crmLeads !== false;
+      }
+      if (tab === 'marketing' || tab === 'ai-insights') {
+        return em.marketingAds !== false;
+      }
+      if (tab === 'automations') {
+        return em.automations !== false;
+      }
+      if (tab === 'staff' || tab === 'integrations' || tab === 'reports') {
+        return true;
+      }
+    }
+
     if (mode === 'ALL') return true;
     if (mode === 'PRODUCT') {
       return tab !== 'service-bookings' && tab !== 'travel-bookings';
@@ -2980,7 +3007,7 @@ export const MerchantDashboard = () => {
           {navItem('overview', 'Overview', LayoutDashboard)}
 
           {/* E-Commerce / Retail Modules (Achar / Product) */}
-          {(businessTypeMode === 'PRODUCT' || businessTypeMode === 'ALL') && (
+          {isTabAllowedForBusinessType('products', businessTypeMode) && (
             <>
               {businessTypeMode === 'ALL' && (
                 <div className="pt-2 pb-1 px-3 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
@@ -2995,7 +3022,7 @@ export const MerchantDashboard = () => {
           )}
 
           {/* Service / Studio / Appointment Modules */}
-          {(businessTypeMode === 'SERVICE' || businessTypeMode === 'ALL') && (
+          {isTabAllowedForBusinessType('service-bookings', businessTypeMode) && (
             <>
               {businessTypeMode === 'ALL' && (
                 <div className="pt-2 pb-1 px-3 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
@@ -3007,7 +3034,7 @@ export const MerchantDashboard = () => {
           )}
 
           {/* Travel & Tourism Modules */}
-          {(businessTypeMode === 'TRAVEL' || businessTypeMode === 'ALL') && (
+          {isTabAllowedForBusinessType('travel-bookings', businessTypeMode) && (
             <>
               {businessTypeMode === 'ALL' && (
                 <div className="pt-2 pb-1 px-3 text-[9px] font-bold text-slate-500 uppercase tracking-wider">
@@ -3024,11 +3051,21 @@ export const MerchantDashboard = () => {
               CRM &amp; Growth
             </div>
           )}
-          {navItem('leads', 'Leads / CRM', Users2)}
-          {navItem('customers', 'Customers', Users)}
-          {navItem('ai-insights', 'AI Business Analyzer', Sparkles)}
-          {navItem('marketing', 'Marketing & Ads', Megaphone)}
-          {navItem('automations', 'Automations', Zap)}
+          {isTabAllowedForBusinessType('leads', businessTypeMode) && (
+            <>
+              {navItem('leads', 'Leads / CRM', Users2)}
+              {navItem('customers', 'Customers', Users)}
+            </>
+          )}
+          {isTabAllowedForBusinessType('marketing', businessTypeMode) && (
+            <>
+              {navItem('ai-insights', 'AI Business Analyzer', Sparkles)}
+              {navItem('marketing', 'Marketing & Ads', Megaphone)}
+            </>
+          )}
+          {isTabAllowedForBusinessType('automations', businessTypeMode) && (
+            navItem('automations', 'Automations', Zap)
+          )}
           {navItem('staff', 'Staff & Roles', ShieldCheck)}
           {navItem('integrations', 'Integrations', Share2)}
           {navItem('reports', 'Reports', BarChart3)}

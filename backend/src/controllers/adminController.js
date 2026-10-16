@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
 const Order = require('../models/Order');
@@ -279,8 +280,168 @@ const testMerchantIntegration = async (req, res) => {
   }
 };
 
+// @desc    Create new merchant and owner account by Super Admin
+// @route   POST /api/admin/merchants
+// @access  Private (SUPER_ADMIN)
+const createMerchant = async (req, res) => {
+  try {
+    const {
+      businessName,
+      slug,
+      businessType = 'PRODUCT',
+      templateCode = 'PRODUCT',
+      planTier = 'GROWTH',
+      ownerName,
+      ownerEmail,
+      password = 'password123',
+      phone = '',
+      enabledModules,
+    } = req.body;
+
+    if (!businessName || !ownerEmail) {
+      return res.status(400).json({ success: false, message: 'Business name and owner email are required' });
+    }
+
+    const finalSlug = (slug || businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) + '-' + Date.now().toString().slice(-4);
+
+    const existingUser = await User.findOne({ email: ownerEmail.toLowerCase().trim() });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User with this email already exists' });
+    }
+
+    let modules = enabledModules;
+    if (!modules) {
+      if (templateCode === 'PRODUCT') {
+        modules = { products: true, orders: true, inventory: true, serviceBookings: false, travelBookings: false, crmLeads: true, marketingAds: true, automations: true };
+      } else if (templateCode === 'TRAVEL') {
+        modules = { products: false, orders: false, inventory: false, serviceBookings: false, travelBookings: true, crmLeads: true, marketingAds: true, automations: true };
+      } else if (templateCode === 'SERVICE') {
+        modules = { products: false, orders: false, inventory: false, serviceBookings: true, travelBookings: false, crmLeads: true, marketingAds: true, automations: true };
+      } else {
+        modules = { products: true, orders: true, inventory: true, serviceBookings: true, travelBookings: true, crmLeads: true, marketingAds: true, automations: true };
+      }
+    }
+
+    const tenant = await Tenant.create({
+      businessName,
+      slug: finalSlug,
+      businessType,
+      templateCode,
+      planTier,
+      status: 'ACTIVE',
+      enabledModules: modules,
+      contact: { email: ownerEmail, phone },
+    });
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      name: ownerName || businessName + ' Owner',
+      email: ownerEmail.toLowerCase().trim(),
+      password: hashedPassword,
+      role: 'MERCHANT_OWNER',
+      businessId: tenant._id,
+      phone,
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `Merchant ${businessName} created successfully`,
+      data: {
+        ...tenant.toObject(),
+        ownerName: user.name,
+        ownerEmail: user.email,
+        ordersCount: 0,
+        bookingsCount: 0,
+        leadsCount: 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update merchant status (Active, Suspended, Pending)
+// @route   PATCH /api/admin/merchants/:id/status
+// @access  Private (SUPER_ADMIN)
+const updateMerchantStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['ACTIVE', 'SUSPENDED', 'PENDING'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Valid status is required (ACTIVE, SUSPENDED, PENDING)' });
+    }
+
+    const tenant = await Tenant.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Merchant not found' });
+    }
+
+    // Also update associated owner user active state
+    await User.updateMany(
+      { businessId: tenant._id },
+      { isActive: status === 'ACTIVE' }
+    );
+
+    res.json({
+      success: true,
+      message: `Merchant status updated to ${status}`,
+      data: tenant,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get aggregate platform metrics
+// @route   GET /api/admin/stats
+// @access  Private (SUPER_ADMIN, SUPER_STAFF)
+const getPlatformStats = async (req, res) => {
+  try {
+    const [totalMerchants, activeMerchants, totalOrders, totalBookings, totalLeads] = await Promise.all([
+      Tenant.countDocuments(),
+      Tenant.countDocuments({ status: 'ACTIVE' }),
+      Order.countDocuments(),
+      Booking.countDocuments(),
+      Lead.countDocuments(),
+    ]);
+
+    const ordersRevenue = await Order.aggregate([
+      { $match: { status: { $ne: 'CANCELLED' } } },
+      { $group: { _id: null, total: { $sum: '$total' } } },
+    ]);
+
+    const totalRevenue = ordersRevenue[0]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalMerchants,
+        activeMerchants,
+        totalOrders,
+        totalBookings,
+        totalLeads,
+        totalRevenue,
+        activeSubscriptions: activeMerchants,
+        systemHealth: '100% Operational',
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getAllMerchants,
+  createMerchant,
+  updateMerchantStatus,
+  getPlatformStats,
   updateMerchantTemplate,
   updateMerchantModules,
   getMerchantIntegrations,
