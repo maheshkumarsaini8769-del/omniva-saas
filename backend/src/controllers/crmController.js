@@ -206,6 +206,7 @@ const getLeads = async (req, res) => {
       pipelineSummary,
       totalPipelineValue,
       leads,
+      data: leads,
     });
   } catch (error) {
     res.status(500).json({
