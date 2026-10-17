@@ -111,7 +111,7 @@ export const MerchantDashboard = () => {
       orders: 'Orders & Fulfillment',
       products: 'Products Catalog',
       categories: 'Categories Showcase',
-      'customer-view': 'Customer Storefront',
+      'customer-view': 'Customer View (Storefront)',
       leads: 'Leads & CRM Pipeline',
       customers: 'Customers Directory',
       'ai-insights': 'AI Business Analyzer',
@@ -3005,6 +3005,7 @@ export const MerchantDashboard = () => {
         {/* Navigation Items (Dynamic by Business Type / Super Admin setting) */}
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
           {navItem('overview', 'Overview', LayoutDashboard)}
+          {navItem('customer-view', 'Customer View (Storefront)', Store)}
 
           {/* E-Commerce / Retail Modules (Achar / Product) */}
           {isTabAllowedForBusinessType('products', businessTypeMode) && (
@@ -3017,7 +3018,6 @@ export const MerchantDashboard = () => {
               {navItem('orders', 'Orders & Fulfillment', ShoppingBag)}
               {navItem('products', 'Products (Catalog)', Package)}
               {navItem('categories', 'Categories', LayoutGrid)}
-              {navItem('customer-view', 'Customer Storefront', Store)}
             </>
           )}
 
@@ -3142,10 +3142,10 @@ export const MerchantDashboard = () => {
               type="button"
               onClick={() => setActiveTab('customer-view')}
               title="View Customer Storefront"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl bg-white transition cursor-pointer text-xs font-bold shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl bg-white transition cursor-pointer text-xs font-bold shadow-xs"
             >
               <Store className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Customer Store</span>
+              <span>Customer View</span>
             </button>
 
             {/* Quick Actions */}
