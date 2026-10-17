@@ -173,6 +173,11 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    duplicateResolved: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     timeline: {
       type: [orderTimelineSchema],
       default: () => [{

@@ -1,6 +1,8 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 
+const mongoose = require('mongoose');
+
 // ==================== CATEGORIES ====================
 
 // @desc    Get all categories for merchant
@@ -21,24 +23,38 @@ const getCategories = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const { name, slug, description, image, orderIndex } = req.body;
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Category name is required' });
     }
 
-    const catSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const trimmedName = name.trim();
+    let catSlug = slug?.trim() || trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-    const existing = await Category.findOne({ businessId: req.businessId, slug: catSlug });
+    // Check if category with this name or slug already exists for this merchant
+    const existing = await Category.findOne({
+      businessId: req.businessId,
+      $or: [
+        { name: { $regex: new RegExp(`^${trimmedName}$`, 'i') } },
+        { slug: catSlug }
+      ]
+    });
+
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Category with this slug already exists' });
+      // If image or description provided, update existing
+      if (image && !existing.image) existing.image = image;
+      if (description && !existing.description) existing.description = description;
+      await existing.save();
+      return res.status(200).json({ success: true, data: existing, message: 'Category ready' });
     }
 
     const category = await Category.create({
       businessId: req.businessId,
-      name,
+      name: trimmedName,
       slug: catSlug,
       description: description || '',
       image: image || '',
       orderIndex: orderIndex || 0,
+      isActive: true,
     });
 
     res.status(201).json({ success: true, data: category });
@@ -58,8 +74,8 @@ const updateCategory = async (req, res) => {
     }
 
     const { name, slug, description, image, orderIndex, isActive } = req.body;
-    if (name) category.name = name;
-    if (slug) category.slug = slug;
+    if (name) category.name = name.trim();
+    if (slug) category.slug = slug.trim();
     if (description !== undefined) category.description = description;
     if (image !== undefined) category.image = image;
     if (orderIndex !== undefined) category.orderIndex = orderIndex;
@@ -108,7 +124,7 @@ const getProducts = async (req, res) => {
     }
 
     const products = await Product.find(filter)
-      .populate('categoryId', 'name slug')
+      .populate('categoryId', 'name slug image')
       .sort({ createdAt: -1 });
 
     res.json({ success: true, count: products.length, data: products });
@@ -122,7 +138,7 @@ const getProducts = async (req, res) => {
 // @access  Private (Merchant Admin/Staff)
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findOne({ _id: req.params.id, businessId: req.businessId }).populate('categoryId', 'name slug');
+    const product = await Product.findOne({ _id: req.params.id, businessId: req.businessId }).populate('categoryId', 'name slug image');
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -137,28 +153,46 @@ const getProductById = async (req, res) => {
 // @access  Private (Merchant Admin)
 const createProduct = async (req, res) => {
   try {
-    const { name, slug, categoryId, description, price, compareAtPrice, images, variants, stockQuantity, trackQuantity, isAvailable, tags } = req.body;
+    const { name, slug, categoryId, categoryName, description, price, compareAtPrice, images, variants, stockQuantity, trackQuantity, isAvailable, tags } = req.body;
 
     if (!name || price === undefined) {
       return res.status(400).json({ success: false, message: 'Product name and price are required' });
     }
 
-    const prodSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    let prodSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
     const existing = await Product.findOne({ businessId: req.businessId, slug: prodSlug });
     if (existing) {
-      return res.status(400).json({ success: false, message: 'A product with this slug already exists' });
+      prodSlug = `${prodSlug}-${Date.now().toString().slice(-4)}`;
+    }
+
+    // Resolve categoryId if categoryId or categoryName provided
+    let resolvedCategoryId = null;
+    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+      resolvedCategoryId = categoryId;
+    } else if (categoryName || categoryId) {
+      const searchCat = (categoryName || categoryId).toString().trim();
+      const catObj = await Category.findOne({
+        businessId: req.businessId,
+        $or: [
+          { name: { $regex: new RegExp(`^${searchCat}$`, 'i') } },
+          { slug: searchCat.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
+        ]
+      });
+      if (catObj) {
+        resolvedCategoryId = catObj._id;
+      }
     }
 
     const product = await Product.create({
       businessId: req.businessId,
-      categoryId: categoryId || null,
-      name,
+      categoryId: resolvedCategoryId,
+      name: name.trim(),
       slug: prodSlug,
       description: description || '',
       price: Number(price),
       compareAtPrice: Number(compareAtPrice || 0),
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images : (images ? [images] : []),
       variants: Array.isArray(variants) ? variants : [],
       stockQuantity: stockQuantity !== undefined ? Number(stockQuantity) : 100,
       trackQuantity: trackQuantity !== undefined ? Boolean(trackQuantity) : true,
@@ -166,7 +200,8 @@ const createProduct = async (req, res) => {
       tags: Array.isArray(tags) ? tags : [],
     });
 
-    res.status(201).json({ success: true, data: product });
+    const populatedProduct = await Product.findById(product._id).populate('categoryId', 'name slug image');
+    res.status(201).json({ success: true, data: populatedProduct });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -182,15 +217,33 @@ const updateProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    const fields = ['name', 'slug', 'categoryId', 'description', 'price', 'compareAtPrice', 'images', 'variants', 'stockQuantity', 'trackQuantity', 'isAvailable', 'tags'];
+    const fields = ['name', 'slug', 'description', 'price', 'compareAtPrice', 'images', 'variants', 'stockQuantity', 'trackQuantity', 'isAvailable', 'tags'];
     fields.forEach((field) => {
       if (req.body[field] !== undefined) {
         product[field] = req.body[field];
       }
     });
 
+    // Resolve categoryId if provided
+    if (req.body.categoryId && mongoose.Types.ObjectId.isValid(req.body.categoryId)) {
+      product.categoryId = req.body.categoryId;
+    } else if (req.body.categoryName || (req.body.categoryId && !mongoose.Types.ObjectId.isValid(req.body.categoryId))) {
+      const searchCat = (req.body.categoryName || req.body.categoryId).toString().trim();
+      const catObj = await Category.findOne({
+        businessId: req.businessId,
+        $or: [
+          { name: { $regex: new RegExp(`^${searchCat}$`, 'i') } },
+          { slug: searchCat.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
+        ]
+      });
+      if (catObj) {
+        product.categoryId = catObj._id;
+      }
+    }
+
     await product.save();
-    res.json({ success: true, data: product });
+    const populated = await Product.findById(product._id).populate('categoryId', 'name slug image');
+    res.json({ success: true, data: populated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

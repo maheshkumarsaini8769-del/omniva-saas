@@ -12,7 +12,9 @@ import {
   X, 
   Kanban, 
   List, 
-  DollarSign
+  DollarSign,
+  PackageCheck,
+  Zap,
 } from 'lucide-react';
 
 const STAGES = [
@@ -47,6 +49,19 @@ export const CrmPipeline = () => {
     source: 'META_ADS',
     campaignName: '',
     initialNote: '',
+  });
+
+  // Convert Lead to Order state
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [convertingOrder, setConvertingOrder] = useState(false);
+  const [convertFormData, setConvertFormData] = useState({
+    street: '',
+    city: '',
+    pincode: '110001',
+    price: 299,
+    productName: '',
+    paymentMethod: 'COD',
+    notes: '',
   });
 
   const fetchLeads = useCallback(async () => {
@@ -112,6 +127,50 @@ export const CrmPipeline = () => {
       }
     } catch (err) {
       alert(err.response?.data?.message || 'Error updating stage');
+    }
+  };
+
+  const handleOpenConvertModal = () => {
+    if (!selectedLead) return;
+    setConvertFormData({
+      street: selectedLead.customFields?.address || '',
+      city: selectedLead.customFields?.city || '',
+      pincode: '110001',
+      price: selectedLead.budget > 0 ? selectedLead.budget : 299,
+      productName: selectedLead.customFields?.productName || selectedLead.campaignName || 'Direct Inquired Product',
+      paymentMethod: 'COD',
+      notes: '',
+    });
+    setIsConvertModalOpen(true);
+  };
+
+  const handleConvertLeadToOrder = async (e) => {
+    e.preventDefault();
+    if (!selectedLead) return;
+
+    const cleanPin = (convertFormData.pincode || '').replace(/\D/g, '');
+    if (cleanPin.length !== 6 || !/^[1-9][0-9]{5}$/.test(cleanPin)) {
+      alert('⚠️ Invalid PIN Code! Please enter a valid 6-digit Indian postal PIN code (e.g. 110001, 400001).');
+      return;
+    }
+
+    setConvertingOrder(true);
+    try {
+      const res = await axios.post(`/api/crm/leads/${selectedLead._id}/convert-to-order`, {
+        ...convertFormData,
+        pincode: cleanPin,
+      });
+      if (res.data.success) {
+        alert(`🎉 Success! Lead converted to Order #${res.data.data.order.orderNumber}. It is now in Orders Management!`);
+        setIsConvertModalOpen(false);
+        setSelectedLead(res.data.data.lead);
+        fetchLeads();
+        fetchStats();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error converting lead to order');
+    } finally {
+      setConvertingOrder(false);
     }
   };
 
@@ -563,7 +622,13 @@ export const CrmPipeline = () => {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-100">
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <button
+                onClick={handleOpenConvertModal}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition cursor-pointer"
+              >
+                <PackageCheck className="w-4 h-4 text-emerald-300" /> ⚡ Convert Lead to Order (1-Click)
+              </button>
               <a
                 href={`https://wa.me/91${selectedLead.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(selectedLead.name)}`}
                 target="_blank"
@@ -672,6 +737,124 @@ export const CrmPipeline = () => {
                 className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/30"
               >
                 Add Lead to Pipeline
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Convert Lead to Order Modal */}
+      {isConvertModalOpen && selectedLead && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <PackageCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Convert Lead to Order</h3>
+                  <p className="text-[11px] text-slate-500">Transfers directly to Orders Fulfillment Dashboard</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsConvertModalOpen(false)}
+                className="p-1 rounded text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConvertLeadToOrder} className="space-y-3 text-xs">
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
+                <div className="text-[11px] font-semibold text-slate-500">Customer Summary:</div>
+                <div className="font-bold text-slate-800">{selectedLead.name} ({selectedLead.phone})</div>
+                <div className="text-[10px] text-emerald-600 font-semibold">Status will automatically update to WON</div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Product / Item Name</label>
+                <input
+                  type="text"
+                  required
+                  value={convertFormData.productName}
+                  onChange={(e) => setConvertFormData({ ...convertFormData, productName: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Deal Price (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={convertFormData.price}
+                    onChange={(e) => setConvertFormData({ ...convertFormData, price: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-indigo-500 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Payment Method</label>
+                  <select
+                    value={convertFormData.paymentMethod}
+                    onChange={(e) => setConvertFormData({ ...convertFormData, paymentMethod: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none"
+                  >
+                    <option value="COD">Cash on Delivery (COD)</option>
+                    <option value="ONLINE">Paid Online (UPI / Card)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Delivery Street Address</label>
+                <input
+                  type="text"
+                  required
+                  value={convertFormData.street}
+                  placeholder="House No., Street, Area"
+                  onChange={(e) => setConvertFormData({ ...convertFormData, street: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">City</label>
+                  <input
+                    type="text"
+                    required
+                    value={convertFormData.city}
+                    placeholder="e.g. Mumbai"
+                    onChange={(e) => setConvertFormData({ ...convertFormData, city: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase">Pincode *</label>
+                    <span className="text-[10px] text-slate-400">6 Digits</span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={convertFormData.pincode}
+                    placeholder="400001"
+                    onChange={(e) => setConvertFormData({ ...convertFormData, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={convertingOrder}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4" />
+                {convertingOrder ? 'Creating Order...' : '🚀 Confirm & Create Direct Order'}
               </button>
             </form>
           </div>

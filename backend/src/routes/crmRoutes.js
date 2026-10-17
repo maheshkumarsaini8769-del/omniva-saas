@@ -11,6 +11,7 @@ const {
   createTask,
   toggleTask,
   getCRMStats,
+  convertLeadToOrder,
 } = require('../controllers/crmController');
 const { protect, tenantScope } = require('../middlewares/authMiddleware');
 const { enforceQuota } = require('../middlewares/quotaMiddleware');
@@ -31,5 +32,6 @@ router.route('/leads/:id/notes').post(addNote);
 router.route('/leads/:id/call-logs').post(logCall);
 router.route('/leads/:id/tasks').post(createTask);
 router.route('/leads/:leadId/tasks/:taskId').patch(toggleTask);
+router.route('/leads/:id/convert-to-order').post(convertLeadToOrder);
 
 module.exports = router;

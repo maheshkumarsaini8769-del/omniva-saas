@@ -20,7 +20,11 @@ import {
   Camera,
   Calendar,
   Clock,
-  Trash2
+  Trash2,
+  Zap,
+  X,
+  Gift,
+  MessageSquare
 } from 'lucide-react';
 
 export const PublicStorefront = () => {
@@ -49,6 +53,17 @@ export const PublicStorefront = () => {
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Direct Inquiry (Lead) and Exit-Intent State
+  const [inquireModalProduct, setInquireModalProduct] = useState(null);
+  const [inquireCustomerName, setInquireCustomerName] = useState('');
+  const [inquireCustomerPhone, setInquireCustomerPhone] = useState('');
+  const [inquireSubmitting, setInquireSubmitting] = useState(false);
+  const [isExitPopupOpen, setIsExitPopupOpen] = useState(false);
+  const [exitPhone, setExitPhone] = useState('');
+  const [exitName, setExitName] = useState('');
+  const [hasTriggeredExit, setHasTriggeredExit] = useState(false);
+  const [couponClaimed, setCouponClaimed] = useState(false);
 
   // Service & Travel Booking state
   const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -263,7 +278,7 @@ export const PublicStorefront = () => {
   const addToCart = (product, selectedVariant = null) => {
     setCart((prev) => {
       const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
-      const variantId = selectedVariant?._id || selectedVariant?.id || variantName;
+      const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
       const prodId = product._id || product.id || product.name;
 
       const existingIndex = prev.findIndex(
@@ -324,10 +339,124 @@ export const PublicStorefront = () => {
   const shippingFee = cart.length === 0 ? 0 : isFreeShipping ? 0 : 50;
   const totalAmount = cartSubtotal + shippingFee;
 
+  // Exit-Intent Listener
+  useEffect(() => {
+    const handleMouseLeave = (e) => {
+      if (e.clientY <= 10 && !hasTriggeredExit && !couponClaimed) {
+        setIsExitPopupOpen(true);
+        setHasTriggeredExit(true);
+      }
+    };
+    document.addEventListener('mouseleave', handleMouseLeave);
+    return () => document.removeEventListener('mouseleave', handleMouseLeave);
+  }, [hasTriggeredExit, couponClaimed]);
+
+  const handleDirectBuy = (product, selectedVariant = null) => {
+    addToCart(product, selectedVariant);
+    setCheckoutStep('CHECKOUT');
+    setIsCartOpen(true);
+  };
+
+  const handleOpenInquire = (product, selectedVariant = null) => {
+    const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+    const vPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+    setInquireModalProduct({
+      ...product,
+      selectedVariantName: selectedVariant?.name || '',
+      activePrice: vPrice,
+    });
+  };
+
+  const handleSubmitInquiry = async (e) => {
+    e.preventDefault();
+    const cleanPhone = (inquireCustomerPhone || '').replace(/\D/g, '');
+    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
+    setInquireSubmitting(true);
+    try {
+      const res = await fetch(`/api/public/store/${slug}/inquire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: inquireCustomerName || 'Storefront Visitor',
+          phone: cleanPhone,
+          productName: inquireModalProduct ? `${inquireModalProduct.name}${inquireModalProduct.selectedVariantName ? ' (' + inquireModalProduct.selectedVariantName + ')' : ''}` : 'General Inquiry',
+          productPrice: inquireModalProduct?.activePrice,
+          productId: inquireModalProduct?._id,
+          source: 'WHATSAPP',
+          utmSource: searchParams.get('utm_source') || '',
+          utmCampaign: searchParams.get('utm_campaign') || '',
+        }),
+      });
+      const data = await res.json();
+      if (data.data?.whatsappUrl) {
+        window.open(data.data.whatsappUrl, '_blank');
+      } else {
+        const tenantPhone = (storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '');
+        const text = encodeURIComponent(`Hi! I am interested in ${inquireModalProduct?.name || 'your store products'}. Please share details & COD availability.`);
+        window.open(`https://wa.me/91${tenantPhone.slice(-10)}?text=${text}`, '_blank');
+      }
+      setInquireModalProduct(null);
+    } catch (err) {
+      console.error('Inquiry error:', err);
+      const tenantPhone = (storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '');
+      const text = encodeURIComponent(`Hi! I am interested in ${inquireModalProduct?.name || 'your store products'}.`);
+      window.open(`https://wa.me/91${tenantPhone.slice(-10)}?text=${text}`, '_blank');
+      setInquireModalProduct(null);
+    } finally {
+      setInquireSubmitting(false);
+    }
+  };
+
+  const handleClaimCoupon = async (e) => {
+    e.preventDefault();
+    const cleanPhone = (exitPhone || '').replace(/\D/g, '');
+    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
+    try {
+      await fetch(`/api/public/store/${slug}/inquire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: exitName || 'Exit Discount Visitor',
+          phone: cleanPhone,
+          productName: 'Claimed ₹100 / 10% Discount Coupon',
+          source: 'EXIT_POPUP',
+        }),
+      });
+      setCouponClaimed(true);
+    } catch (err) {
+      setCouponClaimed(true);
+    }
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
-    if (!customerName || !customerPhone || !street || !city || !pincode) {
-      alert('Please fill all mandatory shipping address fields');
+    if (!cart || cart.length === 0) {
+      alert('⚠️ Your cart is empty! Please add a product before placing an order.');
+      return;
+    }
+
+    if (!customerName?.trim() || !customerPhone || !street?.trim() || !city?.trim() || !pincode) {
+      alert('⚠️ Please fill all required fields: Full Name, Mobile Number, Complete Address, City, and Pincode.');
+      return;
+    }
+
+    const cleanPhone = customerPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).');
+      return;
+    }
+
+    const cleanPincode = pincode.replace(/\D/g, '');
+    if (cleanPincode.length !== 6 || !/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+      alert('⚠️ Invalid PIN Code! Please enter a valid 6-digit Indian postal PIN code (e.g. 110001, 302001).');
       return;
     }
 
@@ -337,14 +466,14 @@ export const PublicStorefront = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerName,
-          customerPhone,
+          customerName: customerName.trim(),
+          customerPhone: cleanPhone,
           customerEmail,
           shippingAddress: {
-            street,
-            city,
+            street: street.trim(),
+            city: city.trim(),
             state,
-            pincode,
+            pincode: cleanPincode,
           },
           items: cart,
           paymentMethod,
@@ -397,8 +526,9 @@ export const PublicStorefront = () => {
     selectedCategory === 'ALL'
       ? products
       : products.filter((p) => {
-          const catId = p.categoryId?._id || p.categoryId;
-          return catId === selectedCategory;
+          const catId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
+          const catSlug = p.categoryId?.slug || '';
+          return catId === String(selectedCategory) || (catSlug && catSlug === String(selectedCategory));
         });
 
   return (
@@ -517,15 +647,16 @@ export const PublicStorefront = () => {
               </div>
             </button>
 
-            {/* Individual Category Cards with High-Res Photos */}
             {categories.map((c) => {
-              const catProdCount = products.filter(
-                (p) => (p.categoryId?._id || p.categoryId) === c._id
-              ).length;
+              const catProdCount = products.filter((p) => {
+                const pCatId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
+                const pCatSlug = p.categoryId?.slug || '';
+                return pCatId === String(c._id) || (pCatSlug && pCatSlug === String(c.slug));
+              }).length;
               const catImage =
                 c.image ||
                 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
-              const isSelected = selectedCategory === c._id;
+              const isSelected = selectedCategory === c._id || selectedCategory === c.slug;
               return (
                 <button
                   key={c._id}
@@ -665,12 +796,46 @@ export const PublicStorefront = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProducts.map((prod) => (
-                <ProductCard key={prod._id} product={prod} onAddToCart={addToCart} />
+                <ProductCard
+                  key={prod._id}
+                  product={prod}
+                  onAddToCart={addToCart}
+                  onDirectBuy={handleDirectBuy}
+                  onInquire={handleOpenInquire}
+                />
               ))}
             </div>
           </div>
         )}
       </main>
+
+      {/* Mobile Sticky Quick Funnel Bar (When cart is empty) */}
+      {cart.length === 0 && !isCartOpen && (
+        <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 max-w-md mx-auto bg-white/95 backdrop-blur-md border border-slate-200/90 p-2 rounded-2xl shadow-xl flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (filteredProducts.length > 0) {
+                handleDirectBuy(filteredProducts[0]);
+              }
+            }}
+            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5" /> ⚡ 1-Click Order
+          </button>
+          <button
+            onClick={() => {
+              if (filteredProducts.length > 0) {
+                handleOpenInquire(filteredProducts[0]);
+              } else {
+                handleOpenInquire({ name: store.businessName, price: 0 });
+              }
+            }}
+            className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Phone className="w-3.5 h-3.5 text-emerald-400" /> 💬 Chat on WhatsApp
+          </button>
+        </div>
+      )}
 
       {/* Floating Bottom Cart Bar (Mobile Sticky) */}
       {cart.length > 0 && !isCartOpen && (
@@ -853,15 +1018,24 @@ export const PublicStorefront = () => {
                   </div>
 
                   <div>
-                    <label className="text-slate-700 block mb-1 font-semibold">10-Digit Mobile Number *</label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="e.g. 9876543210"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-slate-700 font-semibold">10-Digit Mobile Number *</label>
+                      <span className="text-[10px] text-slate-400 font-medium">Starts with 6-9</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-bold text-xs flex items-center">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="9876543210"
+                        maxLength={10}
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold focus:bg-white"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -889,14 +1063,18 @@ export const PublicStorefront = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-slate-700 block mb-1 font-semibold">Pincode *</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-semibold">Pincode *</label>
+                        <span className="text-[10px] text-slate-400 font-medium">6 Digits</span>
+                      </div>
                       <input
                         type="text"
                         required
-                        placeholder="e.g. 201309"
+                        placeholder="e.g. 110001"
+                        maxLength={6}
                         value={pincode}
-                        onChange={(e) => setPincode(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
+                        onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold focus:bg-white"
                       />
                     </div>
                   </div>
@@ -1224,12 +1402,159 @@ export const PublicStorefront = () => {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Inquiry & Lead Capture Modal */}
+      {inquireModalProduct && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Direct WhatsApp Inquiry</h3>
+                  <p className="text-[10px] text-slate-500">Get instant details, discounts & COD support</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setInquireModalProduct(null)}
+                className="p-1 rounded text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-center gap-3">
+              <img
+                src={inquireModalProduct.images?.[0] || inquireModalProduct.img || inquireModalProduct.image || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=100&auto=format&fit=crop&q=80'}
+                alt={inquireModalProduct.name}
+                className="w-12 h-12 rounded-xl object-cover"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-slate-900 truncate">{inquireModalProduct.name}</div>
+                {inquireModalProduct.selectedVariantName && (
+                  <div className="text-[10px] text-slate-500">{inquireModalProduct.selectedVariantName}</div>
+                )}
+                <div className="text-xs font-extrabold text-emerald-600">₹{inquireModalProduct.activePrice || inquireModalProduct.price}</div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitInquiry} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Your Name (Optional)</label>
+                <input
+                  type="text"
+                  value={inquireCustomerName}
+                  placeholder="e.g. Rahul Sharma"
+                  onChange={(e) => setInquireCustomerName(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">WhatsApp Mobile Number *</label>
+                <div className="flex gap-2">
+                  <span className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold">+91</span>
+                  <input
+                    type="tel"
+                    required
+                    value={inquireCustomerPhone}
+                    placeholder="9876543210"
+                    maxLength={10}
+                    onChange={(e) => setInquireCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                    className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={inquireSubmitting}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95 disabled:opacity-50"
+              >
+                <MessageSquare className="w-4 h-4" />
+                {inquireSubmitting ? 'Connecting...' : '💬 Chat on WhatsApp Now'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Exit-Intent Discount Coupon Modal */}
+      {isExitPopupOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl relative text-center">
+            <button
+              onClick={() => setIsExitPopupOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center text-amber-500 shadow-inner">
+              <Gift className="w-7 h-7" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-100 px-2.5 py-0.5 rounded-full">
+                Special One-Time Offer
+              </span>
+              <h3 className="text-lg font-black text-slate-900 mt-2">Wait! Get ₹100 Extra OFF</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Enter your WhatsApp number to unlock your secret discount coupon code before you leave!
+              </p>
+            </div>
+
+            {!couponClaimed ? (
+              <form onSubmit={handleClaimCoupon} className="space-y-3 text-xs text-left">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Your Mobile Number</label>
+                  <div className="flex gap-2">
+                    <span className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold">+91</span>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="9876543210"
+                      maxLength={10}
+                      value={exitPhone}
+                      onChange={(e) => setExitPhone(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4" /> 🎁 Unlock ₹100 Off Coupon
+                </button>
+              </form>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
+                <div className="text-xs font-bold text-emerald-800">🎉 Coupon Unlocked!</div>
+                <div className="bg-white border border-dashed border-emerald-400 py-2 px-4 rounded-xl text-emerald-600 font-black text-base tracking-wider">
+                  SAVE100
+                </div>
+                <p className="text-[11px] text-emerald-700">Use this coupon code at checkout or mention it in WhatsApp chat!</p>
+                <button
+                  onClick={() => setIsExitPopupOpen(false)}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl"
+                >
+                  Continue Shopping
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // Reusable Product Card with High-Res Image, Badges, Ratings and Variant Selector
-const ProductCard = ({ product, onAddToCart }) => {
+const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
   const rawBasePrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price).replace(/[^0-9.]/g, '')) || 299;
 
   const availableVariants = (product.jars && product.jars.length > 0)
@@ -1356,25 +1681,47 @@ const ProductCard = ({ product, onAddToCart }) => {
           )}
         </div>
 
-        {/* Pricing and Add button */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-xl font-black text-slate-900">₹{price}</span>
-              {compareAt > price && (
-                <span className="text-xs text-slate-500 line-through">₹{compareAt}</span>
-              )}
+        {/* Pricing and Dual Action Buttons (Direct Order vs WhatsApp Inquiry) */}
+        <div className="pt-3 border-t border-slate-100 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black text-slate-900">₹{price}</span>
+                {compareAt > price && (
+                  <span className="text-xs text-slate-500 line-through">₹{compareAt}</span>
+                )}
+              </div>
+              <span className="text-[10px] text-emerald-500 font-medium">Inclusive of all taxes</span>
             </div>
-            <span className="text-[10px] text-emerald-400 font-medium">Inclusive of all taxes</span>
+
+            <button
+              onClick={() => onAddToCart(product, selectedVariant)}
+              type="button"
+              className="py-1 px-2 text-slate-500 hover:text-indigo-600 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> + Cart
+            </button>
           </div>
 
-          <button
-            onClick={() => onAddToCart(product, selectedVariant)}
-            type="button"
-            className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 transform active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Add to Cart
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Option 1: Direct Order (Instant Checkout Drawer) */}
+            <button
+              onClick={() => onDirectBuy(product, selectedVariant)}
+              type="button"
+              className="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" /> ⚡ Direct Order
+            </button>
+
+            {/* Option 2: WhatsApp Inquiry (Direct Lead Capture) */}
+            <button
+              onClick={() => onInquire(product, selectedVariant)}
+              type="button"
+              className="py-2.5 px-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
+            >
+              <Phone className="w-3.5 h-3.5 text-emerald-400" /> 💬 Ask on WhatsApp
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -9,6 +9,9 @@ const getOrders = async (req, res) => {
   try {
     const { orderStatus, paymentStatus, search, startDate, endDate, page = 1, limit = 50 } = req.query;
     const filter = { businessId: req.businessId };
+    if (!req.query.includeTest) {
+      filter.orderNumber = { $not: /^DUMMY/ };
+    }
 
     if (orderStatus && orderStatus !== 'ALL') filter.orderStatus = orderStatus;
     if (paymentStatus && paymentStatus !== 'ALL') filter.paymentStatus = paymentStatus;
@@ -70,7 +73,7 @@ const getOrderById = async (req, res) => {
 // @access  Private (Merchant Admin/Staff)
 const updateOrderStatus = async (req, res) => {
   try {
-    const { orderStatus, paymentStatus, courierPartner, trackingNumber, note } = req.body;
+    const { orderStatus, paymentStatus, courierPartner, trackingNumber, note, duplicateResolved } = req.body;
     const order = await Order.findOne({ _id: req.params.id, businessId: req.businessId });
 
     if (!order) {
@@ -78,6 +81,10 @@ const updateOrderStatus = async (req, res) => {
     }
 
     const updater = req.user ? `${req.user.name} (${req.user.role})` : 'Merchant Admin';
+
+    if (duplicateResolved !== undefined) {
+      order.duplicateResolved = Boolean(duplicateResolved);
+    }
 
     if (orderStatus && orderStatus !== order.orderStatus) {
       order.orderStatus = orderStatus;

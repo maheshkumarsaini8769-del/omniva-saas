@@ -199,17 +199,18 @@ export const MerchantDashboard = () => {
   const planName = 'Growth plan';
 
   // Dynamic Date Range Filter State (Pure Calendar Controlled)
-  const [datePreset, setDatePreset] = useState('CALENDAR');
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [datePreset, setDatePreset] = useState('ALL');
   const [startDate, setStartDate] = useState('2026-10-01');
-  const [endDate, setEndDate] = useState('2026-10-07');
+  const [endDate, setEndDate] = useState(todayStr);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Interactive Visual Calendar Range Picker State
   const [showCalendarModal, setShowCalendarModal] = useState(false);
-  const [calPickerYear, setCalPickerYear] = useState(2026);
-  const [calPickerMonth, setCalPickerMonth] = useState(9); // 0-indexed: 9 = October
+  const [calPickerYear, setCalPickerYear] = useState(new Date().getFullYear());
+  const [calPickerMonth, setCalPickerMonth] = useState(new Date().getMonth());
   const [selectedRangeStart, setSelectedRangeStart] = useState('2026-10-01');
-  const [selectedRangeEnd, setSelectedRangeEnd] = useState('2026-10-07');
+  const [selectedRangeEnd, setSelectedRangeEnd] = useState(todayStr);
 
   // Interactive Order Processing State
   const [orderPipelineTab, setOrderPipelineTab] = useState('ALL'); // ALL, NEW, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
@@ -883,8 +884,10 @@ export const MerchantDashboard = () => {
 
   // Dynamic Date Filter & Range Calculations
   const dateFilteredOrders = ordersList.filter(o => {
-    if (startDate && o.date < startDate) return false;
-    if (endDate && o.date > endDate) return false;
+    if (datePreset !== 'ALL') {
+      if (startDate && o.date < startDate) return false;
+      if (endDate && o.date > endDate) return false;
+    }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase().trim();
       const matchCust = o.customer?.toLowerCase().includes(q);
@@ -902,23 +905,69 @@ export const MerchantDashboard = () => {
   // Detects if the same customer placed another active/recent order
   const getDuplicateOrdersForOrder = (targetOrder, allOrders) => {
     if (!targetOrder || !allOrders) return [];
+    if (targetOrder.duplicateResolved) return [];
+    if (targetOrder.status === 'CANCELLED') return [];
+
     const cleanPhone = (p) => (p || '').replace(/[^0-9]/g, '').slice(-10);
     const targetPhone = cleanPhone(targetOrder.phone);
     const targetEmail = (targetOrder.email || '').trim().toLowerCase();
     const targetCustomer = (targetOrder.customer || '').trim().toLowerCase();
 
+    const parseTime = (order) => {
+      if (order.createdAt) {
+        const t = new Date(order.createdAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (order.date) {
+        const t = new Date(order.date).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      return 0;
+    };
+
+    const targetTime = parseTime(targetOrder);
+
     return allOrders.filter(o => {
       if (o.id === targetOrder.id) return false;
+      if (o._id && targetOrder._id && String(o._id) === String(targetOrder._id)) return false;
       if (o.status === 'CANCELLED') return false;
+      if (o.duplicateResolved) return false;
+
+      // Time proximity check: Duplicate orders occur within 48 hours of each other
+      const oTime = parseTime(o);
+      if (targetTime > 0 && oTime > 0) {
+        const diffHours = Math.abs(targetTime - oTime) / (1000 * 60 * 60);
+        if (diffHours > 48) return false;
+      } else if (targetOrder.date && o.date && targetOrder.date !== o.date) {
+        return false;
+      }
 
       const oPhone = cleanPhone(o.phone);
-      const phoneMatch = Boolean(targetPhone && oPhone && targetPhone === oPhone);
+      let phoneMatch = false;
+      if (targetPhone && oPhone && targetPhone.length >= 10 && targetPhone === oPhone) {
+        const nameA = targetCustomer;
+        const nameB = (o.customer || '').trim().toLowerCase();
+        const sameName = Boolean(nameA && nameB && (nameA === nameB || nameA.includes(nameB) || nameB.includes(nameA)));
+        
+        const pinA = (targetOrder.address || '').match(/\b\d{6}\b/)?.[0] || '';
+        const pinB = (o.address || '').match(/\b\d{6}\b/)?.[0] || '';
+        const samePin = Boolean(pinA && pinB && pinA === pinB);
+
+        const itemA = (targetOrder.itemSummary || '').toLowerCase();
+        const itemB = (o.itemSummary || '').toLowerCase();
+        const sameItem = Boolean(itemA && itemB && itemA === itemB);
+
+        // Genuine duplicate orders share customer name, delivery pincode, or cart items
+        if (sameName || samePin || sameItem || (!nameA && !nameB)) {
+          phoneMatch = true;
+        }
+      }
       
       const oEmail = (o.email || '').trim().toLowerCase();
-      const emailMatch = Boolean(targetEmail && oEmail && targetEmail === oEmail);
+      const emailMatch = Boolean(targetEmail && oEmail && !targetEmail.includes('@example.com') && targetEmail === oEmail);
 
       const oCustomer = (o.customer || '').trim().toLowerCase();
-      const customerMatch = Boolean(targetCustomer && oCustomer && targetCustomer === oCustomer && o.date === targetOrder.date);
+      const customerMatch = Boolean(targetCustomer && oCustomer && targetCustomer === oCustomer && targetOrder.date === o.date);
 
       return phoneMatch || emailMatch || customerMatch;
     });
@@ -966,7 +1015,7 @@ export const MerchantDashboard = () => {
 
   // Calculate duplicate orders count
   const duplicateOrdersList = staffScopedOrders.filter(o => {
-    if (o.status === 'CANCELLED') return false;
+    if (o.status === 'CANCELLED' || o.duplicateResolved) return false;
     const dupes = getDuplicateOrdersForOrder(o, ordersList);
     return dupes.length > 0;
   });
@@ -974,6 +1023,7 @@ export const MerchantDashboard = () => {
 
   const displayOrders = staffScopedOrders.filter(o => {
     if (orderPipelineTab === 'DUPLICATES') {
+      if (o.status === 'CANCELLED' || o.duplicateResolved) return false;
       const dupes = getDuplicateOrdersForOrder(o, ordersList);
       if (dupes.length === 0) return false;
     } else if (orderPipelineTab !== 'ALL' && o.status !== orderPipelineTab) {
@@ -1107,15 +1157,31 @@ export const MerchantDashboard = () => {
   };
 
   // Order Lifecycle Handlers
-  const handleAcceptOrder = (orderId) => {
+  const handleAcceptOrder = async (orderId) => {
+    const target = ordersList.find(o => 
+      o.id === orderId || 
+      o.orderNumber === orderId || 
+      o._id === orderId || 
+      o.id === `#${orderId}` || 
+      orderId === `#${o.orderNumber}`
+    );
+    if (target?._id) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.patch(`/api/orders/${target._id}/status`, { orderStatus: 'CONFIRMED' }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update order status on backend:', err);
+      }
+    }
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId) {
+      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
         return {
           ...o,
           status: 'CONFIRMED',
           statusLabel: 'Accepted / Confirmed',
           statusColor: 'bg-blue-50 text-blue-700 border-blue-200',
-          timeline: o.timeline.map((t, idx) => idx === 1 ? { ...t, time: 'Accepted Just Now by Merchant', done: true } : t)
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 1 ? { ...t, time: 'Accepted Just Now by Merchant', done: true } : t) : []
         };
       }
       return o;
@@ -1124,15 +1190,31 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
-  const handleMarkReadyToPack = (orderId) => {
+  const handleMarkReadyToPack = async (orderId) => {
+    const target = ordersList.find(o => 
+      o.id === orderId || 
+      o.orderNumber === orderId || 
+      o._id === orderId || 
+      o.id === `#${orderId}` || 
+      orderId === `#${o.orderNumber}`
+    );
+    if (target?._id) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.patch(`/api/orders/${target._id}/status`, { orderStatus: 'PROCESSING' }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update order status on backend:', err);
+      }
+    }
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId) {
+      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
         return {
           ...o,
           status: 'PROCESSING',
           statusLabel: 'Packed / Ready to Ship',
           statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-          timeline: o.timeline.map((t, idx) => idx === 2 ? { ...t, time: 'Packed & Boxed Just Now', done: true } : t)
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 2 ? { ...t, time: 'Packed & Boxed Just Now', done: true } : t) : []
         };
       }
       return o;
@@ -1141,9 +1223,28 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
-  const handleConfirmBothOrders = (orderId1, orderId2) => {
+  const handleConfirmBothOrders = async (orderId1, orderId2) => {
+    const findOrder = (val) => {
+      if (!val) return null;
+      return ordersList.find(o => 
+        o.id === val || 
+        o.orderNumber === val || 
+        o._id === val || 
+        o.id === `#${val}` || 
+        val === `#${o.orderNumber}`
+      );
+    };
+
+    const o1 = findOrder(orderId1);
+    const o2 = findOrder(orderId2);
+
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId1 || o.id === orderId2) {
+      const match1 = o1 && (o.id === o1.id || o._id === o1._id);
+      const match2 = o2 && (o.id === o2.id || o._id === o2._id);
+      if (match1 || match2) {
         return {
           ...o,
           status: 'CONFIRMED',
@@ -1155,38 +1256,182 @@ export const MerchantDashboard = () => {
       }
       return o;
     }));
-    setActionSuccessToast(`✅ Customer Confirmed: Both orders (${orderId1} & ${orderId2}) marked as Confirmed!`);
+
+    const updatePromises = [];
+    if (o1?._id) {
+      updatePromises.push(
+        axios.patch(`/api/orders/${o1._id}/status`, {
+          orderStatus: 'CONFIRMED',
+          duplicateResolved: true,
+          note: 'Customer confirmed both orders are valid'
+        }, { headers: authHeaders }).catch(err => console.warn('Failed to update order 1 duplicate status:', err))
+      );
+    }
+    if (o2?._id) {
+      updatePromises.push(
+        axios.patch(`/api/orders/${o2._id}/status`, {
+          orderStatus: 'CONFIRMED',
+          duplicateResolved: true,
+          note: 'Customer confirmed both orders are valid'
+        }, { headers: authHeaders }).catch(err => console.warn('Failed to update order 2 duplicate status:', err))
+      );
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.allSettled(updatePromises);
+    }
+
+    setActionSuccessToast(`Both orders (${orderId1} & ${orderId2}) marked as Confirmed and Verified!`);
     setTimeout(() => setActionSuccessToast(''), 4500);
     setSelectedOrderForDetail(null);
   };
 
-  const handleCancelDuplicateOrder = (duplicateOrderId, originalOrderId) => {
+  const handleCancelDuplicateOrder = async (duplicateOrderId, originalOrderId) => {
     if (window.confirm(`Are you sure you want to cancel duplicate order "${duplicateOrderId}"? The original order "${originalOrderId}" will remain active.`)) {
+      const findOrder = (val) => {
+        if (!val) return null;
+        return ordersList.find(o => 
+          o.id === val || 
+          o.orderNumber === val || 
+          o._id === val || 
+          o.id === `#${val}` || 
+          val === `#${o.orderNumber}`
+        );
+      };
+
+      const dup = findOrder(duplicateOrderId);
+      const orig = findOrder(originalOrderId);
+
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
       setOrdersList(prev => prev.map(o => {
-        if (o.id === duplicateOrderId) {
+        if (dup && (o.id === dup.id || o._id === dup._id)) {
           return {
             ...o,
             status: 'CANCELLED',
             statusLabel: 'Cancelled (Duplicate)',
             statusColor: 'bg-rose-50 text-rose-700 border-rose-200',
+            duplicateResolved: true,
             cancelReason: `Duplicate of ${originalOrderId}. Customer confirmed only 1 order needed.`
+          };
+        }
+        if (orig && (o.id === orig.id || o._id === orig._id)) {
+          return {
+            ...o,
+            duplicateResolved: true
           };
         }
         return o;
       }));
-      setActionSuccessToast(`🗑️ Duplicate order ${duplicateOrderId} cancelled. Original order ${originalOrderId} active!`);
+
+      const patchPromises = [];
+      if (dup?._id) {
+        patchPromises.push(
+          axios.patch(`/api/orders/${dup._id}/status`, {
+            orderStatus: 'CANCELLED',
+            duplicateResolved: true,
+            note: `Duplicate order cancelled. Customer confirmed only ${originalOrderId} is needed.`
+          }, { headers: authHeaders }).catch(err => console.warn('Failed to cancel duplicate order on backend:', err))
+        );
+      }
+      if (orig?._id) {
+        patchPromises.push(
+          axios.patch(`/api/orders/${orig._id}/status`, {
+            duplicateResolved: true,
+            note: 'Duplicate order resolved. Original order kept.'
+          }, { headers: authHeaders }).catch(err => console.warn('Failed to update original order duplicate status:', err))
+        );
+      }
+
+      if (patchPromises.length > 0) {
+        await Promise.allSettled(patchPromises);
+      }
+
+      setActionSuccessToast(`Duplicate order ${duplicateOrderId} cancelled. Original order ${originalOrderId} active!`);
       setTimeout(() => setActionSuccessToast(''), 4500);
       setSelectedOrderForDetail(null);
     }
   };
 
-  const handleConfirmDispatch = () => {
+  const handleMarkAsNotDuplicate = async (orderId1, orderId2) => {
+    const findOrder = (val) => {
+      if (!val) return null;
+      return ordersList.find(o => 
+        o.id === val || 
+        o.orderNumber === val || 
+        o._id === val || 
+        o.id === `#${val}` || 
+        val === `#${o.orderNumber}`
+      );
+    };
+
+    const o1 = findOrder(orderId1);
+    const o2 = findOrder(orderId2);
+
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    setOrdersList(prev => prev.map(o => {
+      const match1 = o1 && (o.id === o1.id || o._id === o1._id);
+      const match2 = o2 && (o.id === o2.id || o._id === o2._id);
+      if (match1 || match2) {
+        return {
+          ...o,
+          duplicateResolved: true
+        };
+      }
+      return o;
+    }));
+
+    const updatePromises = [];
+    if (o1?._id) {
+      updatePromises.push(
+        axios.patch(`/api/orders/${o1._id}/status`, {
+          duplicateResolved: true,
+          note: 'Verified by merchant - separate valid order'
+        }, { headers: authHeaders }).catch(err => console.warn('Failed to mark order 1 as not duplicate:', err))
+      );
+    }
+    if (o2?._id) {
+      updatePromises.push(
+        axios.patch(`/api/orders/${o2._id}/status`, {
+          duplicateResolved: true,
+          note: 'Verified by merchant - separate valid order'
+        }, { headers: authHeaders }).catch(err => console.warn('Failed to mark order 2 as not duplicate:', err))
+      );
+    }
+
+    if (updatePromises.length > 0) {
+      await Promise.allSettled(updatePromises);
+    }
+
+    setActionSuccessToast('Orders marked as verified! Duplicate alert dismissed.');
+    setTimeout(() => setActionSuccessToast(''), 4500);
+    setSelectedOrderForDetail(null);
+  };
+
+  const handleConfirmDispatch = async () => {
     if (!dispatchModalOrder) return;
     const orderId = dispatchModalOrder.id;
     const finalTracking = (trackingNumber && trackingNumber.trim()) || ('DEL-' + Math.floor(100000 + Math.random() * 900000));
     const cleanPhone = (dispatchModalOrder.phone || '').replace(/[^0-9]/g, '').slice(-10);
     const trackingUrl = getCourierTrackingUrl(courierName, finalTracking, dispatchModalOrder.orderNumber || dispatchModalOrder.id, cleanPhone);
     const trackingMsg = generateTrackingMessage(dispatchModalOrder, courierName, finalTracking);
+
+    if (dispatchModalOrder._id) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.patch(`/api/orders/${dispatchModalOrder._id}/status`, {
+          orderStatus: 'SHIPPED',
+          courierPartner: courierName,
+          trackingNumber: finalTracking
+        }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update dispatch status on backend:', err);
+      }
+    }
 
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
@@ -1201,7 +1446,7 @@ export const MerchantDashboard = () => {
           trackingNotified: true,
           trackingNotifiedAt: new Date().toISOString(),
           trackingMessage: trackingMsg,
-          timeline: o.timeline.map((t, idx) => idx === 3 ? { ...t, time: `Dispatched via ${courierName} (${finalTracking})`, done: true } : t)
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 3 ? { ...t, time: `Dispatched via ${courierName} (${finalTracking})`, done: true } : t) : []
         };
       }
       return o;
@@ -1387,9 +1632,19 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
-  const handleSaveCategoryPhoto = () => {
+  const handleSaveCategoryPhoto = async () => {
     if (!editingCategory) return;
-    setCategoriesList(prev => prev.map(c => c.id === editingCategory.id ? { ...c, image: categoryPhotoUrl } : c));
+    const catId = editingCategory._id || editingCategory.id;
+    if (editingCategory._id) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.put(`/api/categories/${editingCategory._id}`, { image: categoryPhotoUrl }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update category photo on backend:', err);
+      }
+    }
+    setCategoriesList(prev => prev.map(c => ((c._id && c._id === catId) || c.id === catId) ? { ...c, image: categoryPhotoUrl } : c));
     setEditingCategory(null);
     setActionSuccessToast(`Category image updated successfully! Synchronized with customer storefront.`);
     setTimeout(() => setActionSuccessToast(''), 4000);
@@ -2203,6 +2458,207 @@ export const MerchantDashboard = () => {
     }
   };
 
+  const fetchProductsAndCategories = async () => {
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const [catsRes, prodsRes] = await Promise.all([
+        axios.get('/api/categories', { headers: authHeaders }).catch(e => ({ data: { data: [] } })),
+        axios.get('/api/products', { headers: authHeaders }).catch(e => ({ data: { data: [] } }))
+      ]);
+
+      const apiCats = catsRes.data?.data || [];
+      const apiProds = prodsRes.data?.data || [];
+
+      if (apiCats.length > 0) {
+        const formattedCats = apiCats.map(c => {
+          const count = apiProds.filter(p => {
+            const pCatId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
+            return pCatId === String(c._id);
+          }).length;
+          return {
+            id: c._id,
+            _id: c._id,
+            name: c.name,
+            slug: c.slug,
+            description: c.description || '',
+            image: c.image || (photoPresets && photoPresets[0]?.url) || '',
+            productsCount: count,
+            status: c.isActive !== false ? 'Active' : 'Inactive'
+          };
+        });
+        setCategoriesList(formattedCats);
+      }
+
+      if (apiProds.length > 0) {
+        const formattedProds = apiProds.map(p => {
+          const catObj = p.categoryId;
+          const catName = catObj?.name || (typeof p.categoryId === 'string' ? p.categoryId : 'Pickles');
+          const rawPrice = Number(p.price) || 299;
+          const rawStock = Number(p.stockQuantity) || 0;
+          const imgUrl = (Array.isArray(p.images) && p.images[0]) || p.image || (photoPresets && photoPresets[0]?.url) || '';
+
+          const jars = (p.variants && p.variants.length > 0)
+            ? p.variants.map((v, idx) => ({
+                id: v._id || `v-${idx}`,
+                name: v.name,
+                price: Number(v.price) || rawPrice,
+                stock: Number(v.stockQuantity) || 0,
+                enabled: true
+              }))
+            : [
+                { id: 'j250', name: '250g Glass Jar', price: Math.round(rawPrice * 0.65), stock: Math.round(rawStock * 0.3) || 20, enabled: true },
+                { id: 'j500', name: '500g Traditional Jar', price: rawPrice, stock: rawStock, enabled: true },
+                { id: 'j1000', name: '1kg Family Pack Jar', price: Math.round(rawPrice * 1.7), stock: Math.round(rawStock * 0.2) || 15, enabled: true }
+              ];
+
+          return {
+            id: p._id,
+            _id: p._id,
+            name: p.name,
+            sku: p.variants?.[0]?.sku || p.slug || `ACH-${String(p._id).slice(-4)}`,
+            cat: catName,
+            categoryId: catObj?._id || p.categoryId,
+            price: `₹${rawPrice}`,
+            stock: rawStock,
+            status: rawStock > 10 ? 'In stock' : (rawStock > 0 ? 'Low stock' : 'Out of stock'),
+            statusColor: rawStock > 10 ? 'bg-emerald-50 text-emerald-700' : (rawStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
+            vis: p.isAvailable ? 'Published' : 'Hidden',
+            img: imgUrl,
+            jars: jars
+          };
+        });
+        setProductsList(formattedProds);
+      }
+    } catch (err) {
+      console.warn('Error fetching products/categories from backend:', err);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const res = await axios.get('/api/orders', {
+        headers: authHeaders,
+        params: { limit: 100 }
+      });
+
+      if (res.data?.data && res.data.data.length > 0) {
+        const apiOrders = res.data.data;
+        const formattedOrders = apiOrders.map(o => {
+          const d = o.createdAt ? new Date(o.createdAt) : new Date();
+          const dateStr = d.toISOString().slice(0, 10);
+          const displayDate = d.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          const items = (o.items && o.items.length > 0)
+            ? o.items.map(it => ({
+                name: it.name,
+                variant: it.variantName || 'Standard Jar',
+                qty: it.quantity || 1,
+                price: it.price || 0,
+                image: it.image || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80'
+              }))
+            : [];
+
+          const itemSummary = items.length > 0
+            ? `${items.reduce((acc, it) => acc + (it.qty || 1), 0)} items (${items.map(it => it.name).join(', ')})`
+            : '1 item';
+
+          const addr = o.shippingAddress
+            ? (typeof o.shippingAddress === 'string'
+                ? o.shippingAddress
+                : `${o.shippingAddress.street || ''}, ${o.shippingAddress.city || ''}, ${o.shippingAddress.state || ''} - ${o.shippingAddress.pincode || ''}`)
+            : '';
+
+          const utm = (o.attribution?.utmSource || '').toUpperCase();
+          const source = utm.includes('INSTA') ? 'INSTAGRAM' : (utm.includes('FACE') ? 'FACEBOOK' : (utm.includes('WHATS') ? 'WHATSAPP' : 'WEBSITE'));
+          const channelName = o.attribution?.utmSource || 'Direct Online Store';
+          const campaign = o.attribution?.utmCampaign || 'Organic Storefront Visit';
+
+          const pay = o.paymentMethod || 'COD';
+          const status = o.orderStatus || 'NEW';
+          const statusLabel = status === 'NEW' ? 'New / Awaiting Acceptance'
+            : status === 'CONFIRMED' ? 'Accepted / Confirmed'
+            : status === 'PROCESSING' ? 'Packed / Ready to Ship'
+            : status === 'SHIPPED' ? 'Shipped / Out for Delivery'
+            : status === 'DELIVERED' ? 'Delivered'
+            : status === 'CANCELLED' ? 'Cancelled'
+            : status;
+
+          const statusColor = status === 'NEW' ? 'bg-purple-50 text-purple-700 border-purple-200'
+            : status === 'CONFIRMED' ? 'bg-blue-50 text-blue-700 border-blue-200'
+            : status === 'PROCESSING' ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+            : status === 'SHIPPED' ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+            : status === 'DELIVERED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-rose-50 text-rose-700 border-rose-200';
+
+          const payColor = pay === 'ONLINE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200';
+
+          const timeline = (o.timeline && o.timeline.length > 0)
+            ? o.timeline.map(t => ({
+                title: t.note || t.status,
+                time: t.timestamp ? new Date(t.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+                done: true
+              }))
+            : [
+                { title: `Order Placed (${pay})`, time: displayDate, done: true },
+                { title: 'Merchant Acceptance', time: status === 'NEW' ? 'Awaiting Action' : 'Done', done: status !== 'NEW' },
+                { title: 'Packed & Boxed', time: (status === 'PROCESSING' || status === 'SHIPPED' || status === 'DELIVERED') ? 'Done' : 'Pending', done: (status === 'PROCESSING' || status === 'SHIPPED' || status === 'DELIVERED') },
+                { title: 'Courier Dispatch', time: (status === 'SHIPPED' || status === 'DELIVERED') ? 'Done' : 'Pending', done: (status === 'SHIPPED' || status === 'DELIVERED') },
+                { title: 'Delivered', time: status === 'DELIVERED' ? 'Done' : 'Pending', done: status === 'DELIVERED' }
+              ];
+
+          return {
+            id: `#${o.orderNumber || o._id}`,
+            _id: o._id,
+            orderNumber: o.orderNumber,
+            date: dateStr,
+            displayDate,
+            customer: o.customerName || 'Anonymous Customer',
+            phone: o.customerPhone || '',
+            email: o.customerEmail || `${(o.customerName || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+            address: addr,
+            source,
+            channelName,
+            campaign,
+            items,
+            itemSummary,
+            total: o.totalAmount,
+            displayTotal: `₹${o.totalAmount}`,
+            pay,
+            payMethod: pay,
+            payColor,
+            status,
+            statusLabel,
+            statusColor,
+            courier: o.courierPartner || '',
+            tracking: o.trackingNumber || '',
+            duplicateResolved: Boolean(o.duplicateResolved),
+            createdAt: o.createdAt,
+            timeline
+          };
+        });
+        setOrdersList(formattedOrders);
+      }
+    } catch (err) {
+      console.warn('Error fetching orders from backend:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProductsAndCategories();
+    fetchOrders();
+  }, []);
+
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     const subParam = searchParams.get('sub');
@@ -2219,6 +2675,12 @@ export const MerchantDashboard = () => {
   }, [searchParams]);
 
   useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'overview') {
+      fetchOrders();
+    }
+    if (activeTab === 'products' || activeTab === 'categories') {
+      fetchProductsAndCategories();
+    }
     if (activeTab === 'leads') {
       fetchCrmLeads();
     }
@@ -2226,6 +2688,15 @@ export const MerchantDashboard = () => {
       fetchAutomationRules();
       fetchAutomationLogs();
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (activeTab === 'orders' || activeTab === 'overview') {
+        fetchOrders();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   const handleSyncMetaLeads = async () => {
@@ -2597,33 +3068,60 @@ export const MerchantDashboard = () => {
     }
   };
 
-  const handleSaveProduct = (e) => {
+  const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!newProductForm.name || !newProductForm.name.trim()) {
       alert('Please enter a product name');
       return;
     }
-    const enteredCat = newProductForm.newCatInput?.trim() || newProductForm.cat || (categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)');
-    
-    // Auto-create category in categoriesList if a new one was typed
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    let enteredCat = newProductForm.newCatInput?.trim() || newProductForm.cat || (categoriesList[0]?.name || 'Mango Pickles');
+    let targetCatId = null;
+
+    // 1. If merchant typed a new category, save to MongoDB first
     if (newProductForm.newCatInput?.trim()) {
       const catName = newProductForm.newCatInput.trim();
       const existing = categoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
-      if (!existing) {
-        const newCatObj = {
-          id: `CAT-${Date.now().toString().slice(-4)}`,
-          name: catName,
-          slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          description: `Handcrafted ${catName} slow-cured with authentic Marwadi spices in pure mustard oil.`,
-          image: newProductForm.img || photoPresets[0].url,
-          productsCount: 1,
-          status: 'Active'
-        };
-        setCategoriesList(prev => [...prev, newCatObj]);
+      if (existing) {
+        targetCatId = existing._id || existing.id;
+        enteredCat = existing.name;
+      } else {
+        try {
+          const catRes = await axios.post('/api/categories', {
+            name: catName,
+            slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+            description: `Handcrafted ${catName} slow-cured with authentic spices in pure mustard oil.`,
+            image: newProductForm.img || (photoPresets && photoPresets[0]?.url) || ''
+          }, { headers: authHeaders });
+          if (catRes.data?.data) {
+            const createdCat = catRes.data.data;
+            targetCatId = createdCat._id;
+            const newCatObj = {
+              id: createdCat._id,
+              _id: createdCat._id,
+              name: createdCat.name,
+              slug: createdCat.slug,
+              description: createdCat.description,
+              image: createdCat.image || (photoPresets && photoPresets[0]?.url),
+              productsCount: 1,
+              status: 'Active'
+            };
+            setCategoriesList(prev => [newCatObj, ...prev]);
+          }
+        } catch (catErr) {
+          console.warn('Could not save category to backend:', catErr);
+        }
+      }
+    } else {
+      const matched = categoriesList.find(c => c.name === enteredCat || c.slug === enteredCat);
+      if (matched) {
+        targetCatId = matched._id || matched.id;
       }
     }
 
-    const fallbackImg = photoPresets[0].url;
+    const fallbackImg = (photoPresets && photoPresets[0]?.url) || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
     const finalImg = newProductForm.img && newProductForm.img.trim() ? newProductForm.img.trim() : fallbackImg;
     const activeJars = newProductForm.jars || [];
     const baseJar = activeJars.find(j => j.enabled);
@@ -2631,10 +3129,48 @@ export const MerchantDashboard = () => {
     const enabledJarsStock = activeJars.filter(j => j.enabled).reduce((acc, j) => acc + (parseInt(j.stock) || 0), 0);
     const numericStock = enabledJarsStock > 0 ? enabledJarsStock : (parseInt(newProductForm.stock) >= 0 ? parseInt(newProductForm.stock) : 50);
 
+    const variantsPayload = activeJars.filter(j => j.enabled).map(j => ({
+      name: j.name,
+      sku: newProductForm.sku ? `${newProductForm.sku}-${j.name.split(' ')[0]}` : '',
+      price: Number(j.price) || numericPrice,
+      stockQuantity: Number(j.stock) || 20
+    }));
+
+    let savedProductData = null;
+    try {
+      const prodRes = await axios.post('/api/products', {
+        name: newProductForm.name.trim(),
+        sku: newProductForm.sku?.trim(),
+        categoryId: targetCatId,
+        categoryName: enteredCat,
+        price: numericPrice,
+        stockQuantity: numericStock,
+        images: [finalImg],
+        variants: variantsPayload.length > 0 ? variantsPayload : [{
+          name: 'Standard Jar',
+          price: numericPrice,
+          stockQuantity: numericStock
+        }],
+        isAvailable: true,
+        tags: [enteredCat.toLowerCase()]
+      }, { headers: authHeaders });
+
+      if (prodRes.data?.data) {
+        savedProductData = prodRes.data.data;
+      }
+    } catch (prodErr) {
+      console.error('Failed to save product to backend:', prodErr);
+      alert('Could not save product to database: ' + (prodErr.response?.data?.message || prodErr.message));
+      return;
+    }
+
     const newProd = {
-      name: newProductForm.name.trim(),
-      sku: newProductForm.sku?.trim() || `ACH-${Date.now().toString().slice(-4)}`,
+      id: savedProductData?._id || `PROD-${Date.now()}`,
+      _id: savedProductData?._id,
+      name: savedProductData?.name || newProductForm.name.trim(),
+      sku: newProductForm.sku?.trim() || savedProductData?.slug || `ACH-${Date.now().toString().slice(-4)}`,
       cat: enteredCat,
+      categoryId: targetCatId,
       price: `₹${numericPrice}`,
       stock: numericStock,
       status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
@@ -2646,7 +3182,7 @@ export const MerchantDashboard = () => {
 
     setProductsList(prev => [newProd, ...prev]);
     // Increment category product count
-    setCategoriesList(prev => prev.map(c => (c.name === enteredCat || c.slug === enteredCat) ? { ...c, productsCount: (c.productsCount || 0) + 1 } : c));
+    setCategoriesList(prev => prev.map(c => (c.name === enteredCat || c.slug === enteredCat || c._id === targetCatId) ? { ...c, productsCount: (c.productsCount || 0) + 1 } : c));
 
     // Reset and close
     setShowAddProductModal(false);
@@ -2665,28 +3201,53 @@ export const MerchantDashboard = () => {
     setNewJarPrice('');
     setNewJarStock('25');
     setProductsActiveSubTab('catalog');
-    setActionSuccessToast(`🎉 Product "${newProd.name}" with ${activeJars.filter(j => j.enabled).length} jar sizes added to "${enteredCat}"!`);
+    setActionSuccessToast(`🎉 Product "${newProd.name}" saved to database and live on customer storefront!`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
-  const handleSaveCategory = (e) => {
+  const handleSaveCategory = async (e) => {
     e.preventDefault();
     if (!newCategoryForm.name || !newCategoryForm.name.trim()) {
       alert('Please enter category name');
       return;
     }
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
     const catName = newCategoryForm.name.trim();
     const slug = newCategoryForm.slug?.trim() || catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const fallbackImg = photoPresets[0].url;
+    const fallbackImg = (photoPresets && photoPresets[0]?.url) || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+    const finalImg = newCategoryForm.image && newCategoryForm.image.trim() ? newCategoryForm.image.trim() : fallbackImg;
+
+    let savedCatData = null;
+    try {
+      const res = await axios.post('/api/categories', {
+        name: catName,
+        slug: slug,
+        description: newCategoryForm.description?.trim() || `Freshly prepared handcrafted ${catName} with cold-pressed mustard oil and aromatic spices.`,
+        image: finalImg
+      }, { headers: authHeaders });
+
+      if (res.data?.data) {
+        savedCatData = res.data.data;
+      }
+    } catch (catErr) {
+      console.error('Failed to save category to backend:', catErr);
+      alert('Could not save category to database: ' + (catErr.response?.data?.message || catErr.message));
+      return;
+    }
+
     const newCat = {
-      id: `CAT-${Date.now().toString().slice(-4)}`,
-      name: catName,
-      slug: slug,
-      description: newCategoryForm.description?.trim() || `Freshly prepared handcrafted ${catName} with cold-pressed mustard oil and aromatic spices.`,
-      image: newCategoryForm.image && newCategoryForm.image.trim() ? newCategoryForm.image.trim() : fallbackImg,
+      id: savedCatData?._id || `CAT-${Date.now().toString().slice(-4)}`,
+      _id: savedCatData?._id,
+      name: savedCatData?.name || catName,
+      slug: savedCatData?.slug || slug,
+      description: savedCatData?.description || newCategoryForm.description?.trim() || `Freshly prepared handcrafted ${catName} with cold-pressed mustard oil and aromatic spices.`,
+      image: savedCatData?.image || finalImg,
       productsCount: 0,
       status: 'Active'
     };
+
     setCategoriesList(prev => [newCat, ...prev]);
     setShowAddCategoryModal(false);
     setNewCategoryForm({
@@ -2695,7 +3256,7 @@ export const MerchantDashboard = () => {
       description: '',
       image: ''
     });
-    setActionSuccessToast(`🎉 Category "${newCat.name}" created successfully! Synchronized with storefront.`);
+    setActionSuccessToast(`🎉 Category "${newCat.name}" created and synced with customer storefront!`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
@@ -2737,34 +3298,58 @@ export const MerchantDashboard = () => {
     setShowEditProductModal(true);
   };
 
-  const handleUpdateProduct = (e) => {
+  const handleUpdateProduct = async (e) => {
     e.preventDefault();
     if (!editProductForm.name || !editProductForm.name.trim()) {
       alert('Please enter a product name');
       return;
     }
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
     const enteredCat = editProductForm.newCatInput?.trim() || editProductForm.cat || (categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)');
-    
+    let targetCatId = null;
+
     // Auto-create category in categoriesList if a new one was typed
     if (editProductForm.newCatInput?.trim()) {
       const catName = editProductForm.newCatInput.trim();
       const existing = categoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
-      if (!existing) {
-        const newCatObj = {
-          id: `CAT-${Date.now().toString().slice(-4)}`,
-          name: catName,
-          slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          description: `Handcrafted ${catName} slow-cured with authentic Marwadi spices in pure mustard oil.`,
-          image: editProductForm.img || photoPresets[0].url,
-          productsCount: 1,
-          status: 'Active'
-        };
-        setCategoriesList(prev => [...prev, newCatObj]);
+      if (existing) {
+        targetCatId = existing._id || existing.id;
+      } else {
+        try {
+          const catRes = await axios.post('/api/categories', {
+            name: catName,
+            slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+            description: `Handcrafted ${catName} slow-cured with authentic Marwadi spices in pure mustard oil.`,
+            image: editProductForm.img || (photoPresets && photoPresets[0]?.url) || ''
+          }, { headers: authHeaders });
+          if (catRes.data?.data) {
+            targetCatId = catRes.data.data._id;
+            const newCatObj = {
+              id: catRes.data.data._id,
+              _id: catRes.data.data._id,
+              name: catRes.data.data.name,
+              slug: catRes.data.data.slug,
+              description: catRes.data.data.description,
+              image: catRes.data.data.image || (photoPresets && photoPresets[0]?.url),
+              productsCount: 1,
+              status: 'Active'
+            };
+            setCategoriesList(prev => [...prev, newCatObj]);
+          }
+        } catch (catErr) {
+          console.warn('Could not create category on backend:', catErr);
+        }
+      }
+    } else {
+      const matched = categoriesList.find(c => c.name === enteredCat || c.slug === enteredCat);
+      if (matched) {
+        targetCatId = matched._id || matched.id;
       }
     }
 
-    const fallbackImg = photoPresets[0].url;
+    const fallbackImg = (photoPresets && photoPresets[0]?.url) || '';
     const finalImg = editProductForm.img && editProductForm.img.trim() ? editProductForm.img.trim() : fallbackImg;
     const activeJars = editProductForm.jars || [];
     const baseJar = activeJars.find(j => j.enabled);
@@ -2772,10 +3357,39 @@ export const MerchantDashboard = () => {
     const enabledJarsStock = activeJars.filter(j => j.enabled).reduce((acc, j) => acc + (parseInt(j.stock) || 0), 0);
     const numericStock = enabledJarsStock > 0 ? enabledJarsStock : (parseInt(editProductForm.stock) >= 0 ? parseInt(editProductForm.stock) : 50);
 
+    const variantsPayload = activeJars.filter(j => j.enabled).map(j => ({
+      name: j.name,
+      sku: editProductForm.sku ? `${editProductForm.sku}-${j.name.split(' ')[0]}` : '',
+      price: Number(j.price) || numericPrice,
+      stockQuantity: Number(j.stock) || 20
+    }));
+
+    const prodDbId = editingProduct?._id || (editingProduct?.id && String(editingProduct.id).length === 24 ? editingProduct.id : null);
+    if (prodDbId) {
+      try {
+        await axios.put(`/api/products/${prodDbId}`, {
+          name: editProductForm.name.trim(),
+          sku: editProductForm.sku?.trim(),
+          categoryId: targetCatId,
+          categoryName: enteredCat,
+          price: numericPrice,
+          stockQuantity: numericStock,
+          images: [finalImg],
+          variants: variantsPayload,
+          isAvailable: editProductForm.vis !== 'Hidden'
+        }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update product on backend:', err);
+      }
+    }
+
     const updatedProd = {
+      id: editingProduct?.id || editingProduct?._id,
+      _id: editingProduct?._id,
       name: editProductForm.name.trim(),
       sku: editProductForm.sku?.trim() || editingProduct?.sku || `ACH-${Date.now().toString().slice(-4)}`,
       cat: enteredCat,
+      categoryId: targetCatId,
       price: `₹${numericPrice}`,
       stock: numericStock,
       status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
@@ -2789,7 +3403,7 @@ export const MerchantDashboard = () => {
       const nextList = [...prev];
       const targetIdx = editingProduct?.originalIndex !== undefined && editingProduct.originalIndex >= 0 && editingProduct.originalIndex < nextList.length
         ? editingProduct.originalIndex
-        : nextList.findIndex(p => p.sku === editingProduct?.sku || p.name === editingProduct?.name);
+        : nextList.findIndex(p => (p._id && p._id === editingProduct?._id) || p.sku === editingProduct?.sku || p.name === editingProduct?.name);
       
       if (targetIdx >= 0) {
         nextList[targetIdx] = updatedProd;
@@ -2804,10 +3418,20 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
-  const handleDeleteProduct = (prodToDelete) => {
+  const handleDeleteProduct = async (prodToDelete) => {
     if (!prodToDelete) return;
     if (window.confirm(`Are you sure you want to delete "${prodToDelete.name}" from your catalog?`)) {
-      setProductsList(prev => prev.filter(p => (p.sku ? p.sku !== prodToDelete.sku : p.name !== prodToDelete.name)));
+      const prodDbId = prodToDelete._id || (prodToDelete.id && String(prodToDelete.id).length === 24 ? prodToDelete.id : null);
+      if (prodDbId) {
+        try {
+          const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+          const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+          await axios.delete(`/api/products/${prodDbId}`, { headers: authHeaders });
+        } catch (err) {
+          console.warn('Failed to delete product on backend:', err);
+        }
+      }
+      setProductsList(prev => prev.filter(p => (p._id && prodToDelete._id ? p._id !== prodToDelete._id : (p.sku ? p.sku !== prodToDelete.sku : p.name !== prodToDelete.name))));
       setShowEditProductModal(false);
       setActionSuccessToast(`🗑️ Product "${prodToDelete.name}" removed from catalog.`);
       setTimeout(() => setActionSuccessToast(''), 4000);
@@ -4960,6 +5584,20 @@ export const MerchantDashboard = () => {
                   <div className="flex flex-wrap items-center gap-2.5 text-xs">
                     <button
                       type="button"
+                      onClick={() => {
+                        fetchOrders();
+                        setActionSuccessToast('Orders refreshed from live database!');
+                        setTimeout(() => setActionSuccessToast(''), 3000);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+                      title="Reload latest orders from database"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setShowCalendarModal(true)}
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-2 cursor-pointer transition"
                     >
@@ -6346,6 +6984,15 @@ export const MerchantDashboard = () => {
                             className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition cursor-pointer"
                           >
                             ❌ Cancel This Duplicate (Keep Single)
+                          </button>
+
+                          {/* 5. Mark Verified / Not a Duplicate */}
+                          <button
+                            type="button"
+                            onClick={() => handleMarkAsNotDuplicate(selectedOrderForDetail.id, firstTwin?.id)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs transition cursor-pointer"
+                          >
+                            🛡️ Mark Verified (Not a Duplicate)
                           </button>
                         </div>
                       </div>
@@ -8561,7 +9208,7 @@ export const MerchantDashboard = () => {
                         <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
                       </div>
                       <div className="flex-1 bg-slate-100 rounded-lg px-3 py-1 text-[11px] font-mono text-slate-600 flex items-center justify-between border border-slate-200">
-                        <span className="truncate">https://omniva.io/store/{businessSlug}</span>
+                        <span className="truncate">{typeof window !== 'undefined' ? window.location.origin : 'https://omniva.io'}/store/{businessSlug}</span>
                         <span className="text-emerald-600 font-semibold text-[10px]">🔒 SSL Secured</span>
                       </div>
                     </div>

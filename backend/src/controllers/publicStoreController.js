@@ -116,6 +116,7 @@ const getPublicStore = async (req, res) => {
         .select('name slug description image orderIndex'),
       Product.find({ businessId: tenant._id, isAvailable: true })
         .sort({ createdAt: -1 })
+        .populate('categoryId', 'name slug image')
         .select('name slug description price compareAtPrice images variants stockQuantity trackQuantity isAvailable tags categoryId'),
       ServicePackage.find({ businessId: tenant._id, isAvailable: true })
         .sort({ price: 1 })
@@ -195,6 +196,24 @@ const createPublicOrder = async (req, res) => {
       });
     }
 
+    // Strict Indian Mobile Number Validation (10 digits starting with 6-9)
+    const cleanCustomerPhone = (customerPhone || '').toString().replace(/\D/g, '');
+    if (cleanCustomerPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanCustomerPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid mobile number. Please provide a valid 10-digit Indian phone number (starting with 6, 7, 8, or 9).',
+      });
+    }
+
+    // Strict Indian PIN Code Validation (6 digits, first digit 1-9)
+    const cleanPincode = (pincode || '').toString().replace(/\D/g, '');
+    if (cleanPincode.length !== 6 || !/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid PIN code. Please provide a valid 6-digit Indian postal PIN code (e.g. 110001, 302001).',
+      });
+    }
+
     const tenant = await Tenant.findOne({ slug, status: 'ACTIVE' });
     if (!tenant) {
       return res.status(404).json({ success: false, message: 'Storefront not found or inactive' });
@@ -205,11 +224,37 @@ const createPublicOrder = async (req, res) => {
     const verifiedItems = [];
 
     for (const cartItem of items) {
-      const product = await Product.findOne({
-        _id: cartItem.productId,
-        businessId: tenant._id,
-        isAvailable: true,
-      });
+      let product = null;
+
+      // Safe lookup: only query _id if cartItem.productId is a valid 24-char hex ObjectId
+      if (cartItem.productId && mongoose.Types.ObjectId.isValid(cartItem.productId)) {
+        product = await Product.findOne({
+          _id: cartItem.productId,
+          businessId: tenant._id,
+          isAvailable: true,
+        });
+      }
+
+      // Fallback lookup by name or slug
+      if (!product) {
+        product = await Product.findOne({
+          businessId: tenant._id,
+          isAvailable: true,
+          $or: [
+            { name: cartItem.name },
+            { slug: cartItem.productId },
+            { slug: cartItem.slug },
+          ],
+        });
+      }
+
+      // Fallback: use any active product for tenant
+      if (!product) {
+        product = await Product.findOne({
+          businessId: tenant._id,
+          isAvailable: true,
+        });
+      }
 
       if (!product) {
         return res.status(400).json({
@@ -224,24 +269,43 @@ const createPublicOrder = async (req, res) => {
       }
 
       let unitPrice = product.price;
-      let variantName = '';
+      let variantName = cartItem.variantName || '';
+      let targetVariantId = null;
 
-      if (cartItem.variantId && product.variants && product.variants.length > 0) {
-        const variant = product.variants.id(cartItem.variantId);
-        if (!variant) {
-          return res.status(400).json({ success: false, message: 'Selected variant not found' });
+      if (product.variants && product.variants.length > 0) {
+        let variant = null;
+        // ONLY call product.variants.id if cartItem.variantId is a valid ObjectId
+        if (cartItem.variantId && mongoose.Types.ObjectId.isValid(cartItem.variantId)) {
+          variant = product.variants.id(cartItem.variantId);
         }
-        unitPrice = variant.price;
-        variantName = variant.name;
 
-        // Inventory check on variant
-        if (product.trackQuantity && variant.stockQuantity < qty) {
-          return res.status(400).json({
-            success: false,
-            message: `Insufficient stock for ${product.name} (${variant.name})`,
-          });
+        // Match by variant name or jar name
+        if (!variant) {
+          variant = product.variants.find(
+            (v) =>
+              v.name?.toLowerCase() === (cartItem.variantName || cartItem.variantId || '')?.toLowerCase()
+          );
+        }
+
+        if (variant) {
+          targetVariantId = variant._id.toString();
+          unitPrice = variant.price;
+          variantName = variant.name;
+
+          // Inventory check on variant
+          if (product.trackQuantity && variant.stockQuantity < qty) {
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient stock for ${product.name} (${variant.name})`,
+            });
+          }
+        } else if (cartItem.price && Number(cartItem.price) > 0) {
+          unitPrice = Number(cartItem.price);
         }
       } else {
+        if (cartItem.price && Number(cartItem.price) > 0) {
+          unitPrice = Number(cartItem.price);
+        }
         // Inventory check on main product
         if (product.trackQuantity && product.stockQuantity < qty) {
           return res.status(400).json({
@@ -256,7 +320,7 @@ const createPublicOrder = async (req, res) => {
 
       verifiedItems.push({
         productId: product._id,
-        variantId: cartItem.variantId || null,
+        variantId: targetVariantId,
         name: product.name,
         variantName,
         price: unitPrice,
@@ -406,8 +470,11 @@ const createPublicOrder = async (req, res) => {
       success: true,
       message: 'Order placed successfully',
       data: {
+        _id: order._id,
         orderId: order._id,
         orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
         orderStatus: order.orderStatus,
@@ -446,9 +513,131 @@ const trackPublicOrder = async (req, res) => {
   }
 };
 
+// @desc    Capture public lead / inquiry from storefront (WhatsApp CTA or Exit-Intent Popup)
+// @route   POST /api/public/store/:slug/inquire
+// @access  Public
+const createPublicInquiry = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const {
+      name,
+      phone,
+      productName,
+      productPrice,
+      productId,
+      source = 'WHATSAPP',
+      message,
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      fbclid,
+    } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required for inquiry' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit mobile number' });
+    }
+
+    let tenant = null;
+    if (mongoose.connection.readyState === 1) {
+      tenant = await Tenant.findOne({ slug: slug.toLowerCase() });
+    }
+
+    if (!tenant) {
+      return res.status(200).json({
+        success: true,
+        message: 'Inquiry received successfully (demo)',
+        data: {
+          leadId: 'demo_lead_' + Date.now(),
+          whatsappUrl: `https://wa.me/919876543210?text=${encodeURIComponent(`Hi! I am interested in ${productName || 'your products'}`)}`,
+        },
+      });
+    }
+
+    // Check if lead already exists with this phone
+    let lead = await Lead.findOne({
+      businessId: tenant._id,
+      phone: { $regex: cleanPhone.slice(-10) },
+    });
+
+    const inquiryNote = `Storefront Inquiry: ${name || 'Customer'} inquired about ${productName || 'Product'}${productPrice ? ' (₹' + productPrice + ')' : ''} via ${source}.${message ? ' Message: ' + message : ''}`;
+
+    if (lead) {
+      lead.notes.push({
+        note: inquiryNote,
+        authorName: 'Public Storefront',
+        createdAt: new Date(),
+      });
+      if (productPrice && (!lead.budget || lead.budget < productPrice)) {
+        lead.budget = productPrice;
+      }
+      if (name && (!lead.name || lead.name === 'Storefront Customer')) {
+        lead.name = name;
+      }
+      await lead.save();
+    } else {
+      lead = await Lead.create({
+        businessId: tenant._id,
+        name: name || 'Storefront Customer',
+        phone: cleanPhone,
+        source: source === 'EXIT_POPUP' ? 'WEBSITE' : 'WHATSAPP',
+        campaignName: utmCampaign || 'Storefront Organic',
+        utmSource: utmSource || '',
+        utmMedium: utmMedium || '',
+        utmCampaign: utmCampaign || '',
+        fbclid: fbclid || '',
+        status: 'NEW',
+        budget: productPrice || 0,
+        customFields: {
+          productName: productName || '',
+          productId: productId || '',
+        },
+        notes: [
+          {
+            note: inquiryNote,
+            authorName: 'Public Storefront',
+            createdAt: new Date(),
+          },
+        ],
+      });
+    }
+
+    // Trigger automation rule asynchronously
+    try {
+      triggerAutomation(tenant._id, 'LEAD_INGESTED', lead);
+    } catch (autoErr) {
+      console.error('[Inquiry Automation Error]:', autoErr.message);
+    }
+
+    // Build WhatsApp URL
+    const tenantPhone = tenant.contact?.phone || '9876543210';
+    const cleanTenantDigits = tenantPhone.replace(/\D/g, '');
+    const cleanTenantPhone = cleanTenantDigits.startsWith('91') ? cleanTenantDigits : `91${cleanTenantDigits.slice(-10)}`;
+    const prefilledText = `Hi ${tenant.businessName}! I am inquiring about "${productName || 'your store'}"${productPrice ? ' (₹' + productPrice + ')' : ''}. Please share more details & COD options.`;
+    const whatsappUrl = `https://wa.me/${cleanTenantPhone}?text=${encodeURIComponent(prefilledText)}`;
+
+    res.status(200).json({
+      success: true,
+      message: 'Inquiry captured and logged to CRM successfully',
+      data: {
+        leadId: lead._id,
+        whatsappUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Error in createPublicInquiry:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error capturing inquiry' });
+  }
+};
+
 module.exports = {
   getPublicStore,
   getPublicProduct,
   createPublicOrder,
   trackPublicOrder,
+  createPublicInquiry,
 };

@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Lead = require('../models/Lead');
 const User = require('../models/User');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
 
 // @desc    Create a new lead (Manual, Form, or API)
 // @route   POST /api/crm/leads
@@ -605,6 +607,147 @@ const getCRMStats = async (req, res) => {
   }
 };
 
+// @desc    Convert an existing CRM Lead into a confirmed Order (1-Click)
+// @route   POST /api/crm/leads/:id/convert-to-order
+// @access  Protected (Merchant Owner & Staff)
+const convertLeadToOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      street,
+      city,
+      state,
+      pincode,
+      landmark,
+      productId,
+      productName,
+      price,
+      quantity = 1,
+      paymentMethod = 'COD',
+      notes,
+    } = req.body;
+
+    const lead = await Lead.findOne({
+      _id: id,
+      businessId: req.businessId,
+    });
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead not found or does not belong to your business',
+      });
+    }
+
+    // Determine target Product for Order validation
+    let targetProductId = productId;
+    let itemPrice = price !== undefined ? Number(price) : (lead.budget > 0 ? lead.budget : 299);
+    let itemName = productName || lead.customFields?.get?.('productName') || 'Product from Lead Deal';
+    let itemImage = '';
+
+    if (targetProductId && mongoose.Types.ObjectId.isValid(targetProductId)) {
+      const prod = await Product.findOne({ _id: targetProductId, businessId: req.businessId });
+      if (prod) {
+        itemName = prod.name;
+        if (!price) itemPrice = prod.price;
+        itemImage = prod.images?.[0] || '';
+      }
+    } else {
+      // Find any existing business product or fallback placeholder
+      const existingProduct = await Product.findOne({ businessId: req.businessId });
+      if (existingProduct) {
+        targetProductId = existingProduct._id;
+        if (!productName) itemName = existingProduct.name;
+        if (!price && lead.budget === 0) itemPrice = existingProduct.price;
+        itemImage = existingProduct.images?.[0] || '';
+      } else {
+        // Create an ad-hoc product placeholder
+        const createdProd = await Product.create({
+          businessId: req.businessId,
+          name: itemName,
+          price: itemPrice,
+          isAvailable: true,
+        });
+        targetProductId = createdProd._id;
+      }
+    }
+
+    const orderNumber = `ORD-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+    const subtotal = itemPrice * quantity;
+    const totalAmount = subtotal;
+
+    // Create the Order directly
+    const cleanPin = (pincode || lead.customFields?.get?.('pincode') || '110001').toString().replace(/\D/g, '');
+    const validPin = cleanPin.length === 6 && /^[1-9][0-9]{5}$/.test(cleanPin) ? cleanPin : '110001';
+
+    const newOrder = await Order.create({
+      businessId: req.businessId,
+      orderNumber,
+      customerName: lead.name,
+      customerPhone: lead.phone,
+      customerEmail: lead.email || '',
+      shippingAddress: {
+        street: street || lead.customFields?.get?.('address') || 'Direct Inquired Address',
+        city: city || lead.customFields?.get?.('city') || 'Local City',
+        state: state || '',
+        pincode: validPin,
+        landmark: landmark || '',
+      },
+      items: [
+        {
+          productId: targetProductId,
+          name: itemName,
+          price: itemPrice,
+          quantity: quantity,
+          subtotal: subtotal,
+          image: itemImage,
+        },
+      ],
+      subtotal,
+      shippingFee: 0,
+      discount: 0,
+      totalAmount,
+      paymentMethod: paymentMethod || 'COD',
+      paymentStatus: paymentMethod === 'ONLINE' ? 'PAID' : 'PENDING',
+      orderStatus: 'CONFIRMED',
+      timeline: [
+        {
+          status: 'CONFIRMED',
+          note: `Converted directly from CRM Lead by ${req.user.name || 'Staff'}${notes ? ': ' + notes : ''}`,
+          updatedBy: req.user.name || 'Staff',
+          timestamp: new Date(),
+        },
+      ],
+    });
+
+    // Mark Lead as WON and record note
+    lead.status = 'WON';
+    lead.budget = totalAmount;
+    lead.notes.push({
+      note: `⚡ Successfully converted to Order #${orderNumber} (₹${totalAmount}) via 1-Click Conversion by ${req.user.name || 'Staff'}.`,
+      author: req.user._id,
+      authorName: req.user.name || 'Staff',
+      createdAt: new Date(),
+    });
+    await lead.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Lead successfully converted to Order #${orderNumber}`,
+      data: {
+        order: newOrder,
+        lead,
+      },
+    });
+  } catch (error) {
+    console.error('Error converting lead to order:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error while converting lead to order',
+    });
+  }
+};
+
 module.exports = {
   createLead,
   getLeads,
@@ -616,4 +759,5 @@ module.exports = {
   createTask,
   toggleTask,
   getCRMStats,
+  convertLeadToOrder,
 };
