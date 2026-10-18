@@ -272,7 +272,7 @@ export const PublicStorefront = () => {
     fetchStore();
   }, [slug]);
 
-  const addToCart = (product, selectedVariant = null, openDrawer = false) => {
+  const addToCart = (product, selectedVariant = null, openDrawer = false, qty = 1) => {
     setCart((prev) => {
       const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
       const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
@@ -296,7 +296,7 @@ export const PublicStorefront = () => {
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + 1,
+          quantity: updated[existingIndex].quantity + qty,
         };
         return updated;
       } else {
@@ -308,7 +308,7 @@ export const PublicStorefront = () => {
             name: product.name,
             variantName,
             price,
-            quantity: 1,
+            quantity: qty,
             image: productImage,
           },
         ];
@@ -399,29 +399,62 @@ export const PublicStorefront = () => {
     return () => document.removeEventListener('mouseleave', handleMouseLeave);
   }, [hasTriggeredExit, couponClaimed]);
 
-  const handleDirectBuy = (product, selectedVariant = null) => {
+  const handleDirectBuy = (product, selectedVariant = null, qty = 1) => {
     const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
     const prodId = product._id || product.id || product.name;
-    const existing = cart.find(
-      (item) => item.productId === prodId && item.variantName === variantName
-    );
-    if (!existing) {
-      addToCart(product, selectedVariant, false);
-    }
+
+    setCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) => item.productId === prodId && item.variantName === variantName
+      );
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: Math.max(updated[existingIndex].quantity, qty),
+        };
+        return updated;
+      } else {
+        const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
+        const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+        const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+        const productImage =
+          product.img ||
+          product.image ||
+          (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+          'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80';
+
+        return [
+          ...prev,
+          {
+            productId: prodId,
+            variantId,
+            name: product.name,
+            variantName,
+            price,
+            quantity: qty,
+            image: productImage,
+          },
+        ];
+      }
+    });
+
     setCheckoutStep('CHECKOUT');
     setIsCartOpen(true);
   };
 
-  const handleDirectWhatsApp = (product, selectedVariant = null) => {
+  const handleDirectWhatsApp = (product, selectedVariant = null, qty = 1) => {
     const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-    const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+    const unitPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+    const totalPrice = unitPrice * qty;
     const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
     const rawPhone = storeData?.store?.phone || storeData?.store?.contact?.phone || '9876543210';
     const tenantPhone = rawPhone.replace(/\D/g, '').slice(-10) || '9876543210';
     const storeTitle = storeData?.store?.businessName || storeData?.store?.name || 'Desi Rasoi Achar';
 
+    const qtyText = qty > 1 ? `${qty}x ` : '';
     const text = encodeURIComponent(
-      `Hello! I would like to order *${product.name}* (${variantName}) for *₹${price}* from ${storeTitle}. Please share delivery & COD details!`
+      `Hello! I would like to order *${qtyText}${product.name}* (${variantName}) for *₹${totalPrice}* from ${storeTitle}. Please share delivery & COD details!`
     );
     const waUrl = `https://wa.me/91${tenantPhone}?text=${text}`;
 
@@ -433,8 +466,8 @@ export const PublicStorefront = () => {
         body: JSON.stringify({
           name: 'WhatsApp Store Visitor',
           phone: tenantPhone,
-          productName: `${product.name} (${variantName})`,
-          productPrice: price,
+          productName: `${qtyText}${product.name} (${variantName})`,
+          productPrice: totalPrice,
           productId: product._id || product.id,
           source: 'WHATSAPP_DIRECT_CLICK',
           utmSource: searchParams.get('utm_source') || '',
@@ -1059,17 +1092,51 @@ export const PublicStorefront = () => {
                         Edit Cart
                       </button>
                     </div>
-                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100">
                       {cart.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs">
-                          <div className="truncate max-w-[210px]">
-                            <span className="font-semibold text-slate-900">{item.name}</span>
-                            {item.variantName && (
-                              <span className="text-[10px] text-slate-500 ml-1">({item.variantName})</span>
-                            )}
-                            <span className="text-slate-400 text-[10px] ml-1 font-bold">x{item.quantity}</span>
+                        <div key={idx} className="flex items-center justify-between text-xs pt-1.5 first:pt-0">
+                          <div className="min-w-0 pr-2">
+                            <div className="font-semibold text-slate-900 truncate max-w-[150px]" title={item.name}>
+                              {item.name}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {item.variantName && (
+                                <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-medium truncate">
+                                  {item.variantName}
+                                </span>
+                              )}
+                              <span className="text-[11px] text-slate-500">₹{item.price} each</span>
+                            </div>
                           </div>
-                          <span className="font-bold text-slate-900 shrink-0">₹{item.price * item.quantity}</span>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Quantity Stepper in Checkout */}
+                            <div className="flex items-center bg-white border border-slate-300 rounded-lg p-0.5 shadow-xs">
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(idx, -1)}
+                                className="w-6 h-6 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded hover:bg-slate-100 transition active:scale-90 cursor-pointer"
+                                title="Decrease"
+                              >
+                                <Minus className="w-3 h-3 stroke-[2.5]" />
+                              </button>
+                              <span className="w-6 text-center font-black text-xs text-slate-900">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(idx, 1)}
+                                className="w-6 h-6 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded hover:bg-slate-100 transition active:scale-90 cursor-pointer"
+                                title="Increase"
+                              >
+                                <Plus className="w-3 h-3 stroke-[2.5]" />
+                              </button>
+                            </div>
+
+                            <span className="font-bold text-slate-900 w-14 text-right">
+                              ₹{item.price * item.quantity}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1574,6 +1641,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
         ];
 
   const [selectedVariant, setSelectedVariant] = useState(availableVariants[0]);
+  const [selectedQty, setSelectedQty] = useState(1);
 
   const currentVariant = selectedVariant || availableVariants[0];
 
@@ -1591,6 +1659,15 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
     (item) => item.productId === prodId && item.variantName === variantName
   );
   const cartQty = cartItem ? cartItem.quantity : 0;
+  const activeQty = cartQty > 0 ? cartQty : selectedQty;
+
+  const handleQtyChange = (delta) => {
+    if (cartQty > 0) {
+      onUpdateQty(product, currentVariant, delta);
+    } else {
+      setSelectedQty((prev) => Math.max(1, prev + delta));
+    }
+  };
 
   const productImage =
     product.img ||
@@ -1694,8 +1771,9 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
           )}
         </div>
 
-        {/* Pricing and Cart / Checkout Actions */}
+        {/* Pricing, Quantity Selector & Action CTAs */}
         <div className="pt-3 border-t border-slate-100 space-y-3">
+          {/* Price Header */}
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-baseline gap-2">
@@ -1704,63 +1782,81 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
                   <span className="text-xs text-slate-400 line-through">₹{compareAt}</span>
                 )}
               </div>
-              <span className="text-[10px] text-emerald-600 font-medium">Inclusive of all taxes</span>
+              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                <span>✓</span> Inclusive of all taxes
+              </span>
             </div>
 
-            {/* Cart Stepper: When 0 show "+ Add to Cart", when > 0 show [-] [qty] [+] */}
-            {cartQty === 0 ? (
+            {/* Quick Add to Cart button or In Cart indicator */}
+            {cartQty > 0 ? (
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{cartQty} in Cart</span>
+              </span>
+            ) : (
               <button
-                onClick={() => onAddToCart(product, currentVariant, false)}
+                onClick={() => onAddToCart(product, currentVariant, false, activeQty)}
                 type="button"
                 className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5 text-indigo-600 stroke-[2.5]" />
                 <span>Add to Cart</span>
               </button>
-            ) : (
-              <div className="flex items-center bg-indigo-50 border border-indigo-300 rounded-xl p-0.5 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => onUpdateQty(product, currentVariant, -1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-indigo-700 hover:bg-indigo-600 hover:text-white shadow-xs transition active:scale-90 cursor-pointer"
-                  title="Decrease quantity"
-                >
-                  <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
-                <span className="w-8 text-center font-black text-xs text-indigo-950">
-                  {cartQty}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onUpdateQty(product, currentVariant, 1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs transition active:scale-90 cursor-pointer"
-                  title="Increase quantity"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
-              </div>
             )}
           </div>
 
+          {/* Prominent Always-Visible Quantity Selector */}
+          <div className="flex items-center justify-between bg-slate-50 border border-slate-200/90 rounded-2xl px-3 py-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-800">Select Quantity:</span>
+              {activeQty > 1 && (
+                <span className="text-[11px] font-bold text-emerald-600">
+                  (₹{price * activeQty})
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center bg-white border border-slate-300 rounded-xl p-0.5 shadow-xs">
+              <button
+                type="button"
+                onClick={() => handleQtyChange(-1)}
+                className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer transition active:scale-90"
+                title="Decrease Quantity"
+              >
+                <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+              <span className="w-8 text-center font-black text-xs text-indigo-950">
+                {activeQty}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleQtyChange(1)}
+                className="w-7 h-7 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
+                title="Increase Quantity"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Action CTAs: Direct Order & WhatsApp */}
           <div className="grid grid-cols-2 gap-2">
-            {/* Option 1: Direct Order (Instant Checkout Drawer) */}
             <button
-              onClick={() => onDirectBuy(product, currentVariant)}
+              onClick={() => onDirectBuy(product, currentVariant, activeQty)}
               type="button"
               className="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-              <span>Direct Order</span>
+              <span>Direct Order {activeQty > 1 ? `(${activeQty})` : ''}</span>
             </button>
 
-            {/* Option 2: WhatsApp (Direct Chat with Pre-filled Product Details) */}
             <button
-              onClick={() => onWhatsApp(product, currentVariant)}
+              onClick={() => onWhatsApp(product, currentVariant, activeQty)}
               type="button"
               className="py-2.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 hover:border-emerald-400 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
             >
               <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
-              <span>WhatsApp</span>
+              <span>WhatsApp {activeQty > 1 ? `(${activeQty})` : ''}</span>
             </button>
           </div>
         </div>
