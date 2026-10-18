@@ -364,6 +364,24 @@ const createPublicOrder = async (req, res) => {
       userAgent: attribution.userAgent || userAgent,
     };
 
+    // Check for recent duplicate order with same phone number placed in last 24 hours
+    let isDuplicateOrder = false;
+    try {
+      const cleanCustomerDigits = customerPhone.replace(/\D/g, '').slice(-10);
+      if (cleanCustomerDigits.length >= 10) {
+        const recentOrder = await Order.findOne({
+          businessId: tenant._id,
+          customerPhone: { $regex: cleanCustomerDigits },
+          createdAt: { $gte: new Date(Date.now() - 24 * 3600 * 1000) },
+        });
+        if (recentOrder) {
+          isDuplicateOrder = true;
+        }
+      }
+    } catch (dupErr) {
+      console.warn('[Duplicate Check Warning]:', dupErr.message);
+    }
+
     // Create Order
     const order = await Order.create({
       businessId: tenant._id,
@@ -384,7 +402,9 @@ const createPublicOrder = async (req, res) => {
       timeline: [
         {
           status: 'NEW',
-          note: `Order placed online via storefront (${paymentMethod})`,
+          note: isDuplicateOrder
+            ? `Order placed online via storefront (${paymentMethod}) - [Fraud Flag: Duplicate phone in 24h]`
+            : `Order placed online via storefront (${paymentMethod})`,
           updatedBy: 'Customer',
           timestamp: new Date(),
         },
@@ -392,6 +412,7 @@ const createPublicOrder = async (req, res) => {
     });
 
     // Fire Automation Engine Event (Trigger -> Condition -> Action)
+    const trackingUrl = `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/orders/track?orderNumber=${order.orderNumber}&phone=${order.customerPhone}`;
     await triggerAutomation({
       businessId: tenant._id,
       trigger: 'ORDER_CREATED',
@@ -403,7 +424,11 @@ const createPublicOrder = async (req, res) => {
         customerPhone: order.customerPhone,
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
-        shippingCity: order.shippingAddress.city,
+        shippingCity: order.shippingAddress?.city || '',
+        isDuplicate: isDuplicateOrder ? 'true' : 'false',
+        itemsCount: order.items?.length || 1,
+        productName: order.items?.[0]?.name || 'Artisanal Product',
+        trackingUrl,
       },
     }).catch((err) => console.error('[Automation Trigger Error]:', err.message));
 
@@ -608,7 +633,20 @@ const createPublicInquiry = async (req, res) => {
 
     // Trigger automation rule asynchronously
     try {
-      triggerAutomation(tenant._id, 'LEAD_INGESTED', lead);
+      triggerAutomation({
+        businessId: tenant._id,
+        trigger: 'LEAD_INGESTED',
+        entityType: 'LEAD',
+        entityId: lead._id.toString(),
+        data: {
+          customerName: lead.name,
+          customerPhone: lead.phone,
+          source: lead.source,
+          productName: productName || 'Storefront Item',
+          budget: lead.budget || productPrice || 0,
+          menuUrl: `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/store/${slug}`,
+        },
+      }).catch((e) => console.error('[Inquiry Automation Warning]:', e.message));
     } catch (autoErr) {
       console.error('[Inquiry Automation Error]:', autoErr.message);
     }

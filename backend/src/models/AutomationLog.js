@@ -35,13 +35,25 @@ const automationLogSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    recipient: {
+      type: String,
+      default: '',
+    },
     status: {
       type: String,
       enum: ['SUCCESS', 'FAILED', 'SKIPPED'],
       default: 'SUCCESS',
       index: true,
     },
+    statusCode: {
+      type: Number,
+      default: 200,
+    },
     payloadSummary: {
+      type: String,
+      default: '',
+    },
+    details: {
       type: String,
       default: '',
     },

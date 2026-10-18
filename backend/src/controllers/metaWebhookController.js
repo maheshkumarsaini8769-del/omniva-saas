@@ -1,5 +1,6 @@
 const Tenant = require('../models/Tenant');
 const Lead = require('../models/Lead');
+const { triggerAutomation } = require('../services/automationEngine');
 
 // @desc    Verify Meta Webhook subscription
 // @route   GET /api/webhooks/meta
@@ -79,7 +80,7 @@ const handleMetaWebhook = async (req, res) => {
                 phone: leadPhone.trim(),
               });
 
-              await Lead.create({
+              const createdLead = await Lead.create({
                 businessId: tenant._id,
                 name: leadName.trim(),
                 phone: leadPhone.trim(),
@@ -99,6 +100,20 @@ const handleMetaWebhook = async (req, res) => {
                   },
                 ],
               });
+
+              triggerAutomation({
+                businessId: tenant._id,
+                trigger: 'LEAD_INGESTED',
+                entityType: 'LEAD',
+                entityId: createdLead._id.toString(),
+                data: {
+                  customerName: createdLead.name,
+                  customerPhone: createdLead.phone,
+                  source: 'META_ADS',
+                  campaignName: createdLead.campaignName,
+                  budget: createdLead.budget,
+                },
+              }).catch((e) => console.error('[Meta Lead Automation Warning]:', e.message));
             }
           }
         }
@@ -107,7 +122,7 @@ const handleMetaWebhook = async (req, res) => {
       // Direct testing payload format
       const { name, phone, email, campaignName, adSetName, adName, budget } = req.body;
 
-      await Lead.create({
+      const createdLead = await Lead.create({
         businessId: tenant._id,
         name: name.trim(),
         phone: phone.trim(),
@@ -124,6 +139,20 @@ const handleMetaWebhook = async (req, res) => {
           },
         ],
       });
+
+      triggerAutomation({
+        businessId: tenant._id,
+        trigger: 'LEAD_INGESTED',
+        entityType: 'LEAD',
+        entityId: createdLead._id.toString(),
+        data: {
+          customerName: createdLead.name,
+          customerPhone: createdLead.phone,
+          source: 'META_ADS',
+          campaignName: createdLead.campaignName,
+          budget: createdLead.budget,
+        },
+      }).catch((e) => console.error('[Meta Lead Automation Warning]:', e.message));
     }
 
     // Always acknowledge Meta with 200 OK within 2000ms

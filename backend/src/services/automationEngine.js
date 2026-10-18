@@ -4,25 +4,33 @@ const AutomationLog = require('../models/AutomationLog');
 /**
  * Replace tokens in template string e.g. {{customerName}} -> "Aarav Sharma"
  */
-const interpolateTemplate = (template, data) => {
+const interpolateTemplate = (template, data = {}) => {
   if (!template) return '';
   return template.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, key) => {
-    return data[key] !== undefined ? data[key] : '';
+    return data[key] !== undefined && data[key] !== null ? String(data[key]) : '';
   });
 };
 
 /**
  * Check if rule condition evaluates to true
  */
-const evaluateCondition = (condition, data) => {
-  if (!condition || condition.operator === 'ALWAYS') return true;
+const evaluateCondition = (condition, data = {}) => {
+  if (!condition || condition.operator === 'ALWAYS' || condition.field === 'always' || !condition.field) {
+    return true;
+  }
 
   const actualValue = data[condition.field];
-  const targetValue = condition.value;
+  const targetValue = condition.value !== undefined ? condition.value : '';
+
+  if (actualValue === undefined || actualValue === null) {
+    // If target value is empty and operator is EQUALS, allow match
+    if (condition.operator === 'EQUALS' && targetValue === '') return true;
+    return false;
+  }
 
   switch (condition.operator) {
     case 'EQUALS':
-      return String(actualValue).toLowerCase() === String(targetValue).toLowerCase();
+      return String(actualValue).trim().toLowerCase() === String(targetValue).trim().toLowerCase();
     case 'GREATER_THAN':
       return Number(actualValue) > Number(targetValue);
     case 'LESS_THAN':
@@ -39,18 +47,34 @@ const evaluateCondition = (condition, data) => {
  * @param {Object} params
  * @param {ObjectId} params.businessId
  * @param {String} params.trigger - 'ORDER_CREATED', 'BOOKING_CREATED', etc.
- * @param {String} params.entityType - 'ORDER', 'BOOKING', 'LEAD', 'PRODUCT'
- * @param {String} params.entityId - Primary ID of the entity
- * @param {Object} params.data - Entity payload attributes
+ * @param {String} [params.entityType='ORDER'] - 'ORDER', 'BOOKING', 'LEAD', 'PRODUCT'
+ * @param {String} [params.entityId='TEST_101'] - Primary ID of the entity
+ * @param {Object} [params.data={}] - Entity payload attributes
+ * @param {String} [params.targetRuleId=null] - Optional specific rule ID to evaluate (e.g. for testing)
  */
-const triggerAutomation = async ({ businessId, trigger, entityType, entityId, data = {} }) => {
+const triggerAutomation = async ({
+  businessId,
+  trigger,
+  entityType = 'ORDER',
+  entityId = 'DIRECT',
+  data = {},
+  targetRuleId = null,
+}) => {
   try {
-    const rules = await AutomationRule.find({
-      businessId,
-      trigger,
-      isActive: true,
-    });
+    if (!businessId) {
+      console.warn('[Automation Engine] Missing businessId for event trigger:', trigger);
+      return [];
+    }
 
+    const query = { businessId };
+    if (targetRuleId) {
+      query._id = targetRuleId;
+    } else {
+      query.trigger = trigger;
+      query.isActive = true;
+    }
+
+    const rules = await AutomationRule.find(query);
     const results = [];
 
     for (const rule of rules) {
@@ -70,9 +94,21 @@ const triggerAutomation = async ({ businessId, trigger, entityType, entityId, da
       try {
         const interpolatedMessage = interpolateTemplate(rule.action.template, data);
 
+        // Determine human-readable recipient destination
+        let recipient = rule.action?.target || 'Store Administration';
+        if (rule.action?.type === 'SEND_WHATSAPP') {
+          const phone = data.customerPhone || data.phone || '';
+          const name = data.customerName || data.name || '';
+          recipient = phone ? `${phone}${name ? ` (${name})` : ''}` : (rule.action?.target || 'Customer');
+        } else if (rule.action?.type === 'OUTBOUND_WEBHOOK') {
+          recipient = rule.action?.target || 'Outbound Webhook URL';
+        } else if (rule.action?.type === 'IN_APP_ALERT' || rule.action?.type === 'SEND_INTERNAL_ALERT') {
+          recipient = 'Store Administration / Staff';
+        }
+
+        // Webhook dispatch logic
         if (rule.action.type === 'OUTBOUND_WEBHOOK' && rule.action.target) {
-          if (!rule.action.target.includes('omniva-test')) {
-            // Native fetch dispatch with timeout
+          if (!rule.action.target.includes('omniva-test') && !rule.action.target.includes('beeceptor')) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 4000);
             await fetch(rule.action.target, {
@@ -97,17 +133,20 @@ const triggerAutomation = async ({ businessId, trigger, entityType, entityId, da
           }
         }
 
-        // Log successful execution
-        await AutomationLog.create({
+        // Log successful execution in database
+        const logEntry = await AutomationLog.create({
           businessId,
           ruleId: rule._id,
           ruleName: rule.name,
           trigger,
           entityType,
-          entityId,
+          entityId: String(entityId || 'DIRECT'),
           actionType: rule.action.type,
+          recipient,
           status: 'SUCCESS',
+          statusCode: 200,
           payloadSummary: interpolatedMessage || `Executed ${rule.action.type}`,
+          details: interpolatedMessage || `Executed ${rule.action.type}`,
         });
 
         // Increment execution stats
@@ -120,7 +159,9 @@ const triggerAutomation = async ({ businessId, trigger, entityType, entityId, da
           ruleName: rule.name,
           status: 'SUCCESS',
           action: rule.action.type,
+          recipient,
           summary: interpolatedMessage,
+          logId: logEntry._id,
         });
       } catch (actionErr) {
         await AutomationLog.create({
@@ -129,9 +170,11 @@ const triggerAutomation = async ({ businessId, trigger, entityType, entityId, da
           ruleName: rule.name,
           trigger,
           entityType,
-          entityId,
+          entityId: String(entityId || 'DIRECT'),
           actionType: rule.action.type,
+          recipient: rule.action?.target || 'Store Administration',
           status: 'FAILED',
+          statusCode: 500,
           errorMessage: actionErr.message,
         });
 

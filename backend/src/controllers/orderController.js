@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const { triggerAutomation } = require('../services/automationEngine');
 
 // @desc    Get all orders for merchant with optional status & date filtering
 // @route   GET /api/orders
@@ -81,6 +82,7 @@ const updateOrderStatus = async (req, res) => {
     }
 
     const updater = req.user ? `${req.user.name} (${req.user.role})` : 'Merchant Admin';
+    const previousStatus = order.orderStatus;
 
     if (duplicateResolved !== undefined) {
       order.duplicateResolved = Boolean(duplicateResolved);
@@ -111,6 +113,41 @@ const updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
+
+    // Trigger automations for status transition
+    if (orderStatus && orderStatus !== previousStatus) {
+      const trackingUrl = `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/orders/track?orderNumber=${order.orderNumber}&phone=${order.customerPhone}`;
+      const payloadData = {
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        courierName: order.courierPartner || courierPartner || 'Standard Courier',
+        trackingNumber: order.trackingNumber || trackingNumber || 'N/A',
+        trackingUrl,
+      };
+
+      if (orderStatus === 'CONFIRMED') {
+        triggerAutomation({
+          businessId: req.businessId,
+          trigger: 'ORDER_CONFIRMED',
+          entityType: 'ORDER',
+          entityId: order._id.toString(),
+          data: payloadData,
+        }).catch((err) => console.error('[Automation ORDER_CONFIRMED Trigger Error]:', err.message));
+      } else if (orderStatus === 'SHIPPED') {
+        triggerAutomation({
+          businessId: req.businessId,
+          trigger: 'ORDER_SHIPPED',
+          entityType: 'ORDER',
+          entityId: order._id.toString(),
+          data: payloadData,
+        }).catch((err) => console.error('[Automation ORDER_SHIPPED Trigger Error]:', err.message));
+      }
+    }
+
     res.json({ success: true, data: order });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

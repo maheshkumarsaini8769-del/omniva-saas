@@ -23,6 +23,7 @@ const automationRuleSchema = new mongoose.Schema(
         'BOOKING_CONFIRMED',
         'LEAD_INGESTED',
         'STOCK_LOW',
+        'ABANDONED_CHECKOUT',
       ],
       required: [true, 'Trigger event is required'],
       index: true,
@@ -35,7 +36,7 @@ const automationRuleSchema = new mongoose.Schema(
     action: {
       type: {
         type: String,
-        enum: ['SEND_WHATSAPP', 'ASSIGN_STAFF', 'OUTBOUND_WEBHOOK', 'IN_APP_ALERT'],
+        enum: ['SEND_WHATSAPP', 'ASSIGN_STAFF', 'OUTBOUND_WEBHOOK', 'IN_APP_ALERT', 'SEND_INTERNAL_ALERT'],
         required: [true, 'Action type is required'],
       },
       target: { type: String, default: '' }, // staff ID, destination phone, or webhook URL

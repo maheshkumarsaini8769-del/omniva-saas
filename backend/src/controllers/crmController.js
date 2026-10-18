@@ -3,6 +3,7 @@ const Lead = require('../models/Lead');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const { triggerAutomation } = require('../services/automationEngine');
 
 // @desc    Create a new lead (Manual, Form, or API)
 // @route   POST /api/crm/leads
@@ -79,6 +80,26 @@ const createLead = async (req, res) => {
       customFields: customFields || {},
       notes: notesArray,
     });
+
+    // Fire Automation rule asynchronously
+    try {
+      triggerAutomation({
+        businessId: req.businessId,
+        trigger: 'LEAD_INGESTED',
+        entityType: 'LEAD',
+        entityId: lead._id.toString(),
+        data: {
+          customerName: lead.name,
+          customerPhone: lead.phone,
+          source: lead.source,
+          campaignName: lead.campaignName,
+          budget: lead.budget || 0,
+          isDuplicate: !!existingDuplicate,
+        },
+      }).catch((e) => console.error('[CRM Lead Automation Warning]:', e.message));
+    } catch (autoErr) {
+      console.warn('[CRM Lead Automation Error]:', autoErr.message);
+    }
 
     res.status(201).json({
       success: true,

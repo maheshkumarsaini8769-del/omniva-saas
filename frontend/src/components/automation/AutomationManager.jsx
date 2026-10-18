@@ -234,27 +234,27 @@ export const AutomationManager = () => {
         fetch(`${API_BASE}/logs`, { headers }).catch(() => null)
       ]);
 
-      let hasRules = false;
-      let hasLogs = false;
-
       if (rulesRes && rulesRes.ok) {
         const rulesData = await rulesRes.json().catch(() => ({}));
-        if (rulesData.success && Array.isArray(rulesData.data) && rulesData.data.length > 0) {
+        if (rulesData.success && Array.isArray(rulesData.data)) {
           setRules(rulesData.data);
-          hasRules = true;
+        } else {
+          setRules(DEFAULT_RULES);
         }
+      } else {
+        setRules(DEFAULT_RULES);
       }
 
       if (logsRes && logsRes.ok) {
         const logsData = await logsRes.json().catch(() => ({}));
-        if (logsData.success && Array.isArray(logsData.data) && logsData.data.length > 0) {
+        if (logsData.success && Array.isArray(logsData.data)) {
           setLogs(logsData.data);
-          hasLogs = true;
+        } else {
+          setLogs(DEFAULT_LOGS);
         }
+      } else {
+        setLogs(DEFAULT_LOGS);
       }
-
-      if (!hasRules) setRules(DEFAULT_RULES);
-      if (!hasLogs) setLogs(DEFAULT_LOGS);
     } catch (err) {
       console.warn('Using default automation rules fallback:', err);
       setRules(DEFAULT_RULES);
@@ -278,14 +278,20 @@ export const AutomationManager = () => {
 
     try {
       const token = getToken();
-      await fetch(`${API_BASE}/rules/${ruleId}`, {
+      const res = await fetch(`${API_BASE}/rules/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ isActive: newStatus })
-      }).catch(() => null);
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.success && data.data) {
+          setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? data.data : r)));
+        }
+      }
     } catch (err) {
       console.warn('Rule toggle updated locally:', err);
     }
@@ -302,7 +308,10 @@ export const AutomationManager = () => {
       courierName: 'Delhivery Express',
       trackingNumber: 'DEL-8492014',
       trackingUrl: `${window.location.origin}/orders/track?orderNumber=ORD-9821&phone=9829012345`,
-      productName: 'Kair Sangri Handcrafted Pickle (1kg)'
+      productName: 'Kair Sangri Handcrafted Pickle (1kg)',
+      menuUrl: `${window.location.origin}/store/desi-achar-house`,
+      source: 'INSTAGRAM',
+      isDuplicate: 'false',
     };
 
     let processedMsg = rule.action?.template || '';
@@ -320,9 +329,10 @@ export const AutomationManager = () => {
         },
         body: JSON.stringify({
           trigger: rule.trigger,
+          ruleId: rule._id || rule.id,
           testData: testMockData
         })
-      }).catch(() => null);
+      });
 
       // Increment execution counter in local state
       setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? {
@@ -331,19 +341,31 @@ export const AutomationManager = () => {
         lastRunAt: 'Just now'
       } : r)));
 
-      // Prepend to logs
-      const newLog = {
-        id: 'log_' + Date.now(),
-        ruleName: rule.name,
-        trigger: rule.trigger,
-        actionType: rule.action?.type || 'SEND_WHATSAPP',
-        recipient: rule.action?.target === 'customer' ? '+91 98290 12345 (Rahul Sharma)' : rule.action?.target,
-        status: 'SUCCESS',
-        statusCode: 200,
-        timestamp: 'Just now (Simulated Test)',
-        details: processedMsg
-      };
-      setLogs(prev => [newLog, ...prev]);
+      // Refetch live audit logs from backend
+      const logsRes = await fetch(`${API_BASE}/logs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => null);
+
+      if (logsRes && logsRes.ok) {
+        const logsData = await logsRes.json().catch(() => ({}));
+        if (logsData.success && Array.isArray(logsData.data)) {
+          setLogs(logsData.data);
+        }
+      } else {
+        // Prepend simulated log
+        const newLog = {
+          id: 'log_' + Date.now(),
+          ruleName: rule.name,
+          trigger: rule.trigger,
+          actionType: rule.action?.type || 'SEND_WHATSAPP',
+          recipient: rule.action?.target === 'customer' ? '+91 98290 12345 (Rahul Sharma)' : (rule.action?.target || 'Customer'),
+          status: 'SUCCESS',
+          statusCode: 200,
+          timestamp: 'Just now (Simulated Test)',
+          details: processedMsg
+        };
+        setLogs(prev => [newLog, ...prev]);
+      }
 
       showToast(`🚀 Test Trigger Success: "${rule.name}" fired! Check Live Audit Logs.`);
 
@@ -369,7 +391,7 @@ export const AutomationManager = () => {
       await fetch(`${API_BASE}/rules/${ruleId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
-      }).catch(() => null);
+      });
     } catch (err) {
       console.warn('Deleted locally:', err);
     }
@@ -383,7 +405,7 @@ export const AutomationManager = () => {
     }
 
     const payload = {
-      name: form.name,
+      name: form.name.trim(),
       trigger: form.trigger,
       condition: {
         field: form.conditionField,
@@ -396,18 +418,23 @@ export const AutomationManager = () => {
         template: form.actionTemplate,
       },
       isActive: true,
-      executionCount: 0,
-      lastRunAt: 'Never',
-      successRate: '100%'
     };
 
+    const tempId = editingRule ? (editingRule._id || editingRule.id) : ('temp_rule_' + Date.now());
+
     if (editingRule) {
-      const ruleId = editingRule._id || editingRule.id;
-      setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? { ...r, ...payload } : r)));
+      setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? { ...r, ...payload } : r)));
       showToast(`Rule "${form.name}" updated successfully!`);
     } else {
-      const newRule = { ...payload, _id: 'rule_' + Date.now(), id: 'rule_' + Date.now() };
-      setRules(prev => [newRule, ...prev]);
+      const optimisticRule = {
+        ...payload,
+        _id: tempId,
+        id: tempId,
+        executionCount: 0,
+        lastRunAt: 'Never',
+        successRate: '100%'
+      };
+      setRules(prev => [optimisticRule, ...prev]);
       showToast(`⚡ New automation rule "${form.name}" created and active!`);
     }
 
@@ -417,23 +444,35 @@ export const AutomationManager = () => {
     try {
       const token = getToken();
       if (editingRule) {
-        await fetch(`${API_BASE}/rules/${editingRule._id || editingRule.id}`, {
+        const res = await fetch(`${API_BASE}/rules/${tempId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify(payload)
-        }).catch(() => null);
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.success && data.data) {
+            setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? data.data : r)));
+          }
+        }
       } else {
-        await fetch(`${API_BASE}/rules`, {
+        const res = await fetch(`${API_BASE}/rules`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify(payload)
-        }).catch(() => null);
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.success && data.data) {
+            setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? data.data : r)));
+          }
+        }
       }
     } catch (err) {
       console.warn('Saved locally:', err);
