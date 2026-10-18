@@ -24,7 +24,8 @@ import {
   Zap,
   X,
   Gift,
-  MessageSquare
+  MessageSquare,
+  MessageCircle
 } from 'lucide-react';
 
 export const PublicStorefront = () => {
@@ -54,11 +55,7 @@ export const PublicStorefront = () => {
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Direct Inquiry (Lead) and Exit-Intent State
-  const [inquireModalProduct, setInquireModalProduct] = useState(null);
-  const [inquireCustomerName, setInquireCustomerName] = useState('');
-  const [inquireCustomerPhone, setInquireCustomerPhone] = useState('');
-  const [inquireSubmitting, setInquireSubmitting] = useState(false);
+  // Exit-Intent State
   const [isExitPopupOpen, setIsExitPopupOpen] = useState(false);
   const [exitPhone, setExitPhone] = useState('');
   const [exitName, setExitName] = useState('');
@@ -275,7 +272,7 @@ export const PublicStorefront = () => {
     fetchStore();
   }, [slug]);
 
-  const addToCart = (product, selectedVariant = null) => {
+  const addToCart = (product, selectedVariant = null, openDrawer = false) => {
     setCart((prev) => {
       const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
       const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
@@ -297,7 +294,10 @@ export const PublicStorefront = () => {
 
       if (existingIndex > -1) {
         const updated = [...prev];
-        updated[existingIndex].quantity += 1;
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + 1,
+        };
         return updated;
       } else {
         return [
@@ -314,7 +314,55 @@ export const PublicStorefront = () => {
         ];
       }
     });
-    setIsCartOpen(true);
+
+    if (openDrawer) {
+      setCheckoutStep('CART');
+      setIsCartOpen(true);
+    }
+  };
+
+  const updateProductQuantity = (product, selectedVariant = null, delta = 1) => {
+    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
+    const prodId = product._id || product.id || product.name;
+
+    setCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (item) => item.productId === prodId && item.variantName === variantName
+      );
+
+      if (existingIndex > -1) {
+        const newQty = prev[existingIndex].quantity + delta;
+        if (newQty <= 0) {
+          return prev.filter((_, i) => i !== existingIndex);
+        }
+        const updated = [...prev];
+        updated[existingIndex] = { ...updated[existingIndex], quantity: newQty };
+        return updated;
+      } else if (delta > 0) {
+        const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
+        const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+        const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+        const productImage =
+          product.img ||
+          product.image ||
+          (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+          'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80';
+
+        return [
+          ...prev,
+          {
+            productId: prodId,
+            variantId,
+            name: product.name,
+            variantName,
+            price,
+            quantity: 1,
+            image: productImage,
+          },
+        ];
+      }
+      return prev;
+    });
   };
 
   const updateQuantity = (index, delta) => {
@@ -352,63 +400,52 @@ export const PublicStorefront = () => {
   }, [hasTriggeredExit, couponClaimed]);
 
   const handleDirectBuy = (product, selectedVariant = null) => {
-    addToCart(product, selectedVariant);
+    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
+    const prodId = product._id || product.id || product.name;
+    const existing = cart.find(
+      (item) => item.productId === prodId && item.variantName === variantName
+    );
+    if (!existing) {
+      addToCart(product, selectedVariant, false);
+    }
     setCheckoutStep('CHECKOUT');
     setIsCartOpen(true);
   };
 
-  const handleOpenInquire = (product, selectedVariant = null) => {
+  const handleDirectWhatsApp = (product, selectedVariant = null) => {
     const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-    const vPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
-    setInquireModalProduct({
-      ...product,
-      selectedVariantName: selectedVariant?.name || '',
-      activePrice: vPrice,
-    });
-  };
+    const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
+    const rawPhone = storeData?.store?.phone || storeData?.store?.contact?.phone || '9876543210';
+    const tenantPhone = rawPhone.replace(/\D/g, '').slice(-10) || '9876543210';
+    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || 'Desi Rasoi Achar';
 
-  const handleSubmitInquiry = async (e) => {
-    e.preventDefault();
-    const cleanPhone = (inquireCustomerPhone || '').replace(/\D/g, '');
-    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-      alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.');
-      return;
-    }
+    const text = encodeURIComponent(
+      `Hello! I would like to order *${product.name}* (${variantName}) for *₹${price}* from ${storeTitle}. Please share delivery & COD details!`
+    );
+    const waUrl = `https://wa.me/91${tenantPhone}?text=${text}`;
 
-    setInquireSubmitting(true);
+    // Asynchronously log lead capture without blocking user
     try {
-      const res = await fetch(`/api/public/store/${slug}/inquire`, {
+      fetch(`/api/public/store/${slug}/inquire`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: inquireCustomerName || 'Storefront Visitor',
-          phone: cleanPhone,
-          productName: inquireModalProduct ? `${inquireModalProduct.name}${inquireModalProduct.selectedVariantName ? ' (' + inquireModalProduct.selectedVariantName + ')' : ''}` : 'General Inquiry',
-          productPrice: inquireModalProduct?.activePrice,
-          productId: inquireModalProduct?._id,
-          source: 'WHATSAPP',
+          name: 'WhatsApp Store Visitor',
+          phone: tenantPhone,
+          productName: `${product.name} (${variantName})`,
+          productPrice: price,
+          productId: product._id || product.id,
+          source: 'WHATSAPP_DIRECT_CLICK',
           utmSource: searchParams.get('utm_source') || '',
           utmCampaign: searchParams.get('utm_campaign') || '',
         }),
-      });
-      const data = await res.json();
-      if (data.data?.whatsappUrl) {
-        window.open(data.data.whatsappUrl, '_blank');
-      } else {
-        const tenantPhone = (storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '');
-        const text = encodeURIComponent(`Hi! I am interested in ${inquireModalProduct?.name || 'your store products'}. Please share details & COD availability.`);
-        window.open(`https://wa.me/91${tenantPhone.slice(-10)}?text=${text}`, '_blank');
-      }
-      setInquireModalProduct(null);
-    } catch (err) {
-      console.error('Inquiry error:', err);
-      const tenantPhone = (storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '');
-      const text = encodeURIComponent(`Hi! I am interested in ${inquireModalProduct?.name || 'your store products'}.`);
-      window.open(`https://wa.me/91${tenantPhone.slice(-10)}?text=${text}`, '_blank');
-      setInquireModalProduct(null);
-    } finally {
-      setInquireSubmitting(false);
+      }).catch(() => {});
+    } catch (e) {
+      // ignore background error
     }
+
+    window.open(waUrl, '_blank');
   };
 
   const handleClaimCoupon = async (e) => {
@@ -573,14 +610,14 @@ export const PublicStorefront = () => {
         <div className="flex items-center gap-2.5">
           {store.phone && (
             <a
-              href={`https://wa.me/91${store.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+              href={`https://wa.me/91${store.phone.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(
                 `Hi ${store.businessName}! I'm browsing your online store and need help.`
               )}`}
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/25 text-xs font-semibold transition"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition"
             >
-              <Phone className="w-3.5 h-3.5" /> WhatsApp Support
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp Support
             </a>
           )}
           <button
@@ -799,9 +836,11 @@ export const PublicStorefront = () => {
                 <ProductCard
                   key={prod._id}
                   product={prod}
+                  cart={cart}
                   onAddToCart={addToCart}
+                  onUpdateQty={updateProductQuantity}
                   onDirectBuy={handleDirectBuy}
-                  onInquire={handleOpenInquire}
+                  onWhatsApp={handleDirectWhatsApp}
                 />
               ))}
             </div>
@@ -818,21 +857,24 @@ export const PublicStorefront = () => {
                 handleDirectBuy(filteredProducts[0]);
               }
             }}
-            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
-            <Zap className="w-3.5 h-3.5" /> ⚡ 1-Click Order
+            <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+            <span>Direct Order</span>
           </button>
           <button
             onClick={() => {
               if (filteredProducts.length > 0) {
-                handleOpenInquire(filteredProducts[0]);
+                handleDirectWhatsApp(filteredProducts[0]);
               } else {
-                handleOpenInquire({ name: store.businessName, price: 0 });
+                const tenantPhone = (storeData?.store?.phone || storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '').slice(-10);
+                window.open(`https://wa.me/91${tenantPhone}?text=${encodeURIComponent(`Hi! I want to inquire about products from ${store.businessName}.`)}`, '_blank');
               }
             }}
-            className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
-            <Phone className="w-3.5 h-3.5 text-emerald-400" /> 💬 Chat on WhatsApp
+            <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
+            <span>Order on WhatsApp</span>
           </button>
         </div>
       )}
@@ -867,7 +909,7 @@ export const PublicStorefront = () => {
               <div className="space-y-6">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-indigo-400" />
+                    <ShoppingBag className="w-5 h-5 text-indigo-600" />
                     <h3 className="font-bold text-slate-900 text-base">Your Cart</h3>
                   </div>
                   <button
@@ -881,12 +923,12 @@ export const PublicStorefront = () => {
                 {/* Free shipping banner */}
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
                   {isFreeShipping ? (
-                    <div className="text-emerald-400 font-bold flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4" /> Congratulations! You got FREE Delivery.
+                    <div className="text-emerald-700 font-bold flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" /> Congratulations! You got FREE Delivery.
                     </div>
                   ) : (
                     <div className="text-slate-600">
-                      Add <strong className="text-amber-400">₹{freeShippingThreshold - cartSubtotal}</strong> more to unlock <span className="text-emerald-400 font-bold">FREE Delivery</span>!
+                      Add <strong className="text-amber-600 font-bold">₹{freeShippingThreshold - cartSubtotal}</strong> more to unlock <span className="text-emerald-700 font-bold">FREE Delivery</span>!
                     </div>
                   )}
                   <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
@@ -921,44 +963,44 @@ export const PublicStorefront = () => {
                               {item.name}
                             </div>
                             {item.variantName && (
-                              <div className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <div className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
                                 <span>🏺</span>
                                 <span className="truncate">{item.variantName}</span>
                               </div>
                             )}
-                            <div className="text-[11px] text-slate-400 font-medium">₹{item.price} each</div>
+                            <div className="text-[11px] text-slate-500 font-medium">₹{item.price} each</div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2.5 shrink-0">
-                          <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 shadow-xs">
+                          <div className="flex items-center bg-white border border-slate-300 rounded-xl p-0.5 shadow-xs">
                             <button
                               type="button"
                               onClick={() => updateQuantity(idx, -1)}
-                              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+                              className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer transition active:scale-90"
                               title="Decrease"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
                             </button>
-                            <span className="px-2 font-black text-slate-900 text-xs">{item.quantity}</span>
+                            <span className="w-7 text-center font-black text-slate-900 text-xs">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(idx, 1)}
-                              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+                              className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer transition active:scale-90"
                               title="Increase"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                             </button>
                           </div>
 
                           <div className="text-right">
-                            <div className="font-black text-emerald-400 text-xs w-16">
+                            <div className="font-black text-emerald-600 text-xs w-16">
                               ₹{item.price * item.quantity}
                             </div>
                             <button
                               type="button"
                               onClick={() => removeFromCart(idx)}
-                              className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer mt-0.5 inline-block"
+                              className="text-[10px] text-rose-500 hover:text-rose-700 underline cursor-pointer mt-0.5 inline-block font-medium"
                             >
                               Remove
                             </button>
@@ -972,19 +1014,19 @@ export const PublicStorefront = () => {
                 {/* Price breakdown */}
                 {cart.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-600">
                       <span>Subtotal:</span>
                       <span className="text-slate-900 font-medium">₹{cartSubtotal}</span>
                     </div>
-                    <div className="flex justify-between text-slate-400">
+                    <div className="flex justify-between text-slate-600">
                       <span>Delivery Fee:</span>
-                      <span className={isFreeShipping ? 'text-emerald-400 font-bold' : 'text-white'}>
+                      <span className={isFreeShipping ? 'text-emerald-600 font-bold' : 'text-slate-900 font-bold'}>
                         {isFreeShipping ? 'FREE' : `₹${shippingFee}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
                       <span>Total Amount:</span>
-                      <span className="text-emerald-400">₹{totalAmount}</span>
+                      <span className="text-emerald-600">₹{totalAmount}</span>
                     </div>
                   </div>
                 )}
@@ -998,11 +1040,51 @@ export const PublicStorefront = () => {
                   <button
                     type="button"
                     onClick={() => setCheckoutStep('CART')}
-                    className="text-indigo-400 hover:underline"
+                    className="text-indigo-600 hover:underline font-semibold"
                   >
                     &larr; Back to Cart
                   </button>
                 </div>
+
+                {/* Order Summary Preview Card */}
+                {cart.length > 0 && (
+                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider pb-1.5 border-b border-slate-200">
+                      <span>Order Items ({cart.reduce((s, i) => s + i.quantity, 0)})</span>
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutStep('CART')}
+                        className="text-indigo-600 hover:underline capitalize font-semibold cursor-pointer"
+                      >
+                        Edit Cart
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                      {cart.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs">
+                          <div className="truncate max-w-[210px]">
+                            <span className="font-semibold text-slate-900">{item.name}</span>
+                            {item.variantName && (
+                              <span className="text-[10px] text-slate-500 ml-1">({item.variantName})</span>
+                            )}
+                            <span className="text-slate-400 text-[10px] ml-1 font-bold">x{item.quantity}</span>
+                          </div>
+                          <span className="font-bold text-slate-900 shrink-0">₹{item.price * item.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200">
+                      <span className="text-slate-500">Delivery:</span>
+                      <span className={isFreeShipping ? 'text-emerald-600 font-bold' : 'text-slate-900 font-bold'}>
+                        {isFreeShipping ? 'FREE' : `₹${shippingFee}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-black text-slate-900 pt-1 border-t border-slate-200">
+                      <span>Total Amount:</span>
+                      <span className="text-emerald-600 text-sm">₹{totalAmount}</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <div>
@@ -1088,26 +1170,26 @@ export const PublicStorefront = () => {
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('COD')}
-                        className={`p-3 rounded-xl border text-left transition ${
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                           paymentMethod === 'COD'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-white font-bold'
-                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                            ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 font-bold shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
                         }`}
                       >
-                        <div className="text-xs">Cash on Delivery</div>
-                        <div className="text-[10px] text-emerald-400 mt-0.5">Pay upon delivery</div>
+                        <div className="text-xs font-bold text-slate-900">Cash on Delivery</div>
+                        <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Pay upon delivery</div>
                       </button>
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('ONLINE')}
-                        className={`p-3 rounded-xl border text-left transition ${
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
                           paymentMethod === 'ONLINE'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-white font-bold'
-                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 text-slate-900 font-bold shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
                         }`}
                       >
-                        <div className="text-xs">UPI / Online Pay</div>
-                        <div className="text-[10px] text-cyan-400 mt-0.5">GooglePay, PhonePe</div>
+                        <div className="text-xs font-bold text-slate-900">UPI / Online Pay</div>
+                        <div className="text-[10px] text-indigo-600 mt-0.5 font-medium">GooglePay, PhonePe</div>
                       </button>
                     </div>
                   </div>
@@ -1117,7 +1199,7 @@ export const PublicStorefront = () => {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       'Placing Order...'
@@ -1134,30 +1216,30 @@ export const PublicStorefront = () => {
 
             {checkoutStep === 'SUCCESS' && placedOrder && (
               <div className="py-6 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto">
                   <CheckCircle className="w-8 h-8" />
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">Order Confirmed!</h3>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     Thank you, {customerName}! Your order has been placed successfully.
                   </p>
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left text-xs space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Order Number:</span>
-                    <span className="font-mono font-bold text-indigo-400">
+                    <span className="text-slate-500">Order Number:</span>
+                    <span className="font-mono font-bold text-indigo-600">
                       {placedOrder.orderNumber}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Total Amount:</span>
-                    <span className="font-bold text-emerald-400">₹{placedOrder.totalAmount}</span>
+                    <span className="text-slate-500">Total Amount:</span>
+                    <span className="font-bold text-emerald-600">₹{placedOrder.totalAmount}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Payment Mode:</span>
-                    <span className="text-slate-200">{placedOrder.paymentMethod}</span>
+                    <span className="text-slate-500">Payment Mode:</span>
+                    <span className="text-slate-900 font-semibold">{placedOrder.paymentMethod}</span>
                   </div>
                 </div>
 
@@ -1170,7 +1252,7 @@ export const PublicStorefront = () => {
                     rel="noreferrer"
                     className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
                   >
-                    <Phone className="w-4 h-4" /> Chat on WhatsApp for Updates
+                    <MessageCircle className="w-4 h-4" /> Chat on WhatsApp for Updates
                   </a>
                   <button
                     onClick={() => {
@@ -1403,83 +1485,7 @@ export const PublicStorefront = () => {
         </div>
       )}
 
-      {/* WhatsApp Inquiry & Lead Capture Modal */}
-      {inquireModalProduct && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Direct WhatsApp Inquiry</h3>
-                  <p className="text-[10px] text-slate-500">Get instant details, discounts & COD support</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setInquireModalProduct(null)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-center gap-3">
-              <img
-                src={inquireModalProduct.images?.[0] || inquireModalProduct.img || inquireModalProduct.image || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=100&auto=format&fit=crop&q=80'}
-                alt={inquireModalProduct.name}
-                className="w-12 h-12 rounded-xl object-cover"
-              />
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-900 truncate">{inquireModalProduct.name}</div>
-                {inquireModalProduct.selectedVariantName && (
-                  <div className="text-[10px] text-slate-500">{inquireModalProduct.selectedVariantName}</div>
-                )}
-                <div className="text-xs font-extrabold text-emerald-600">₹{inquireModalProduct.activePrice || inquireModalProduct.price}</div>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmitInquiry} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Your Name (Optional)</label>
-                <input
-                  type="text"
-                  value={inquireCustomerName}
-                  placeholder="e.g. Rahul Sharma"
-                  onChange={(e) => setInquireCustomerName(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">WhatsApp Mobile Number *</label>
-                <div className="flex gap-2">
-                  <span className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-bold">+91</span>
-                  <input
-                    type="tel"
-                    required
-                    value={inquireCustomerPhone}
-                    placeholder="9876543210"
-                    maxLength={10}
-                    onChange={(e) => setInquireCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                    className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-emerald-500 font-bold"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={inquireSubmitting}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition transform active:scale-95 disabled:opacity-50"
-              >
-                <MessageSquare className="w-4 h-4" />
-                {inquireSubmitting ? 'Connecting...' : '💬 Chat on WhatsApp Now'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Exit-Intent Discount Coupon Modal */}
       {isExitPopupOpen && (
@@ -1553,8 +1559,8 @@ export const PublicStorefront = () => {
   );
 };
 
-// Reusable Product Card with High-Res Image, Badges, Ratings and Variant Selector
-const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
+// Reusable Product Card with High-Res Image, Badges, Ratings, Variant Selector & Interactive Stepper
+const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy, onWhatsApp }) => {
   const rawBasePrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price).replace(/[^0-9.]/g, '')) || 299;
 
   const availableVariants = (product.jars && product.jars.length > 0)
@@ -1569,15 +1575,22 @@ const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
 
   const [selectedVariant, setSelectedVariant] = useState(availableVariants[0]);
 
-  const price = selectedVariant
-    ? (typeof selectedVariant.price === 'number' ? selectedVariant.price : parseFloat(String(selectedVariant.price).replace(/[^0-9.]/g, '')) || rawBasePrice)
+  const currentVariant = selectedVariant || availableVariants[0];
+
+  const price = currentVariant
+    ? (typeof currentVariant.price === 'number' ? currentVariant.price : parseFloat(String(currentVariant.price).replace(/[^0-9.]/g, '')) || rawBasePrice)
     : rawBasePrice;
 
-  const compareAt = selectedVariant
-    ? selectedVariant.compareAtPrice
-    : product.compareAtPrice;
+  const compareAt = currentVariant?.compareAtPrice || product.compareAtPrice;
   const discountPercent =
     compareAt > price ? Math.round(((compareAt - price) / compareAt) * 100) : null;
+
+  const variantName = currentVariant?.name || '500g Jar';
+  const prodId = product._id || product.id || product.name;
+  const cartItem = cart.find(
+    (item) => item.productId === prodId && item.variantName === variantName
+  );
+  const cartQty = cartItem ? cartItem.quantity : 0;
 
   const productImage =
     product.img ||
@@ -1644,19 +1657,19 @@ const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
           {availableVariants?.length > 0 && (
             <div className="pt-2">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                <label className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
                   <span>🏺</span>
                   <span>Available Jar Sizes:</span>
                 </label>
-                {selectedVariant && (
-                  <span className="text-[10px] text-indigo-400 font-bold truncate max-w-[130px]">
-                    {selectedVariant.name}
+                {currentVariant && (
+                  <span className="text-[10px] text-indigo-600 font-bold truncate max-w-[130px]">
+                    {currentVariant.name}
                   </span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {availableVariants.map((v, i) => {
-                  const isSelected = selectedVariant?.name === v.name;
+                  const isSelected = currentVariant?.name === v.name;
                   const vPrice = typeof v.price === 'number' ? v.price : parseFloat(String(v.price).replace(/[^0-9.]/g, '')) || rawBasePrice;
                   return (
                     <button
@@ -1665,12 +1678,12 @@ const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
                       type="button"
                       className={`py-1.5 px-2 rounded-xl text-left border transition cursor-pointer ${
                         isSelected
-                          ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 ring-1 ring-indigo-300'
+                          ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm ring-1 ring-indigo-400'
                           : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
                       }`}
                     >
                       <div className="text-[11px] font-bold truncate leading-tight">{v.name}</div>
-                      <div className={`text-[10px] font-extrabold ${isSelected ? 'text-indigo-100' : 'text-emerald-400'}`}>
+                      <div className={`text-[10px] font-extrabold ${isSelected ? 'text-indigo-100' : 'text-emerald-600'}`}>
                         ₹{vPrice}
                       </div>
                     </button>
@@ -1681,45 +1694,73 @@ const ProductCard = ({ product, onAddToCart, onDirectBuy, onInquire }) => {
           )}
         </div>
 
-        {/* Pricing and Dual Action Buttons (Direct Order vs WhatsApp Inquiry) */}
-        <div className="pt-3 border-t border-slate-100 space-y-2.5">
+        {/* Pricing and Cart / Checkout Actions */}
+        <div className="pt-3 border-t border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-black text-slate-900">₹{price}</span>
                 {compareAt > price && (
-                  <span className="text-xs text-slate-500 line-through">₹{compareAt}</span>
+                  <span className="text-xs text-slate-400 line-through">₹{compareAt}</span>
                 )}
               </div>
-              <span className="text-[10px] text-emerald-500 font-medium">Inclusive of all taxes</span>
+              <span className="text-[10px] text-emerald-600 font-medium">Inclusive of all taxes</span>
             </div>
 
-            <button
-              onClick={() => onAddToCart(product, selectedVariant)}
-              type="button"
-              className="py-1 px-2 text-slate-500 hover:text-indigo-600 text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" /> + Cart
-            </button>
+            {/* Cart Stepper: When 0 show "+ Add to Cart", when > 0 show [-] [qty] [+] */}
+            {cartQty === 0 ? (
+              <button
+                onClick={() => onAddToCart(product, currentVariant, false)}
+                type="button"
+                className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 text-indigo-600 stroke-[2.5]" />
+                <span>Add to Cart</span>
+              </button>
+            ) : (
+              <div className="flex items-center bg-indigo-50 border border-indigo-300 rounded-xl p-0.5 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => onUpdateQty(product, currentVariant, -1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-indigo-700 hover:bg-indigo-600 hover:text-white shadow-xs transition active:scale-90 cursor-pointer"
+                  title="Decrease quantity"
+                >
+                  <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+                <span className="w-8 text-center font-black text-xs text-indigo-950">
+                  {cartQty}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateQty(product, currentVariant, 1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs transition active:scale-90 cursor-pointer"
+                  title="Increase quantity"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             {/* Option 1: Direct Order (Instant Checkout Drawer) */}
             <button
-              onClick={() => onDirectBuy(product, selectedVariant)}
+              onClick={() => onDirectBuy(product, currentVariant)}
               type="button"
               className="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
             >
-              <Zap className="w-3.5 h-3.5 text-amber-300" /> ⚡ Direct Order
+              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+              <span>Direct Order</span>
             </button>
 
-            {/* Option 2: WhatsApp Inquiry (Direct Lead Capture) */}
+            {/* Option 2: WhatsApp (Direct Chat with Pre-filled Product Details) */}
             <button
-              onClick={() => onInquire(product, selectedVariant)}
+              onClick={() => onWhatsApp(product, currentVariant)}
               type="button"
-              className="py-2.5 px-2 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
+              className="py-2.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 hover:border-emerald-400 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
             >
-              <Phone className="w-3.5 h-3.5 text-emerald-400" /> 💬 Ask on WhatsApp
+              <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
+              <span>WhatsApp</span>
             </button>
           </div>
         </div>
