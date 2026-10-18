@@ -1048,10 +1048,12 @@ export const MerchantDashboard = () => {
   const dailyChartData = (() => {
     if (!startDate || !endDate) return [];
     const list = [];
-    let curr = new Date(startDate);
-    const end = new Date(endDate);
+    const [sY, sM, sD] = startDate.split('-').map(Number);
+    const [eY, eM, eD] = endDate.split('-').map(Number);
+    let curr = new Date(sY, sM - 1, sD);
+    const end = new Date(eY, eM - 1, eD);
     let count = 0;
-    while (curr <= end && count < 31) {
+    while (curr <= end && count < 60) {
       const yyyy = curr.getFullYear();
       const mm = String(curr.getMonth() + 1).padStart(2, '0');
       const dd = String(curr.getDate()).padStart(2, '0');
@@ -1059,7 +1061,7 @@ export const MerchantDashboard = () => {
       const dayLabel = curr.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 
       const dayOrders = ordersList.filter(o => o.date === dateStr && o.status !== 'CANCELLED');
-      const dayRevenue = dayOrders.reduce((sum, o) => sum + o.total, 0);
+      const dayRevenue = dayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
       const dayOrderCount = dayOrders.length;
 
       list.push({ dateStr, dayLabel, revenue: dayRevenue, count: dayOrderCount });
@@ -4101,39 +4103,86 @@ export const MerchantDashboard = () => {
                   </div>
 
                   {overviewChartMode === 'bar' ? (
-                    <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
-                      {[28, 35, 30, 48, 42, 60, 54, 72, 68, 92].map((val, idx) => (
-                        <div key={idx} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                          <div
-                            style={{ height: `${val}%` }}
-                            className="w-full bg-indigo-600/80 group-hover:bg-indigo-600 rounded-t-lg transition relative"
-                          >
-                            <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
-                              ₹{(val * 2700).toLocaleString('en-IN')}
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-medium">D{idx * 3 + 1}</span>
+                    <div className="h-48 w-full flex items-end gap-1.5 sm:gap-2.5 pt-6 pb-2 px-1 border-b border-slate-100 overflow-x-auto scrollbar-thin">
+                      {dailyChartData.length === 0 ? (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
+                          No orders or sales recorded for the selected date range.
                         </div>
-                      ))}
+                      ) : (
+                        dailyChartData.map((d, idx) => {
+                          const pct = maxDailyRevenue > 0 ? Math.round((d.revenue / maxDailyRevenue) * 100) : 0;
+                          const barHeight = d.revenue > 0 ? Math.max(pct, 14) : 5;
+
+                          return (
+                            <div
+                              key={d.dateStr || idx}
+                              className="flex-1 min-w-[32px] max-w-[52px] h-full flex flex-col justify-end items-center gap-2 group cursor-pointer"
+                            >
+                              {/* Explicit Height Bar Column */}
+                              <div className="w-full h-32 flex items-end justify-center relative">
+                                <div
+                                  style={{ height: `${barHeight}%` }}
+                                  className={`w-full max-w-[28px] rounded-t-lg transition-all duration-300 relative ${
+                                    d.revenue > 0
+                                      ? 'bg-gradient-to-t from-indigo-600 via-indigo-500 to-indigo-400 group-hover:from-indigo-700 group-hover:to-indigo-500 shadow-xs'
+                                      : 'bg-slate-200/90 group-hover:bg-slate-300'
+                                  }`}
+                                >
+                                  {/* Tooltip on hover */}
+                                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-1 px-2.5 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-150 whitespace-nowrap shadow-xl z-30 flex flex-col items-center">
+                                    <span className="font-extrabold text-emerald-400">₹{d.revenue.toLocaleString('en-IN')}</span>
+                                    <span className="text-[9px] text-slate-300 font-medium">
+                                      {d.count} {d.count === 1 ? 'order' : 'orders'} · {d.dayLabel}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Day Label */}
+                              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap text-center select-none">
+                                {d.dayLabel}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   ) : (
-                    <div className="h-44 w-full flex items-center justify-around py-2">
-                      <div className="flex items-center gap-6">
-                        <div className="w-32 h-32 rounded-full border-8 border-indigo-500 border-t-emerald-500 border-r-amber-400 flex items-center justify-center flex-col">
-                          <span className="text-xs text-slate-400">Total</span>
-                          <span className="font-black text-slate-900 text-sm">₹{(rangeRevenue || 248500).toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
-                            <span className="text-slate-600 font-medium">Prepaid Online: 43%</span>
+                    <div className="h-48 w-full flex items-center justify-around py-3">
+                      {(() => {
+                        const codOrders = staffScopedOrders.filter(o => (o.pay || o.payMethod) === 'COD');
+                        const onlineOrders = staffScopedOrders.filter(o => (o.pay || o.payMethod) === 'ONLINE' || (o.pay || o.payMethod) === 'UPI');
+                        const codRev = codOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+                        const onlineRev = onlineOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+                        const totalRev = codRev + onlineRev || rangeRevenue || 1;
+                        const onlinePct = Math.round((onlineRev / totalRev) * 100);
+                        const codPct = 100 - onlinePct;
+
+                        return (
+                          <div className="flex flex-wrap items-center justify-center gap-8">
+                            <div className="w-32 h-32 rounded-full border-8 border-indigo-500 border-t-emerald-500 flex items-center justify-center flex-col shadow-inner">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase">Total</span>
+                              <span className="font-black text-slate-900 text-sm">₹{rangeRevenue.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="space-y-3 text-xs">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-xs"></span>
+                                <div>
+                                  <div className="text-slate-800 font-bold">Prepaid Online: {onlinePct}%</div>
+                                  <div className="text-[11px] text-slate-400 font-medium">₹{onlineRev.toLocaleString('en-IN')} ({onlineOrders.length} orders)</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block shadow-xs"></span>
+                                <div>
+                                  <div className="text-slate-800 font-bold">Cash on Delivery: {codPct}%</div>
+                                  <div className="text-[11px] text-slate-400 font-medium">₹{codRev.toLocaleString('en-IN')} ({codOrders.length} orders)</div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span>
-                            <span className="text-slate-600 font-medium">Cash on Delivery: 57%</span>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
