@@ -18,6 +18,7 @@ const automationRoutes = require('./routes/automationRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const publicStoreRoutes = require('./routes/publicStoreRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const integrationRoutes = require('./routes/integrationRoutes');
 const { handleRazorpayWebhook } = require('./controllers/paymentWebhookController');
 const { sanitizeInput } = require('./middlewares/sanitizeMiddleware');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
@@ -52,6 +53,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api', bookingRoutes);
 app.post('/api/webhooks/razorpay', handleRazorpayWebhook);
 app.use('/api/automations', automationRoutes);
+app.use('/api/integrations', integrationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 
