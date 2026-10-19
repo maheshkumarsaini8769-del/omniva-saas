@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Download,
+  Calendar,
   Calendar as CalendarIcon,
   CheckCircle2,
   Clock,
@@ -319,6 +320,7 @@ export const MerchantDashboard = () => {
   const [selectedStaffForEdit, setSelectedStaffForEdit] = useState(null);
   const [showEditStaffModal, setShowEditStaffModal] = useState(false);
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
   const [simulatedStaffId, setSimulatedStaffId] = useState(null); // null = Merchant Admin (Owner view)
   const [newStaffForm, setNewStaffForm] = useState({
     name: '',
@@ -7609,7 +7611,7 @@ export const MerchantDashboard = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                   <div className="flex items-center gap-3">
                     <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-indigo-600" />
+                      <CalendarIcon className="w-5 h-5 text-indigo-600" />
                       <span>{calendarMonth}</span>
                     </h3>
                     <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
