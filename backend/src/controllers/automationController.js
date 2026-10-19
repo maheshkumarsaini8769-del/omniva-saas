@@ -243,6 +243,7 @@ const getLogs = async (req, res) => {
     const formatted = logs.map((l) => ({
       _id: l._id,
       id: l._id ? l._id.toString() : 'log_' + Date.now(),
+      businessId: l.businessId,
       ruleName: l.ruleName,
       trigger: l.trigger,
       actionType: l.actionType,

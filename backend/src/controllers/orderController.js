@@ -181,6 +181,28 @@ const updateOrderStatus = async (req, res) => {
     }
 
     if (orderStatus && orderStatus !== order.orderStatus) {
+      // If order is cancelled, restore stock to products/variants
+      if (orderStatus === 'CANCELLED' && order.orderStatus !== 'CANCELLED' && order.items && order.items.length) {
+        for (const item of order.items) {
+          if (!item.productId) continue;
+          try {
+            if (item.variantId && mongoose.Types.ObjectId.isValid(item.variantId)) {
+              await Product.updateOne(
+                { _id: item.productId, 'variants._id': item.variantId },
+                { $inc: { 'variants.$.stockQuantity': item.quantity } }
+              );
+            } else if (item.productId && mongoose.Types.ObjectId.isValid(item.productId)) {
+              await Product.updateOne(
+                { _id: item.productId },
+                { $inc: { stockQuantity: item.quantity } }
+              );
+            }
+          } catch (stockErr) {
+            console.warn('[Order Cancel Stock Restoration Warning]:', stockErr.message);
+          }
+        }
+      }
+
       order.orderStatus = orderStatus;
       order.timeline.push({
         status: orderStatus,

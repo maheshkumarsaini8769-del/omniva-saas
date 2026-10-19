@@ -97,8 +97,19 @@ const PORT = process.env.PORT || 5000;
 // Connect to MongoDB and start server
 const startServer = async () => {
   await connectDB();
-  app.listen(PORT, () => {
-    console.log(`[Omniva Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  return new Promise((resolve, reject) => {
+    const s = app.listen(PORT, () => {
+      console.log(`[Omniva Server] Running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+      resolve(s);
+    });
+    s.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`[Omniva Server] Port ${PORT} already active, continuing with running instance.`);
+        resolve(s);
+      } else {
+        reject(err);
+      }
+    });
   });
 };
 

@@ -7,6 +7,7 @@ const {
   setupSuperAdmin,
   createStaff,
   getStaffList,
+  updateBusinessProfile,
 } = require('../controllers/authController');
 const {
   protect,
@@ -22,6 +23,7 @@ router.post('/setup-superadmin', setupSuperAdmin);
 
 // Protected routes
 router.get('/me', protect, getMe);
+router.put('/business-profile', protect, tenantScope, updateBusinessProfile);
 
 // Merchant staff management (Owner only, strictly isolated to req.businessId)
 router.post('/staff', protect, authorize('MERCHANT_OWNER'), tenantScope, createStaff);

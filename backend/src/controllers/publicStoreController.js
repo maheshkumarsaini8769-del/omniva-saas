@@ -636,8 +636,14 @@ const createPublicOrder = async (req, res) => {
       });
     }
 
-    // Strict Indian Mobile Number Validation (10 digits starting with 6-9)
-    const cleanCustomerPhone = (customerPhone || '').toString().replace(/\D/g, '');
+    // Strict Indian Mobile Number Validation (10 digits starting with 6-9, handles +91 / 91 / 0 prefix)
+    let cleanCustomerPhone = (customerPhone || '').toString().replace(/\D/g, '');
+    if (cleanCustomerPhone.length === 12 && cleanCustomerPhone.startsWith('91')) {
+      cleanCustomerPhone = cleanCustomerPhone.slice(2);
+    } else if (cleanCustomerPhone.length === 11 && cleanCustomerPhone.startsWith('0')) {
+      cleanCustomerPhone = cleanCustomerPhone.slice(1);
+    }
+
     if (cleanCustomerPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanCustomerPhone)) {
       return res.status(400).json({
         success: false,

@@ -527,6 +527,44 @@ const getStaffList = async (req, res) => {
   }
 };
 
+// @desc    Update current tenant business profile & settings
+// @route   PUT /api/auth/business-profile
+// @access  Protected (MERCHANT_OWNER / ADMIN)
+const updateBusinessProfile = async (req, res) => {
+  try {
+    const tenant = await Tenant.findById(req.businessId);
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant not found' });
+    }
+    const { businessName, businessType, contactEmail, contactPhone, brandTagline, brandColor, settings } = req.body;
+    if (businessName) tenant.businessName = businessName.trim();
+    if (businessType) tenant.businessType = businessType.trim();
+    if (contactEmail) {
+      if (!tenant.contact) tenant.contact = {};
+      tenant.contact.email = contactEmail.trim();
+    }
+    if (contactPhone) {
+      if (!tenant.contact) tenant.contact = {};
+      tenant.contact.phone = contactPhone.trim();
+    }
+    if (brandTagline !== undefined) {
+      if (!tenant.branding) tenant.branding = {};
+      tenant.branding.tagline = brandTagline;
+    }
+    if (brandColor) {
+      if (!tenant.branding) tenant.branding = {};
+      tenant.branding.primaryColor = brandColor;
+    }
+    if (settings && typeof settings === 'object') {
+      tenant.settings = { ...tenant.settings, ...settings };
+    }
+    await tenant.save();
+    return res.status(200).json({ success: true, message: 'Business profile updated successfully', tenant });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   registerMerchant,
   login,
@@ -534,4 +572,5 @@ module.exports = {
   setupSuperAdmin,
   createStaff,
   getStaffList,
+  updateBusinessProfile,
 };

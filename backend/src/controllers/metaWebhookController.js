@@ -48,6 +48,7 @@ const handleMetaWebhook = async (req, res) => {
     }
 
     const { object, entry } = req.body || {};
+    const tenantSlug = req.query.tenantSlug || req.query.slug || '';
 
     // Promptly acknowledge Meta with 200 OK within 3000ms
     res.status(200).json({ success: true, message: 'EVENT_RECEIVED' });
@@ -76,7 +77,7 @@ const handleMetaWebhook = async (req, res) => {
           }
 
           // Asynchronously process the leadgen event
-          processLeadgenEvent(pageId, leadgenId, formId, adId, value).catch((err) => {
+          processLeadgenEvent(pageId, leadgenId, formId, adId, value, tenantSlug).catch((err) => {
             console.error('[Meta Webhook] Error processing leadgen event:', err);
           });
         }
@@ -94,7 +95,7 @@ const handleMetaWebhook = async (req, res) => {
 /**
  * Asynchronously retrieve full lead details from Meta Graph API and ingest into tenant CRM.
  */
-const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue = {}) => {
+const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue = {}, tenantSlug = '') => {
   try {
     // 1. Resolve owning tenant from MetaIntegration by pageId
     let integration = await MetaIntegration.findOne({
@@ -150,6 +151,10 @@ const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue
 
     // 4. Resolve tenantId
     let businessId = integration?.businessId;
+    if (!businessId && tenantSlug) {
+      const targetTenant = await Tenant.findOne({ slug: tenantSlug });
+      if (targetTenant) businessId = targetTenant._id;
+    }
     if (!businessId) {
       const activeTenant = await Tenant.findOne({ status: 'ACTIVE' });
       businessId = activeTenant?._id;

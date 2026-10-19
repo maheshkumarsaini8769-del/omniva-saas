@@ -1,7 +1,9 @@
 const http = require('http');
 const { startServer } = require('../src/server.js');
+const TEST_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 
 const request = (options, data) => {
+  options.port = TEST_PORT;
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
       let body = '';

@@ -1,7 +1,9 @@
 const http = require('http');
 const { startServer } = require('../src/server.js');
+const TEST_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 
 const request = (options, data) => {
+  options.port = TEST_PORT;
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
       let body = '';
@@ -80,6 +82,10 @@ async function runPhase3Tests() {
   const tokenB = loginB.data.token;
 
   // 4. Ingest Meta Lead Ad Webhook (POST)
+  const testLeadId = 'META_' + Date.now();
+  const testLeadName = 'Pooja Meta ' + Date.now().toString().slice(-4);
+  const testLeadPhone = '98' + Math.floor(10000000 + Math.random() * 90000000);
+
   const webhookPostRes = await request(
     {
       hostname: '127.0.0.1',
@@ -95,11 +101,11 @@ async function runPhase3Tests() {
             {
               field: 'leadgen',
               value: {
-                leadgen_id: '4488992211',
+                leadgen_id: testLeadId,
                 form_id: '99887766',
                 ad_id: '11223344',
-                full_name: 'Pooja Agarwal',
-                phone_number: '9844556677',
+                full_name: testLeadName,
+                phone_number: testLeadPhone,
                 email: 'pooja.agarwal@example.com',
                 campaign_name: 'Instagram Reel Ad - Organic Achar Launch',
                 ad_name: 'Video Reel Creative 15s',
@@ -117,11 +123,14 @@ async function runPhase3Tests() {
     webhookPostRes.data.message
   );
 
+  // Allow async webhook ingestion worker to persist
+  await new Promise(r => setTimeout(r, 1200));
+
   // 5. Verify Ingested Lead in Merchant A's CRM
   const leadsA = await request({
     hostname: '127.0.0.1',
     port: 5000,
-    path: '/api/crm/leads?search=Pooja',
+    path: `/api/crm/leads?search=${encodeURIComponent(testLeadName)}`,
     method: 'GET',
     headers: { Authorization: 'Bearer ' + tokenA },
   });
@@ -139,7 +148,7 @@ async function runPhase3Tests() {
   const leadsB = await request({
     hostname: '127.0.0.1',
     port: 5000,
-    path: '/api/crm/leads?search=Pooja%20Agarwal',
+    path: `/api/crm/leads?search=${encodeURIComponent(testLeadName)}`,
     method: 'GET',
     headers: { Authorization: 'Bearer ' + tokenB },
   });
