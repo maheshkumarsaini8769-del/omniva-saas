@@ -481,6 +481,44 @@ export const PublicStorefront = () => {
     window.open(waUrl, '_blank');
   };
 
+  const handleTopWhatsAppOrder = () => {
+    const rawPhone = storeData?.store?.phone || storeData?.store?.contact?.phone || store.phone || '9876543210';
+    const tenantPhone = rawPhone.replace(/\D/g, '').slice(-10) || '9876543210';
+    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || store.businessName || 'Online Store';
+
+    let text = '';
+    if (cart.length > 0) {
+      const itemsList = cart.map((item, idx) => `${idx + 1}. ${item.quantity}x ${item.name} (${item.variantName || 'Standard'}) - ₹${item.price * item.quantity}`).join('\n');
+      text = encodeURIComponent(
+        `Hello ${storeTitle}! I would like to order the following items via WhatsApp:\n\n${itemsList}\n\n*Total Amount: ₹${totalAmount}*\n\nPlease confirm availability & Cash on Delivery (COD) dispatch!`
+      );
+    } else {
+      text = encodeURIComponent(
+        `Hello ${storeTitle}! I am browsing your online store and would like to order directly via WhatsApp. Please share your catalog & current offers!`
+      );
+    }
+
+    const waUrl = `https://wa.me/91${tenantPhone}?text=${text}`;
+
+    try {
+      fetch(`/api/public/store/${slug}/inquire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'WhatsApp Store Visitor',
+          phone: tenantPhone,
+          productName: cart.length > 0 ? cart.map(i => `${i.quantity}x ${i.name}`).join(', ') : 'Direct Store Inquiry',
+          productPrice: totalAmount || 0,
+          source: 'WHATSAPP_TOP_BUTTON',
+          utmSource: searchParams.get('utm_source') || '',
+          utmCampaign: searchParams.get('utm_campaign') || '',
+        }),
+      }).catch(() => {});
+    } catch (e) {}
+
+    window.open(waUrl, '_blank');
+  };
+
   const handleClaimCoupon = async (e) => {
     e.preventDefault();
     const cleanPhone = (exitPhone || '').replace(/\D/g, '');
@@ -603,21 +641,36 @@ export const PublicStorefront = () => {
 
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white pb-24">
-      {/* Top Banner / Trust Bar */}
-      <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-indigo-50 border-b border-indigo-100 py-2.5 px-4 text-center text-xs font-medium text-slate-700 flex items-center justify-center gap-6 overflow-x-auto whitespace-nowrap">
-        <span className="flex items-center gap-1.5 font-semibold text-slate-900">
-          <Truck className="w-3.5 h-3.5 text-indigo-400" /> Free Express Delivery on Orders &gt; ₹499
-        </span>
-        <span className="flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> 100% Secure Checkout &amp; COD
-        </span>
-        <span className="flex items-center gap-1.5 text-amber-700 font-semibold">
-          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> 4.9/5 Rated by 2,400+ Food Lovers
-        </span>
+      {/* Top Banner / Trust Bar with Highlighted WhatsApp Callout */}
+      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white border-b border-emerald-600/40 py-2 px-4 text-center text-xs font-medium flex items-center justify-between gap-4 overflow-x-auto whitespace-nowrap shadow-xs">
+        <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-3 text-[11px] sm:text-xs">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 font-bold text-white">
+              <Truck className="w-3.5 h-3.5 text-emerald-200" /> Free Express Delivery &gt; ₹499
+            </span>
+            <span className="hidden md:flex items-center gap-1.5 text-emerald-100">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> 100% Secure Checkout &amp; COD
+            </span>
+            <span className="hidden lg:flex items-center gap-1.5 text-amber-300 font-semibold">
+              <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" /> 4.9/5 Rated (2,400+ Reviews)
+            </span>
+          </div>
+
+          {/* Top Bar Direct WhatsApp Link */}
+          <button
+            type="button"
+            onClick={handleTopWhatsAppOrder}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 text-white font-bold transition cursor-pointer backdrop-blur-xs border border-white/25 active:scale-95 text-[11px] shrink-0"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+            <MessageCircle className="w-3.5 h-3.5 text-white fill-white/20" />
+            <span>Direct WhatsApp Order: +91 {store.phone ? store.phone.replace(/[^0-9]/g, '').slice(-10) : 'Available'} ↗</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3.5 flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-600/30 border border-indigo-500/30">
             <Store className="w-5 h-5" />
@@ -625,40 +678,50 @@ export const PublicStorefront = () => {
           <div>
             <h1 className="font-extrabold text-slate-900 text-base md:text-lg tracking-tight flex items-center gap-2">
               {store.businessName}
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600">
                 Verified
               </span>
             </h1>
             <p className="text-[11px] text-slate-400 flex items-center gap-2">
               <span>Authentic Homemade Store</span>
-              <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-              <Link to="/orders/track" className="text-indigo-400 hover:text-indigo-300 hover:underline font-medium">
+              <span className="w-1 h-1 rounded-full bg-slate-400"></span>
+              <Link to="/orders/track" className="text-indigo-600 hover:text-indigo-700 hover:underline font-medium">
                 Track Order
               </Link>
             </p>
           </div>
         </div>
 
-        {/* Header Right Actions */}
-        <div className="flex items-center gap-2.5">
-          {store.phone && (
-            <a
-              href={`https://wa.me/91${store.phone.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(
-                `Hi ${store.businessName}! I'm browsing your online store and need help.`
-              )}`}
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition"
-            >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp Support
-            </a>
-          )}
+        {/* Header Right Actions - Prominently Highlighted WhatsApp Button + Cart */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Prominently Highlighted Top WhatsApp Button */}
           <button
+            type="button"
+            onClick={handleTopWhatsAppOrder}
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-600/25 transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer active:scale-95 border border-emerald-400/40"
+            title="Order directly on WhatsApp"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-100"></span>
+            </span>
+            <MessageCircle className="w-4 h-4 fill-white/20 shrink-0" />
+            <span className="font-extrabold whitespace-nowrap">Order on WhatsApp</span>
+            {cart.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-white text-emerald-800 text-[10px] font-black shadow-xs">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+              </span>
+            )}
+          </button>
+
+          {/* Cart Button */}
+          <button
+            type="button"
             onClick={() => {
               setCheckoutStep('CART');
               setIsCartOpen(true);
             }}
-            className="relative px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer"
+            className="relative px-3.5 py-2 sm:px-4 sm:py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2 cursor-pointer"
           >
             <ShoppingBag className="w-4 h-4" />
             <span className="hidden sm:inline">Cart</span>
@@ -873,7 +936,6 @@ export const PublicStorefront = () => {
                   onAddToCart={addToCart}
                   onUpdateQty={updateProductQuantity}
                   onDirectBuy={handleDirectBuy}
-                  onWhatsApp={handleDirectWhatsApp}
                 />
               ))}
             </div>
@@ -896,14 +958,7 @@ export const PublicStorefront = () => {
             <span>Direct Order</span>
           </button>
           <button
-            onClick={() => {
-              if (filteredProducts.length > 0) {
-                handleDirectWhatsApp(filteredProducts[0]);
-              } else {
-                const tenantPhone = (storeData?.store?.phone || storeData?.store?.contact?.phone || '9876543210').replace(/\D/g, '').slice(-10);
-                window.open(`https://wa.me/91${tenantPhone}?text=${encodeURIComponent(`Hi! I want to inquire about products from ${store.businessName}.`)}`, '_blank');
-              }
-            }}
+            onClick={handleTopWhatsAppOrder}
             className="flex-1 py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
           >
             <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
@@ -1626,8 +1681,8 @@ export const PublicStorefront = () => {
   );
 };
 
-// Reusable Product Card with High-Res Image, Badges, Ratings, Variant Selector & Interactive Stepper
-const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy, onWhatsApp }) => {
+// Reusable Product Card with High-Res Image, Badges, Ratings, Variant Selector & Instant-Cart Stepper
+const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy }) => {
   const rawBasePrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price).replace(/[^0-9.]/g, '')) || 299;
 
   const availableVariants = (product.jars && product.jars.length > 0)
@@ -1641,8 +1696,6 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
         ];
 
   const [selectedVariant, setSelectedVariant] = useState(availableVariants[0]);
-  const [selectedQty, setSelectedQty] = useState(1);
-
   const currentVariant = selectedVariant || availableVariants[0];
 
   const price = currentVariant
@@ -1655,19 +1708,12 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
 
   const variantName = currentVariant?.name || '500g Jar';
   const prodId = product._id || product.id || product.name;
+
+  // Real-time synchronization with customer cart
   const cartItem = cart.find(
     (item) => item.productId === prodId && item.variantName === variantName
   );
   const cartQty = cartItem ? cartItem.quantity : 0;
-  const activeQty = cartQty > 0 ? cartQty : selectedQty;
-
-  const handleQtyChange = (delta) => {
-    if (cartQty > 0) {
-      onUpdateQty(product, currentVariant, delta);
-    } else {
-      setSelectedQty((prev) => Math.max(1, prev + delta));
-    }
-  };
 
   const productImage =
     product.img ||
@@ -1771,7 +1817,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
           )}
         </div>
 
-        {/* Pricing, Quantity Selector & Action CTAs */}
+        {/* Pricing & Interactive Instant-Cart Actions */}
         <div className="pt-3 border-t border-slate-100 space-y-3">
           {/* Price Header */}
           <div className="flex items-center justify-between">
@@ -1787,76 +1833,60 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
               </span>
             </div>
 
-            {/* Quick Add to Cart button or In Cart indicator */}
-            {cartQty > 0 ? (
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
+            {cartQty > 0 && (
+              <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
                 <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{cartQty} in Cart</span>
+                <span>₹{price * cartQty} in Cart</span>
               </span>
-            ) : (
-              <button
-                onClick={() => onAddToCart(product, currentVariant, false, activeQty)}
-                type="button"
-                className="py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
-              >
-                <Plus className="w-3.5 h-3.5 text-indigo-600 stroke-[2.5]" />
-                <span>Add to Cart</span>
-              </button>
             )}
           </div>
 
-          {/* Prominent Always-Visible Quantity Selector */}
-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200/90 rounded-2xl px-3 py-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-800">Select Quantity:</span>
-              {activeQty > 1 && (
-                <span className="text-[11px] font-bold text-emerald-600">
-                  (₹{price * activeQty})
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center bg-white border border-slate-300 rounded-xl p-0.5 shadow-xs">
+          {/* Action CTAs: Instant-Cart Quantity Stepper & Buy Now */}
+          <div className="flex items-center gap-2">
+            {cartQty > 0 ? (
+              // Live Interactive Quantity Stepper directly connected to Cart
+              <div className="flex-1 flex items-center justify-between bg-indigo-50 border border-indigo-300/90 rounded-xl p-1 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => onUpdateQty(product, currentVariant, -1)}
+                  className="w-8 h-8 flex items-center justify-center text-indigo-700 hover:bg-indigo-200/80 rounded-lg cursor-pointer transition active:scale-90"
+                  title="Decrease Quantity"
+                >
+                  <Minus className="w-4 h-4 stroke-[2.5]" />
+                </button>
+                <div className="text-center px-1">
+                  <span className="font-black text-sm text-indigo-950 block leading-none">{cartQty}</span>
+                  <span className="text-[9px] text-indigo-600 font-bold block mt-0.5 leading-none">in Cart</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onUpdateQty(product, currentVariant, 1)}
+                  className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
+                  title="Increase Quantity"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
+            ) : (
+              // Clean "+ Add to Cart" Button that instantly puts item in cart
               <button
                 type="button"
-                onClick={() => handleQtyChange(-1)}
-                className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer transition active:scale-90"
-                title="Decrease Quantity"
+                onClick={() => onAddToCart(product, currentVariant, false, 1)}
+                className="flex-1 py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
               >
-                <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <Plus className="w-4 h-4 text-indigo-600 stroke-[2.5]" />
+                <span>Add to Cart</span>
               </button>
-              <span className="w-8 text-center font-black text-xs text-indigo-950">
-                {activeQty}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleQtyChange(1)}
-                className="w-7 h-7 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
-                title="Increase Quantity"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              </button>
-            </div>
-          </div>
+            )}
 
-          {/* Action CTAs: Direct Order & WhatsApp */}
-          <div className="grid grid-cols-2 gap-2">
+            {/* Direct Buy / Instant Checkout Button */}
             <button
-              onClick={() => onDirectBuy(product, currentVariant, activeQty)}
+              onClick={() => onDirectBuy(product, currentVariant, Math.max(1, cartQty))}
               type="button"
-              className="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
+              className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
             >
               <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-              <span>Direct Order {activeQty > 1 ? `(${activeQty})` : ''}</span>
-            </button>
-
-            <button
-              onClick={() => onWhatsApp(product, currentVariant, activeQty)}
-              type="button"
-              className="py-2.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 hover:border-emerald-400 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
-            >
-              <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
-              <span>WhatsApp {activeQty > 1 ? `(${activeQty})` : ''}</span>
+              <span>{cartQty > 0 ? `Checkout (₹${price * cartQty})` : 'Direct Buy'}</span>
             </button>
           </div>
         </div>
