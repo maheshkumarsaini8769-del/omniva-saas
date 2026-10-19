@@ -13,10 +13,10 @@ module.exports = async (req, res) => {
     try {
       await Promise.race([
         connectDB(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('DB connection timeout')), 1500)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB connection timeout')), 6000)),
       ]);
     } catch (err) {
-      // Graceful fallback in cloud preview when MongoDB Atlas is not yet configured
+      console.warn('[Serverless DB Notice]:', err.message);
     }
   }
   return app(req, res);
