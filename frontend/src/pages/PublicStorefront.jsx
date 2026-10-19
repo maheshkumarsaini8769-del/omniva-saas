@@ -2230,53 +2230,88 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
             )}
           </div>
 
-          {/* Action CTAs: Add to Cart (Outside) & Quantity Stepper */}
-          <div className="w-full">
-            {cartQty > 0 ? (
-              // When in cart: Interactive Quantity Stepper with "View in Cart"
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center justify-between bg-indigo-50 border border-indigo-300/90 rounded-xl p-1 shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => onUpdateQty(product, currentVariant, -1)}
-                    className="w-8 h-8 flex items-center justify-center text-indigo-700 hover:bg-indigo-200/80 rounded-lg cursor-pointer transition active:scale-90"
-                    title="Decrease Quantity"
-                  >
-                    <Minus className="w-4 h-4 stroke-[2.5]" />
-                  </button>
-                  <div className="text-center px-1">
-                    <span className="font-black text-sm text-indigo-950 block leading-none">{cartQty}</span>
-                    <span className="text-[9px] text-indigo-600 font-bold block mt-0.5 leading-none">in Cart</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateQty(product, currentVariant, 1)}
-                    className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
-                    title="Increase Quantity"
-                  >
-                    <Plus className="w-4 h-4 stroke-[2.5]" />
-                  </button>
-                </div>
+          {/* Action CTAs: Permanent Quantity Stepper & Add to Cart / View Cart */}
+          <div className="w-full flex items-center gap-2">
+            {/* Quantity Stepper: ALWAYS VISIBLE ON CARD */}
+            <div
+              className={`flex items-center justify-between border rounded-xl p-1 w-28 sm:w-32 transition shrink-0 ${
+                cartQty > 0
+                  ? 'bg-indigo-50 border-indigo-300'
+                  : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (cartQty > 0) {
+                    onUpdateQty(product, currentVariant, -1);
+                  }
+                }}
+                disabled={cartQty === 0}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+                  cartQty === 0
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-indigo-700 hover:bg-indigo-100 cursor-pointer active:scale-90'
+                }`}
+                title="Decrease Quantity"
+              >
+                <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
 
-                <button
-                  type="button"
-                  onClick={onOpenCart}
-                  className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                  title="Open Cart to Complete Direct Order"
+              <div className="text-center px-1">
+                <span
+                  className={`font-black text-sm block leading-none ${
+                    cartQty > 0 ? 'text-indigo-950' : 'text-slate-700'
+                  }`}
                 >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>View in Cart</span>
-                </button>
+                  {cartQty > 0 ? cartQty : 1}
+                </span>
+                <span
+                  className={`text-[9px] font-bold block mt-0.5 leading-none ${
+                    cartQty > 0 ? 'text-indigo-600' : 'text-slate-400'
+                  }`}
+                >
+                  {cartQty > 0 ? 'in Cart' : 'Qty'}
+                </span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (cartQty > 0) {
+                    onUpdateQty(product, currentVariant, 1);
+                  } else {
+                    // Instantly adds to cart on quantity increase
+                    onAddToCart(product, currentVariant, false, 1);
+                  }
+                }}
+                className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
+                title="Increase Quantity"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+            </div>
+
+            {/* Action Button: Add to Cart or View Cart */}
+            {cartQty > 0 ? (
+              <button
+                type="button"
+                onClick={onOpenCart}
+                className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="Open Cart to Complete Direct Order"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate">View Cart</span>
+              </button>
             ) : (
-              // Clean, full-width "+ Add to Cart" Button outside on card
               <button
                 type="button"
                 onClick={() => onAddToCart(product, currentVariant, false, 1)}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-indigo-600/25 flex items-center justify-center gap-2 transition cursor-pointer active:scale-95"
+                className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-indigo-600/25 flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
+                title="Add Item to Cart"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Add to Cart • ₹{price}</span>
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span className="truncate">Add to Cart</span>
               </button>
             )}
           </div>
