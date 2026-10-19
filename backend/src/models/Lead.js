@@ -67,9 +67,23 @@ const leadSchema = new mongoose.Schema(
     utmCampaign: { type: String, default: '' },
     utmContent: { type: String, default: '' },
     fbclid: { type: String, default: '' },
+    metaLeadId: { type: String, sparse: true, index: true },
+    metaPageId: { type: String, default: '' },
+    metaPageName: { type: String, default: '' },
+    metaFormId: { type: String, default: '' },
+    metaFormName: { type: String, default: '' },
+    metaAdId: { type: String, default: '' },
+    platform: { type: String, default: 'fb' },
+    formAnswers: [
+      {
+        fieldKey: { type: String, default: '' },
+        question: { type: String, default: '' },
+        answer: { type: String, default: '' },
+      },
+    ],
     status: {
       type: String,
-      enum: ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTATION_SENT', 'WON', 'LOST'],
+      enum: ['NEW', 'CONTACTED', 'FOLLOW_UP', 'QUALIFIED', 'QUOTATION_SENT', 'WON', 'LOST'],
       default: 'NEW',
       index: true,
     },
@@ -115,6 +129,7 @@ const leadSchema = new mongoose.Schema(
 
 // Compound indexes for strict multi-tenant performance & deduplication queries
 leadSchema.index({ businessId: 1, phone: 1 });
+leadSchema.index({ businessId: 1, metaLeadId: 1 }, { unique: true, sparse: true });
 leadSchema.index({ businessId: 1, status: 1 });
 leadSchema.index({ businessId: 1, assignedTo: 1 });
 leadSchema.index({ businessId: 1, createdAt: -1 });

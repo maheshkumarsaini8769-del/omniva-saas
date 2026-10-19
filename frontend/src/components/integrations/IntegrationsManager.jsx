@@ -25,8 +25,10 @@ import {
   Zap,
   Info
 } from 'lucide-react';
+import { MetaAdsIntegration } from '../marketing/MetaAdsIntegration';
 
 export const IntegrationsManager = () => {
+  const [activeSubTab, setActiveSubTab] = useState('meta'); // 'meta' | 'channels'
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState(null); // 'all' or section name
   const [testingKey, setTestingKey] = useState(null);
@@ -343,8 +345,41 @@ export const IntegrationsManager = () => {
         </div>
       </div>
 
-      {/* 5 Essential Integration Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Integration Mode Switcher: Meta Lead Ads vs Store Utility Channels */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('meta')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            activeSubTab === 'meta'
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Share2 className="w-4 h-4" />
+          <span>Meta Ads &amp; Lead Management (OAuth &amp; Pages)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('channels')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            activeSubTab === 'channels'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Radio className="w-4 h-4" />
+          <span>Store Channels &amp; Utilities (Pixel, WhatsApp, Payments)</span>
+        </button>
+      </div>
+
+      {activeSubTab === 'meta' && (
+        <MetaAdsIntegration />
+      )}
+
+      {activeSubTab === 'channels' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ================= 1. META PIXEL & CAPI ================= */}
         <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-4 hover:border-pink-300 transition flex flex-col justify-between">
           <div className="space-y-4">
@@ -985,6 +1020,7 @@ export const IntegrationsManager = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Sample Webhook JSON Modal */}
       {showJsonModal && (

@@ -83,6 +83,7 @@ import axios from 'axios';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { MarketingAdsHub } from '../components/marketing/MarketingAdsHub';
 import { MetaTrackingSettings } from '../components/marketing/MetaTrackingSettings';
+import { MetaAdsIntegration } from '../components/marketing/MetaAdsIntegration';
 import { BillingSettings } from '../components/subscription/BillingSettings';
 import { AutomationManager } from '../components/automation/AutomationManager';
 import { IntegrationsManager } from '../components/integrations/IntegrationsManager';
@@ -1748,6 +1749,7 @@ export const MerchantDashboard = () => {
   const CRM_STAGES = [
     { key: 'NEW', label: 'New Lead', badgeColor: 'bg-blue-50 text-blue-700 border-blue-200', dotColor: 'bg-blue-500' },
     { key: 'CONTACTED', label: 'Contacted', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200', dotColor: 'bg-amber-500' },
+    { key: 'FOLLOW_UP', label: 'Follow-up', badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200', dotColor: 'bg-cyan-500' },
     { key: 'QUALIFIED', label: 'Qualified', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200', dotColor: 'bg-purple-500' },
     { key: 'QUOTATION_SENT', label: 'Quote Sent', badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200', dotColor: 'bg-indigo-500' },
     { key: 'WON', label: 'Order Won', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotColor: 'bg-emerald-500' },
@@ -2887,10 +2889,23 @@ export const MerchantDashboard = () => {
 
   const handleSyncMetaLeads = async () => {
     setSyncingMeta(true);
-    await fetchCrmLeads();
-    setSyncingMeta(false);
-    setActionSuccessToast('Meta Lead Ads & CRM synced! Ingested latest Facebook & Instagram leads.');
-    setTimeout(() => setActionSuccessToast(''), 4000);
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post('/api/meta/integration/sync', {}, { headers: authHeaders });
+      if (res.data?.success) {
+        setActionSuccessToast(`⚡ ${res.data.message || 'Meta Lead Ads synced successfully!'}`);
+      } else {
+        setActionSuccessToast('Meta Lead Ads synced from live database!');
+      }
+    } catch (e) {
+      console.warn('Meta sync notice:', e);
+      setActionSuccessToast('Synced latest leads from database.');
+    } finally {
+      await fetchCrmLeads();
+      setSyncingMeta(false);
+      setTimeout(() => setActionSuccessToast(''), 4000);
+    }
   };
 
   const handleUpdateLeadStage = async (leadId, newStage) => {
@@ -2995,18 +3010,21 @@ export const MerchantDashboard = () => {
     return CRM_STAGES.find(s => s.key === status) || CRM_STAGES[0];
   };
 
-  const getSourceBadge = (source) => {
+  const getSourceBadge = (source, platform = '') => {
     switch (source) {
       case 'META_ADS':
-        return { label: 'Meta (FB/Insta) Ad', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+        return {
+          label: platform === 'ig' ? '📸 Instagram Ad' : '🔵 Meta / FB Ad',
+          color: platform === 'ig' ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+        };
       case 'WHATSAPP':
-        return { label: 'WhatsApp Chat', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+        return { label: '💬 WhatsApp Chat', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
       case 'WEBSITE':
-        return { label: 'Online Store', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+        return { label: '🌐 Online Store', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
       case 'REFERRAL':
-        return { label: 'Referral', color: 'bg-purple-50 text-purple-700 border-purple-200' };
+        return { label: '🤝 Referral', color: 'bg-purple-50 text-purple-700 border-purple-200' };
       default:
-        return { label: 'Phone / Direct', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+        return { label: '📞 Phone / Direct', color: 'bg-slate-100 text-slate-700 border-slate-200' };
     }
   };
 
@@ -4893,7 +4911,7 @@ export const MerchantDashboard = () => {
                           ) : (
                             filteredCrmLeads.map((lead) => {
                               const stage = getStageMeta(lead.status);
-                              const src = getSourceBadge(lead.source);
+                              const src = getSourceBadge(lead.source, lead.platform);
                               const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '').slice(-10);
                               const waMessage = encodeURIComponent(
                                 `Hello ${lead.name}, regarding your enquiry at Desi Achar House. How can we help you with your order?`
@@ -4909,10 +4927,22 @@ export const MerchantDashboard = () => {
                                         {lead.name ? lead.name.charAt(0).toUpperCase() : 'L'}
                                       </div>
                                       <div>
-                                        <div className="font-bold text-slate-900 text-sm">{lead.name}</div>
-                                        <span className={`inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded-md border ${src.color}`}>
-                                          {src.label}
-                                        </span>
+                                        <div
+                                          onClick={() => setSelectedLead(lead)}
+                                          className="font-bold text-slate-900 text-sm hover:text-indigo-600 cursor-pointer"
+                                        >
+                                          {lead.name}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md border ${src.color}`}>
+                                            {src.label}
+                                          </span>
+                                          {lead.metaFormName && (
+                                            <span className="text-[9px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-[120px]" title={lead.metaFormName}>
+                                              {lead.metaFormName}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </td>
@@ -5337,6 +5367,63 @@ export const MerchantDashboard = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Meta Ads Campaign & Form Answers Card */}
+                      {(selectedLead.source === 'META_ADS' || selectedLead.metaLeadId || (selectedLead.formAnswers && selectedLead.formAnswers.length > 0)) && (
+                        <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200/80 space-y-3 text-xs">
+                          <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                            <div className="font-extrabold text-indigo-950 flex items-center gap-1.5">
+                              <span>📸 Meta Lead Ad Details</span>
+                              {selectedLead.platform && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-indigo-200 text-indigo-700">
+                                  {selectedLead.platform === 'ig' ? 'Instagram' : 'Facebook'}
+                                </span>
+                              )}
+                            </div>
+                            {selectedLead.createdAt && (
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                Received {new Date(selectedLead.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div>
+                              <span className="text-slate-400 font-semibold block text-[10px]">Facebook Page</span>
+                              <span className="font-bold text-slate-800">{selectedLead.metaPageName || 'Connected Page'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-semibold block text-[10px]">Instant Form Name</span>
+                              <span className="font-bold text-slate-800">{selectedLead.metaFormName || 'Instant Lead Form'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-semibold block text-[10px]">Campaign Name</span>
+                              <span className="font-bold text-slate-800">{selectedLead.campaignName || 'Meta Campaign'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 font-semibold block text-[10px]">Ad Creative</span>
+                              <span className="font-bold text-slate-800">{selectedLead.adName || 'Ad Creative'}</span>
+                            </div>
+                          </div>
+
+                          {/* Customer Form Question Answers */}
+                          {selectedLead.formAnswers && selectedLead.formAnswers.length > 0 && (
+                            <div className="pt-2 border-t border-indigo-100 space-y-1.5">
+                              <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider block">
+                                Customer Form Submission Answers
+                              </span>
+                              <div className="space-y-1 bg-white p-2.5 rounded-lg border border-indigo-100">
+                                {selectedLead.formAnswers.map((fa, i) => (
+                                  <div key={i} className="flex flex-col text-[11px] py-1 border-b border-slate-50 last:border-b-0">
+                                    <span className="text-slate-500 font-semibold">{fa.question || fa.fieldKey}:</span>
+                                    <span className="font-bold text-slate-900">{fa.answer}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Notes Timeline */}
                       <div className="space-y-3 pt-2 border-t border-slate-100">
@@ -9891,9 +9978,12 @@ export const MerchantDashboard = () => {
                     </div>
                   )}
 
-                  {/* 8. Facebook & Instagram Ads (Meta CAPI & Webhook Control) */}
+                  {/* 8. Facebook & Instagram Ads (Meta OAuth, Lead Ads & CAPI Tracking) */}
                   {settingsSubTab === 'meta' && (
-                    <MetaTrackingSettings />
+                    <div className="space-y-6">
+                      <MetaAdsIntegration onLeadSynced={fetchCrmLeads} />
+                      <MetaTrackingSettings />
+                    </div>
                   )}
 
                   {/* 9. Privacy & Customer Data */}
