@@ -1167,6 +1167,23 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
+  // Live LocalStorage Order Status Synchronization
+  const syncLiveOrderStatus = (targetIdentifier, newStatus) => {
+    try {
+      const localPlaced = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
+      if (Array.isArray(localPlaced) && localPlaced.length > 0) {
+        const idClean = String(targetIdentifier || '').replace(/^#/, '');
+        const updated = localPlaced.map(o => {
+          if (o.orderNumber === idClean || o._id === idClean || o.orderId === idClean || String(o.id || '').replace(/^#/, '') === idClean) {
+            return { ...o, orderStatus: newStatus };
+          }
+          return o;
+        });
+        localStorage.setItem('omniva_live_orders', JSON.stringify(updated));
+      }
+    } catch (e) {}
+  };
+
   // Order Lifecycle Handlers
   const handleAcceptOrder = async (orderId) => {
     const target = ordersList.find(o => 
@@ -1176,15 +1193,17 @@ export const MerchantDashboard = () => {
       o.id === `#${orderId}` || 
       orderId === `#${o.orderNumber}`
     );
-    if (target?._id) {
+    if (target?._id || target?.orderNumber) {
       try {
         const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${target._id}/status`, { orderStatus: 'CONFIRMED' }, { headers: authHeaders });
+        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, { orderStatus: 'CONFIRMED' }, { headers: authHeaders });
       } catch (err) {
         console.warn('Failed to update order status on backend:', err);
       }
     }
+    syncLiveOrderStatus(orderId, 'CONFIRMED');
+    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'CONFIRMED');
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
         return {
@@ -1209,15 +1228,17 @@ export const MerchantDashboard = () => {
       o.id === `#${orderId}` || 
       orderId === `#${o.orderNumber}`
     );
-    if (target?._id) {
+    if (target?._id || target?.orderNumber) {
       try {
         const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${target._id}/status`, { orderStatus: 'PROCESSING' }, { headers: authHeaders });
+        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, { orderStatus: 'PROCESSING' }, { headers: authHeaders });
       } catch (err) {
         console.warn('Failed to update order status on backend:', err);
       }
     }
+    syncLiveOrderStatus(orderId, 'PROCESSING');
+    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'PROCESSING');
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
         return {
@@ -1430,11 +1451,11 @@ export const MerchantDashboard = () => {
     const trackingUrl = getCourierTrackingUrl(courierName, finalTracking, dispatchModalOrder.orderNumber || dispatchModalOrder.id, cleanPhone);
     const trackingMsg = generateTrackingMessage(dispatchModalOrder, courierName, finalTracking);
 
-    if (dispatchModalOrder._id) {
+    if (dispatchModalOrder._id || dispatchModalOrder.orderNumber) {
       try {
         const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${dispatchModalOrder._id}/status`, {
+        await axios.patch(`/api/orders/${dispatchModalOrder._id || dispatchModalOrder.orderNumber}/status`, {
           orderStatus: 'SHIPPED',
           courierPartner: courierName,
           trackingNumber: finalTracking
@@ -1443,6 +1464,7 @@ export const MerchantDashboard = () => {
         console.warn('Failed to update dispatch status on backend:', err);
       }
     }
+    syncLiveOrderStatus(dispatchModalOrder?.orderNumber || dispatchModalOrder?.id, 'SHIPPED');
 
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
@@ -1569,9 +1591,30 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 5000);
   };
 
-  const handleMarkDelivered = (orderId) => {
+  const handleMarkDelivered = async (orderId) => {
+    const target = ordersList.find(o => 
+      o.id === orderId || 
+      o.orderNumber === orderId || 
+      o._id === orderId || 
+      o.id === `#${orderId}` || 
+      orderId === `#${o.orderNumber}`
+    );
+    if (target?._id || target?.orderNumber) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, {
+          orderStatus: 'DELIVERED',
+          paymentStatus: 'PAID'
+        }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update delivered status on backend:', err);
+      }
+    }
+    syncLiveOrderStatus(orderId, 'DELIVERED');
+    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'DELIVERED');
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId) {
+      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
         return {
           ...o,
           status: 'DELIVERED',
@@ -1579,7 +1622,7 @@ export const MerchantDashboard = () => {
           statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           pay: 'Paid',
           payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          timeline: o.timeline.map((t, idx) => idx === 4 ? { ...t, time: 'Delivered Successfully Just Now', done: true } : t)
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 4 ? { ...t, time: 'Delivered Successfully Just Now', done: true } : t) : []
         };
       }
       return o;
@@ -1588,17 +1631,31 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!cancelModalOrder) return;
     const orderId = cancelModalOrder.id;
+    if (cancelModalOrder._id || cancelModalOrder.orderNumber) {
+      try {
+        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        await axios.patch(`/api/orders/${cancelModalOrder._id || cancelModalOrder.orderNumber}/status`, {
+          orderStatus: 'CANCELLED',
+          note: cancelReason
+        }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Failed to update cancelled status on backend:', err);
+      }
+    }
+    syncLiveOrderStatus(orderId, 'CANCELLED');
+    if (cancelModalOrder.orderNumber) syncLiveOrderStatus(cancelModalOrder.orderNumber, 'CANCELLED');
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId) {
+      if (o.id === orderId || o.orderNumber === orderId) {
         return {
           ...o,
           status: 'CANCELLED',
           statusLabel: 'Cancelled',
           statusColor: 'bg-rose-50 text-rose-700 border-rose-200',
-          timeline: [...o.timeline, { title: `Cancelled: ${cancelReason}`, time: 'Just Now', done: true }]
+          timeline: Array.isArray(o.timeline) ? [...o.timeline, { title: `Cancelled: ${cancelReason}`, time: 'Just Now', done: true }] : []
         };
       }
       return o;
@@ -2651,8 +2708,8 @@ export const MerchantDashboard = () => {
     const channelName = o.attribution?.utmSource || 'Direct Online Store';
     const campaign = o.attribution?.utmCampaign || 'Organic Storefront Visit';
 
-    const pay = o.paymentMethod || 'COD';
-    const status = o.orderStatus || 'NEW';
+    const pay = o.paymentMethod || o.pay || o.payMethod || 'COD';
+    const status = o.orderStatus || o.status || 'NEW';
     const statusLabel = status === 'NEW' ? 'New / Awaiting Acceptance'
       : status === 'CONFIRMED' ? 'Accepted / Confirmed'
       : status === 'PROCESSING' ? 'Packed / Ready to Ship'
@@ -2684,23 +2741,28 @@ export const MerchantDashboard = () => {
           { title: 'Delivered', time: status === 'DELIVERED' ? 'Done' : 'Pending', done: status === 'DELIVERED' }
         ];
 
+    const custName = o.customerName || o.customer || 'Customer';
+    const custPhone = o.customerPhone || o.phone || '';
+    const custEmail = o.customerEmail || o.email || `${custName.toLowerCase().replace(/\s+/g, '')}@example.com`;
+    const totAmount = o.totalAmount !== undefined ? o.totalAmount : (o.total !== undefined ? o.total : 0);
+
     return {
       id: `#${o.orderNumber || o._id}`,
       _id: o._id,
       orderNumber: o.orderNumber,
       date: dateStr,
       displayDate,
-      customer: o.customerName || 'Anonymous Customer',
-      phone: o.customerPhone || '',
-      email: o.customerEmail || `${(o.customerName || 'customer').toLowerCase().replace(/\s+/g, '')}@example.com`,
+      customer: custName,
+      phone: custPhone,
+      email: custEmail,
       address: addr,
       source,
       channelName,
       campaign,
       items,
       itemSummary,
-      total: o.totalAmount,
-      displayTotal: `₹${o.totalAmount}`,
+      total: totAmount,
+      displayTotal: `₹${totAmount}`,
       pay,
       payMethod: pay,
       payColor,
