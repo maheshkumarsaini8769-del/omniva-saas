@@ -1299,7 +1299,10 @@ export const PublicStorefront = () => {
                   cart={cart}
                   onAddToCart={addToCart}
                   onUpdateQty={updateProductQuantity}
-                  onDirectBuy={handleDirectBuy}
+                  onOpenCart={() => {
+                    setCheckoutStep('CART');
+                    setIsCartOpen(true);
+                  }}
                 />
               ))}
             </div>
@@ -1766,14 +1769,15 @@ export const PublicStorefront = () => {
               </div>
             )}
 
-            {/* Bottom buttons for CART step */}
+            {/* Bottom buttons for CART step - Direct Buy & WhatsApp inside Cart */}
             {checkoutStep === 'CART' && cart.length > 0 && (
-              <div className="pt-4 border-t border-slate-200 space-y-2">
+              <div className="pt-4 border-t border-slate-200 space-y-2.5">
                 <button
                   onClick={() => setCheckoutStep('CHECKOUT')}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-xl shadow-emerald-600/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  <span>Proceed to Express Checkout</span>
+                  <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                  <span>Direct Buy Now • ₹{totalAmount}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <button
@@ -2067,7 +2071,7 @@ export const PublicStorefront = () => {
 };
 
 // Reusable Product Card with High-Res Image, Badges, Ratings, Variant Selector & Instant-Cart Stepper
-const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy }) => {
+const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart }) => {
   const rawBasePrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price).replace(/[^0-9.]/g, '')) || 299;
 
   const availableVariants = (product.jars && product.jars.length > 0)
@@ -2226,53 +2230,55 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onDirectBuy
             )}
           </div>
 
-          {/* Action CTAs: Instant-Cart Quantity Stepper & Buy Now */}
-          <div className="flex items-center gap-2">
+          {/* Action CTAs: Add to Cart (Outside) & Quantity Stepper */}
+          <div className="w-full">
             {cartQty > 0 ? (
-              // Live Interactive Quantity Stepper directly connected to Cart
-              <div className="flex-1 flex items-center justify-between bg-indigo-50 border border-indigo-300/90 rounded-xl p-1 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => onUpdateQty(product, currentVariant, -1)}
-                  className="w-8 h-8 flex items-center justify-center text-indigo-700 hover:bg-indigo-200/80 rounded-lg cursor-pointer transition active:scale-90"
-                  title="Decrease Quantity"
-                >
-                  <Minus className="w-4 h-4 stroke-[2.5]" />
-                </button>
-                <div className="text-center px-1">
-                  <span className="font-black text-sm text-indigo-950 block leading-none">{cartQty}</span>
-                  <span className="text-[9px] text-indigo-600 font-bold block mt-0.5 leading-none">in Cart</span>
+              // When in cart: Interactive Quantity Stepper with "View in Cart"
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center justify-between bg-indigo-50 border border-indigo-300/90 rounded-xl p-1 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateQty(product, currentVariant, -1)}
+                    className="w-8 h-8 flex items-center justify-center text-indigo-700 hover:bg-indigo-200/80 rounded-lg cursor-pointer transition active:scale-90"
+                    title="Decrease Quantity"
+                  >
+                    <Minus className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <div className="text-center px-1">
+                    <span className="font-black text-sm text-indigo-950 block leading-none">{cartQty}</span>
+                    <span className="text-[9px] text-indigo-600 font-bold block mt-0.5 leading-none">in Cart</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateQty(product, currentVariant, 1)}
+                    className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
+                    title="Increase Quantity"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                  </button>
                 </div>
+
                 <button
                   type="button"
-                  onClick={() => onUpdateQty(product, currentVariant, 1)}
-                  className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
-                  title="Increase Quantity"
+                  onClick={onOpenCart}
+                  className="flex-1 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Open Cart to Complete Direct Order"
                 >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>View in Cart</span>
                 </button>
               </div>
             ) : (
-              // Clean "+ Add to Cart" Button that instantly puts item in cart
+              // Clean, full-width "+ Add to Cart" Button outside on card
               <button
                 type="button"
                 onClick={() => onAddToCart(product, currentVariant, false, 1)}
-                className="flex-1 py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 shadow-xs"
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-indigo-600/25 flex items-center justify-center gap-2 transition cursor-pointer active:scale-95"
               >
-                <Plus className="w-4 h-4 text-indigo-600 stroke-[2.5]" />
-                <span>Add to Cart</span>
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Add to Cart • ₹{price}</span>
               </button>
             )}
-
-            {/* Direct Buy / Instant Checkout Button */}
-            <button
-              onClick={() => onDirectBuy(product, currentVariant, Math.max(1, cartQty))}
-              type="button"
-              className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-              <span>{cartQty > 0 ? `Checkout (₹${price * cartQty})` : 'Direct Buy'}</span>
-            </button>
           </div>
         </div>
       </div>
