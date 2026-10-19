@@ -2883,6 +2883,9 @@ export const MerchantDashboard = () => {
       if (activeTab === 'orders' || activeTab === 'overview') {
         fetchOrders();
       }
+      if (activeTab === 'leads') {
+        fetchCrmLeads();
+      }
     }, 15000);
     return () => clearInterval(interval);
   }, [activeTab]);
