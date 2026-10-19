@@ -139,109 +139,463 @@ export const PublicStorefront = () => {
       },
     },
     categories: [
-      { _id: 'cat_mango', name: 'Mango Pickles (Aam ka Achar)' },
-      { _id: 'cat_garlic', name: 'Garlic Pickles (Lahsun ka Achar)' },
-      { _id: 'cat_chilli', name: 'Chilli Pickles (Mirchi ka Achar)' },
-      { _id: 'cat_mix', name: 'Mixed Veg Pickles (Mix Achar)' },
-      { _id: 'cat_sweet', name: 'Sweet Chutney & Murabba' }
+      {
+        _id: 'cat_mango',
+        name: 'Mango Delights (Aam)',
+        slug: 'mango-delights',
+        description: 'Traditional sun-dried raw mango pickles infused with cold-pressed mustard oil and aromatic spices',
+        image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 1,
+      },
+      {
+        _id: 'cat_red_chilli',
+        name: 'Stuffed Red Chilli (Lal Mirch)',
+        slug: 'stuffed-red-chilli',
+        description: 'Authentic Banarasi thick winter red chillies hand-stuffed with roasted heirloom masala',
+        image: 'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 2,
+      },
+      {
+        _id: 'cat_green_chilli',
+        name: 'Green Chilli & Hari Mirch',
+        slug: 'green-chilli',
+        description: 'Spicy Rajasthani slit green chillies, tipore, and lemon-soaked tangy bites',
+        image: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 3,
+      },
+      {
+        _id: 'cat_garlic',
+        name: 'Garlic & Spicy Blends',
+        slug: 'garlic-spicy',
+        description: 'Golden whole garlic cloves and spicy thecha tempered in pure mustard oil',
+        image: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 4,
+      },
+      {
+        _id: 'cat_citrus',
+        name: 'Citrus & Lemon (Nimbu)',
+        slug: 'citrus-lemon',
+        description: 'Zero-oil sun-matured Kagzi lemon pickles with Himalayan rock salt and digestive carom',
+        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 5,
+      },
+      {
+        _id: 'cat_sweet',
+        name: 'Sweet & Khatta Meetha',
+        slug: 'sweet-chunda',
+        description: 'Gujarati sweet mango chunda, royal fruit murabbas, and sweet-sour lime preserves',
+        image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 6,
+      },
+      {
+        _id: 'cat_mixed',
+        name: 'Heritage Mixed & Winter Veg',
+        slug: 'heritage-mixed',
+        description: 'Pachranga mixed winter veggies, cauliflower, carrots, and Punjabi village specials',
+        image: 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 7,
+      },
+      {
+        _id: 'cat_amla',
+        name: 'Amla & Health Herbal',
+        slug: 'amla-health',
+        description: 'Wild forest amla, organic fresh haldi, and ginger pickles rich in natural antioxidants',
+        image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 8,
+      },
+      {
+        _id: 'cat_royal',
+        name: 'Royal & Dry Fruit Delicacies',
+        slug: 'royal-dryfruit',
+        description: 'Rajasthani Ker Sangri, spiced cashew nuts, and royal desert delicacies',
+        image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 9,
+      },
+      {
+        _id: 'cat_gift',
+        name: 'Festive & Luxury Gift Boxes',
+        slug: 'festive-combos',
+        description: 'Curated 3-in-1 and 4-in-1 handcrafted wooden tasting hampers and celebration gift sets',
+        image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80',
+        orderIndex: 10,
+      },
     ],
     products: [
+      // 1. Mango Delights
       {
-        _id: 'prod_mango_special',
-        name: 'Rajasthani Keri Ka Achar (Traditional Mango Pickle)',
-        category: 'Mango Pickles (Aam ka Achar)',
-        categoryId: 'cat_mango',
-        price: 320,
-        comparePrice: 399,
-        rating: 4.9,
-        reviewsCount: 382,
-        stock: 120,
-        badge: 'Bestseller',
-        isBestSeller: true,
-        image: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&auto=format&fit=crop&q=80',
-        description: 'Authentic Marwadi style sun-dried raw mango pickle aged in cold-pressed mustard oil with whole fenugreek, fennel, nigella seeds and rock salt.',
-        jars: [
-          { name: '250g Glass Jar', weight: '250g', price: 180, enabled: true },
-          { name: '500g Glass Jar', weight: '500g', price: 320, enabled: true },
-          { name: '1kg Bulk Pack', weight: '1kg', price: 590, enabled: true }
-        ]
+        _id: 'prod_m1',
+        name: 'Desi Kacchi Kairi Mango Achar',
+        slug: 'desi-kacchi-kairi-mango-achar',
+        categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
+        category: 'Mango Delights (Aam)',
+        description: 'Handcrafted with unblemished Ramkela raw mangoes, roasted fenugreek, nigella seeds, and pure cold-pressed mustard oil. Sun-cured for 21 days for maximum crunch.',
+        price: 299,
+        compareAtPrice: 399,
+        images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 60 },
+          { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 85 },
+          { name: '1 Kg Family Pack', price: 549, compareAtPrice: 749, stockQuantity: 50 },
+        ],
+        stockQuantity: 85,
+        isAvailable: true,
       },
       {
-        _id: 'prod_garlic_spicy',
-        name: 'Spicy Desi Garlic Pickle (Lahsun Ka Achar)',
-        category: 'Garlic Pickles (Lahsun ka Achar)',
-        categoryId: 'cat_garlic',
-        price: 340,
-        comparePrice: 420,
-        rating: 4.8,
-        reviewsCount: 219,
-        stock: 85,
-        badge: 'Immunity Booster',
-        image: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281699?w=800&auto=format&fit=crop&q=80',
-        description: 'Whole peeled garlic cloves infused in spicy red chilli flakes, crushed mustard seeds, and ginger extracts.',
-        jars: [
-          { name: '250g Glass Jar', weight: '250g', price: 195, enabled: true },
-          { name: '500g Glass Jar', weight: '500g', price: 340, enabled: true },
-          { name: '1kg Bulk Pack', weight: '1kg', price: 620, enabled: true }
-        ]
+        _id: 'prod_m2',
+        name: 'Hing & Methi Sun-Dried Raw Mango',
+        slug: 'hing-methi-sun-dried-mango',
+        categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
+        category: 'Mango Delights (Aam)',
+        description: 'Infused with aromatic compounding Hathras asafoetida (hing) and hand-pounded yellow mustard. Tangy, zesty, and zero artificial preservatives.',
+        price: 329,
+        compareAtPrice: 429,
+        images: ['https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 40 },
+          { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
+          { name: '1 Kg Family Pack', price: 599, compareAtPrice: 799, stockQuantity: 45 },
+        ],
+        stockQuantity: 70,
+        isAvailable: true,
+      },
+
+      // 2. Stuffed Red Chilli
+      {
+        _id: 'prod_rc1',
+        name: 'Banarasi Hand-Stuffed Red Chilli Pickle',
+        slug: 'banarasi-hand-stuffed-red-chilli',
+        categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
+        category: 'Stuffed Red Chilli (Lal Mirch)',
+        description: 'World-renowned Banarasi thick winter red chillies cored by hand and tightly filled with roasted amchur, fennel, and spiced mustard blend.',
+        price: 349,
+        compareAtPrice: 449,
+        images: ['https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 219, compareAtPrice: 289, stockQuantity: 50 },
+          { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
+          { name: '1 Kg Family Pack', price: 629, compareAtPrice: 849, stockQuantity: 40 },
+        ],
+        stockQuantity: 65,
+        isAvailable: true,
       },
       {
-        _id: 'prod_green_chilli',
-        name: 'Stuffed Red & Green Chilli Pickle (Bharwa Mirch Achar)',
-        category: 'Chilli Pickles (Mirchi ka Achar)',
-        categoryId: 'cat_chilli',
-        price: 290,
-        comparePrice: 360,
-        rating: 4.9,
-        reviewsCount: 412,
-        stock: 95,
-        badge: 'Spicy Favorite',
-        image: 'https://images.unsplash.com/photo-1589135233689-d56b00b0d367?w=800&auto=format&fit=crop&q=80',
-        description: 'Hand-stuffed thick green chillies filled with hand-ground dry masala, amchur powder, and pure mustard oil.',
-        jars: [
-          { name: '250g Glass Jar', weight: '250g', price: 165, enabled: true },
-          { name: '500g Glass Jar', weight: '500g', price: 290, enabled: true },
-          { name: '1kg Bulk Pack', weight: '1kg', price: 540, enabled: true }
-        ]
+        _id: 'prod_rc2',
+        name: 'Smoked Mustard Stuffed Lal Mirch',
+        slug: 'smoked-mustard-stuffed-lal-mirch',
+        categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
+        category: 'Stuffed Red Chilli (Lal Mirch)',
+        description: 'A fiery, smoky variant of stuffed red peppers cured in wood-pressed mustard oil with a punch of crushed black cumin and ajwain.',
+        price: 369,
+        compareAtPrice: 469,
+        images: ['https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 229, compareAtPrice: 299, stockQuantity: 40 },
+          { name: '500g Glass Jar', price: 369, compareAtPrice: 469, stockQuantity: 55 },
+          { name: '1 Kg Family Pack', price: 659, compareAtPrice: 899, stockQuantity: 30 },
+        ],
+        stockQuantity: 55,
+        isAvailable: true,
+      },
+
+      // 3. Green Chilli & Hari Mirch
+      {
+        _id: 'prod_gc1',
+        name: 'Rajasthani Hari Mirch Tipore & Slit Chilli',
+        slug: 'rajasthani-hari-mirch-tipore',
+        categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
+        category: 'Green Chilli & Hari Mirch',
+        description: 'Fresh Rajasthani green chillies tossed with cracked coriander, turmeric, fennel, and lemon juice. The ultimate lunch companion.',
+        price: 249,
+        compareAtPrice: 329,
+        images: ['https://images.unsplash.com/photo-1589135233689-d56b00b0d367?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 159, compareAtPrice: 219, stockQuantity: 70 },
+          { name: '500g Glass Jar', price: 249, compareAtPrice: 329, stockQuantity: 90 },
+          { name: '1 Kg Family Pack', price: 449, compareAtPrice: 599, stockQuantity: 45 },
+        ],
+        stockQuantity: 90,
+        isAvailable: true,
       },
       {
-        _id: 'prod_mix_panchmel',
-        name: 'Panchmel Mix Veggie Pickle (Crunchy Cauliflower, Carrot & Turnip)',
-        category: 'Mixed Veg Pickles (Mix Achar)',
-        categoryId: 'cat_mix',
-        price: 310,
-        comparePrice: 380,
-        rating: 4.7,
-        reviewsCount: 165,
-        stock: 64,
-        badge: 'Winter Special',
-        image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80',
-        description: 'Wholesome blend of crunchy winter veggies seasoned with crushed mustard, black salt, and mild tangy spices.',
-        jars: [
-          { name: '250g Glass Jar', weight: '250g', price: 175, enabled: true },
-          { name: '500g Glass Jar', weight: '500g', price: 310, enabled: true },
-          { name: '1kg Bulk Pack', weight: '1kg', price: 570, enabled: true }
-        ]
+        _id: 'prod_gc2',
+        name: 'Lemon & Green Chilli Tangy Zing',
+        slug: 'lemon-green-chilli-tangy-zing',
+        categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
+        category: 'Green Chilli & Hari Mirch',
+        description: 'Bite-sized whole green peppers aged alongside sour yellow Kagzi lemon wedges in mineral-rich pink Himalayan rock salt.',
+        price: 269,
+        compareAtPrice: 349,
+        images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 50 },
+          { name: '500g Glass Jar', price: 269, compareAtPrice: 349, stockQuantity: 75 },
+          { name: '1 Kg Family Pack', price: 489, compareAtPrice: 649, stockQuantity: 35 },
+        ],
+        stockQuantity: 75,
+        isAvailable: true,
+      },
+
+      // 4. Garlic & Spicy Blends
+      {
+        _id: 'prod_g1',
+        name: 'Desi Spicy Garlic Pickle (Lahsun Ka Achar)',
+        slug: 'desi-spicy-garlic-pickle',
+        categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
+        category: 'Garlic & Spicy Blends',
+        description: 'Whole peeled golden garlic cloves simmered slowly in fiery Kashmiri red chilli paste, mustard, and roasted cumin. Great for digestion.',
+        price: 319,
+        compareAtPrice: 419,
+        images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 60 },
+          { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
+          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 779, stockQuantity: 40 },
+        ],
+        stockQuantity: 80,
+        isAvailable: true,
       },
       {
-        _id: 'prod_sweet_chutney',
-        name: 'Sweet & Tangy Keri Chutney (Gud Keri Launji)',
-        category: 'Sweet Chutney & Murabba',
-        categoryId: 'cat_sweet',
-        price: 280,
-        comparePrice: 350,
-        rating: 4.9,
-        reviewsCount: 290,
-        stock: 110,
-        badge: 'Jaggery Sweetened',
-        image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80',
-        description: 'Slow-simmered mango chunks in organic pure sugarcane jaggery (gud), raisins, cardamom, and roasted cumin.',
-        jars: [
-          { name: '250g Glass Jar', weight: '250g', price: 160, enabled: true },
-          { name: '500g Glass Jar', weight: '500g', price: 280, enabled: true },
-          { name: '1kg Bulk Pack', weight: '1kg', price: 520, enabled: true }
-        ]
-      }
+        _id: 'prod_g2',
+        name: 'Kolhapuri Garlic Thecha & Mustard Relish',
+        slug: 'kolhapuri-garlic-thecha-relish',
+        categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
+        category: 'Garlic & Spicy Blends',
+        description: 'Coarsely pounded raw garlic and roasted green chillies tempered with hot peanut oil and freshly toasted sesame seeds.',
+        price: 289,
+        compareAtPrice: 379,
+        images: ['https://images.unsplash.com/photo-1621996346565-e3d5d6281699?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 50 },
+          { name: '500g Glass Jar', price: 289, compareAtPrice: 379, stockQuantity: 65 },
+          { name: '1 Kg Family Pack', price: 529, compareAtPrice: 699, stockQuantity: 30 },
+        ],
+        stockQuantity: 65,
+        isAvailable: true,
+      },
+
+      // 5. Citrus & Lemon (Nimbu)
+      {
+        _id: 'prod_c1',
+        name: 'Kagzi Nimbu Tangy Pickle (Zero Oil)',
+        slug: 'kagzi-nimbu-tangy-pickle',
+        categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
+        category: 'Citrus & Lemon (Nimbu)',
+        description: 'Paper-thin skin Kagzi lemons cured under the midday sun for 30 days with Himalayan rock salt, ajwain, and black pepper. Completely oil-free.',
+        price: 279,
+        compareAtPrice: 359,
+        images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 70 },
+          { name: '500g Glass Jar', price: 279, compareAtPrice: 359, stockQuantity: 95 },
+          { name: '1 Kg Family Pack', price: 499, compareAtPrice: 649, stockQuantity: 45 },
+        ],
+        stockQuantity: 95,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_c2',
+        name: 'Sweet & Sour Khatta Meetha Lemon Pickle',
+        slug: 'khatta-meetha-lemon-pickle',
+        categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
+        category: 'Citrus & Lemon (Nimbu)',
+        description: 'Juicy lemons sweetened with organic jaggery syrup and cinnamon quills. Cured until dark, syrupy, and deeply flavorful.',
+        price: 299,
+        compareAtPrice: 399,
+        images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 60 },
+          { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 75 },
+          { name: '1 Kg Family Pack', price: 549, compareAtPrice: 729, stockQuantity: 40 },
+        ],
+        stockQuantity: 75,
+        isAvailable: true,
+      },
+
+      // 6. Sweet & Khatta Meetha
+      {
+        _id: 'prod_sw1',
+        name: 'Traditional Gujarati Sweet Mango Chunda',
+        slug: 'traditional-gujarati-sweet-mango-chunda',
+        categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
+        category: 'Sweet & Khatta Meetha',
+        description: 'Grated green mangoes sun-cooked in raw unrefined sugar crystals, Kashmiri saffron strands, cardamom pods, and cinnamon.',
+        price: 339,
+        compareAtPrice: 439,
+        images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 65 },
+          { name: '500g Glass Jar', price: 339, compareAtPrice: 439, stockQuantity: 85 },
+          { name: '1 Kg Family Pack', price: 619, compareAtPrice: 799, stockQuantity: 40 },
+        ],
+        stockQuantity: 85,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_sw2',
+        name: 'Organic Gur Keri Raw Mango Launji',
+        slug: 'organic-gur-keri-mango-launji',
+        categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
+        category: 'Sweet & Khatta Meetha',
+        description: 'Slow-simmered raw mango pieces in pure organic sugarcane jaggery (gur), plump golden raisins, and roasted kalonji.',
+        price: 319,
+        compareAtPrice: 409,
+        images: ['https://images.unsplash.com/photo-1553279768-865429fa0078?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 50 },
+          { name: '500g Glass Jar', price: 319, compareAtPrice: 409, stockQuantity: 70 },
+          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 749, stockQuantity: 35 },
+        ],
+        stockQuantity: 70,
+        isAvailable: true,
+      },
+
+      // 7. Heritage Mixed & Winter Veg
+      {
+        _id: 'prod_mv1',
+        name: 'Pachranga Heritage Winter Veggie Pickle',
+        slug: 'pachranga-heritage-winter-veggie',
+        categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
+        category: 'Heritage Mixed & Winter Veg',
+        description: 'Crisp winter cauliflower florets, crunchy red carrots, baby turnips, green peas, and lotus stem in aged mustard oil.',
+        price: 299,
+        compareAtPrice: 389,
+        images: ['https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 179, compareAtPrice: 239, stockQuantity: 65 },
+          { name: '500g Glass Jar', price: 299, compareAtPrice: 389, stockQuantity: 90 },
+          { name: '1 Kg Family Pack', price: 539, compareAtPrice: 699, stockQuantity: 50 },
+        ],
+        stockQuantity: 90,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_mv2',
+        name: 'Punjabi Gobhi Gajar Shalgam Crunchy Pickle',
+        slug: 'punjabi-gobhi-gajar-shalgam',
+        categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
+        category: 'Heritage Mixed & Winter Veg',
+        description: 'Grandma recipe sweet and sour winter special prepared with jaggery, malt vinegar, fresh ginger slivers, and mustard.',
+        price: 319,
+        compareAtPrice: 419,
+        images: ['https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 189, compareAtPrice: 259, stockQuantity: 55 },
+          { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
+          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 769, stockQuantity: 40 },
+        ],
+        stockQuantity: 80,
+        isAvailable: true,
+      },
+
+      // 8. Amla & Health Herbal
+      {
+        _id: 'prod_ah1',
+        name: 'Wild Forest Amla & Turmeric Immunity Pickle',
+        slug: 'wild-forest-amla-turmeric',
+        categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
+        category: 'Amla & Health Herbal',
+        description: 'Hand-picked wild Indian gooseberries (amla) steam-cured with freshly scraped raw Salem turmeric roots and crushed black pepper.',
+        price: 329,
+        compareAtPrice: 429,
+        images: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 50 },
+          { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
+          { name: '1 Kg Family Pack', price: 599, compareAtPrice: 789, stockQuantity: 35 },
+        ],
+        stockQuantity: 70,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_ah2',
+        name: 'Organic Fresh Kacchi Haldi & Ginger Pickle',
+        slug: 'organic-fresh-kacchi-haldi-ginger',
+        categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
+        category: 'Amla & Health Herbal',
+        description: 'Zesty matchstick slices of organic raw yellow turmeric and tender young ginger marinated in freshly squeezed lemon juice.',
+        price: 349,
+        compareAtPrice: 449,
+        images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 209, compareAtPrice: 279, stockQuantity: 45 },
+          { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
+          { name: '1 Kg Family Pack', price: 629, compareAtPrice: 829, stockQuantity: 30 },
+        ],
+        stockQuantity: 65,
+        isAvailable: true,
+      },
+
+      // 9. Royal & Dry Fruit Delicacies
+      {
+        _id: 'prod_rf1',
+        name: 'Royal Rajasthani Ker Sangri Desert Pickle',
+        slug: 'royal-rajasthani-ker-sangri',
+        categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
+        category: 'Royal & Dry Fruit Delicacies',
+        description: 'Wild desert capers (Ker) and dried beans (Sangri) from the Thar desert, cooked in pure mustard oil with raisins and whole red chillies.',
+        price: 499,
+        compareAtPrice: 649,
+        images: ['https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 289, compareAtPrice: 389, stockQuantity: 40 },
+          { name: '500g Glass Jar', price: 499, compareAtPrice: 649, stockQuantity: 50 },
+          { name: '1 Kg Family Pack', price: 929, compareAtPrice: 1199, stockQuantity: 25 },
+        ],
+        stockQuantity: 50,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_rf2',
+        name: 'Shahi Spiced Cashew & Raisin Achar',
+        slug: 'shahi-spiced-cashew-raisin',
+        categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
+        category: 'Royal & Dry Fruit Delicacies',
+        description: 'Whole roasted Goan cashews and jumbo Afghan raisins tossed in a sweet-tart royal mango masala gravy.',
+        price: 549,
+        compareAtPrice: 699,
+        images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '250g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 35 },
+          { name: '500g Glass Jar', price: 549, compareAtPrice: 699, stockQuantity: 45 },
+          { name: '1 Kg Family Pack', price: 999, compareAtPrice: 1299, stockQuantity: 20 },
+        ],
+        stockQuantity: 45,
+        isAvailable: true,
+      },
+
+      // 10. Festive & Luxury Gift Boxes
+      {
+        _id: 'prod_gb1',
+        name: 'Grand 3-in-1 Handcrafted Wooden Heritage Crate',
+        slug: 'grand-3-in-1-wooden-heritage-crate',
+        categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
+        category: 'Festive & Luxury Gift Boxes',
+        description: 'Artisanal pine wood gift box featuring three 350g signature jars: Ramkela Mango, Banarasi Stuffed Red Chilli, and Kagzi Nimbu.',
+        price: 899,
+        compareAtPrice: 1199,
+        images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '3 x 350g Wooden Box Gift Set', price: 899, compareAtPrice: 1199, stockQuantity: 35 },
+        ],
+        stockQuantity: 35,
+        isAvailable: true,
+      },
+      {
+        _id: 'prod_gb2',
+        name: 'Royal 4-in-1 Festive Pickle Gift Hamper',
+        slug: 'royal-4-in-1-festive-gift-hamper',
+        categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
+        category: 'Festive & Luxury Gift Boxes',
+        description: 'The ultimate royal gift hamper with 4 handcrafted jars: Desi Garlic, Sweet Mango Chunda, Ker Sangri, and Banarasi Lal Mirch.',
+        price: 1199,
+        compareAtPrice: 1499,
+        images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
+        variants: [
+          { name: '4 x 350g Deluxe Hamper Box', price: 1199, compareAtPrice: 1499, stockQuantity: 25 },
+        ],
+        stockQuantity: 25,
+        isAvailable: true,
+      },
     ]
   };
 
@@ -635,8 +989,13 @@ export const PublicStorefront = () => {
       ? products
       : products.filter((p) => {
           const catId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
-          const catSlug = p.categoryId?.slug || '';
-          return catId === String(selectedCategory) || (catSlug && catSlug === String(selectedCategory));
+          const catSlug = p.categoryId?.slug || p.categorySlug || '';
+          const catName = p.categoryId?.name || p.category || '';
+          return (
+            catId === String(selectedCategory) ||
+            (catSlug && catSlug === String(selectedCategory)) ||
+            (catName && catName === String(selectedCategory))
+          );
         });
 
   return (
@@ -783,17 +1142,22 @@ export const PublicStorefront = () => {
             {categories.map((c) => {
               const catProdCount = products.filter((p) => {
                 const pCatId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
-                const pCatSlug = p.categoryId?.slug || '';
-                return pCatId === String(c._id) || (pCatSlug && pCatSlug === String(c.slug));
+                const pCatSlug = p.categoryId?.slug || p.categorySlug || '';
+                const pCatName = p.categoryId?.name || p.category || '';
+                return (
+                  pCatId === String(c._id) ||
+                  (pCatSlug && pCatSlug === String(c.slug)) ||
+                  (pCatName && pCatName === String(c.name))
+                );
               }).length;
               const catImage =
                 c.image ||
                 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
-              const isSelected = selectedCategory === c._id || selectedCategory === c.slug;
+              const isSelected = selectedCategory === c._id || selectedCategory === c.slug || selectedCategory === c.name;
               return (
                 <button
-                  key={c._id}
-                  onClick={() => setSelectedCategory(c._id)}
+                  key={c._id || c.slug}
+                  onClick={() => setSelectedCategory(isSelected ? 'ALL' : (c.slug || c._id))}
                   className={`flex items-center gap-3 p-2 pr-4 rounded-2xl border transition-all shrink-0 cursor-pointer ${
                     isSelected
                       ? 'bg-indigo-600/20 border-indigo-500 shadow-lg shadow-indigo-600/20 text-white'
@@ -943,28 +1307,41 @@ export const PublicStorefront = () => {
         )}
       </main>
 
-      {/* Mobile Sticky Quick Funnel Bar (When cart is empty) */}
-      {cart.length === 0 && !isCartOpen && (
-        <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 max-w-md mx-auto bg-white/95 backdrop-blur-md border border-slate-200/90 p-2 rounded-2xl shadow-xl flex items-center gap-2">
+      {/* High-Visibility Floating WhatsApp Action Button (FAB) */}
+      {!isCartOpen && (
+        <aside
+          className={`fixed z-40 right-4 sm:right-6 transition-all duration-300 ${
+            cart.length > 0 ? 'bottom-20 sm:bottom-6' : 'bottom-6'
+          }`}
+        >
           <button
-            onClick={() => {
-              if (filteredProducts.length > 0) {
-                handleDirectBuy(filteredProducts[0]);
-              }
-            }}
-            className="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-          >
-            <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-            <span>Direct Order</span>
-          </button>
-          <button
+            type="button"
             onClick={handleTopWhatsAppOrder}
-            className="flex-1 py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            className="group flex items-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-3 sm:px-5 sm:py-3.5 rounded-full shadow-2xl shadow-emerald-700/40 border-2 border-emerald-300/80 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+            title="Order or Inquire Directly on WhatsApp"
           >
-            <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
-            <span>Order on WhatsApp</span>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+            </span>
+            <MessageCircle className="w-5 h-5 fill-white/20 text-white shrink-0 group-hover:rotate-12 transition-transform" />
+            <div className="text-left flex flex-col">
+              <span className="text-xs sm:text-sm font-extrabold tracking-tight leading-none whitespace-nowrap">
+                {cart.length > 0
+                  ? `Order on WhatsApp (${cart.reduce((s, i) => s + i.quantity, 0)})`
+                  : 'Order on WhatsApp'}
+              </span>
+              <span className="text-[10px] text-emerald-100 font-medium leading-none mt-1">
+                {cart.length > 0 ? `Total: ₹${totalAmount} • Instant Dispatch` : 'Direct Customer Support'}
+              </span>
+            </div>
+            {cart.length > 0 && (
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-white text-emerald-800 text-[11px] font-black shadow-xs">
+                ₹{totalAmount}
+              </span>
+            )}
           </button>
-        </div>
+        </aside>
       )}
 
       {/* Floating Bottom Cart Bar (Mobile Sticky) */}
@@ -1389,15 +1766,23 @@ export const PublicStorefront = () => {
               </div>
             )}
 
-            {/* Bottom button for CART step */}
+            {/* Bottom buttons for CART step */}
             {checkoutStep === 'CART' && cart.length > 0 && (
-              <div className="pt-4 border-t border-slate-200">
+              <div className="pt-4 border-t border-slate-200 space-y-2">
                 <button
                   onClick={() => setCheckoutStep('CHECKOUT')}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
-                  <span>Proceed to Checkout</span>
+                  <span>Proceed to Express Checkout</span>
                   <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTopWhatsAppOrder}
+                  className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600/20" />
+                  <span>Order Entire Cart via WhatsApp</span>
                 </button>
               </div>
             )}
