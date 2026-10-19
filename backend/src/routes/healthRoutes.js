@@ -1,8 +1,14 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const connectDB = require('../config/db');
 const router = express.Router();
 
-router.get('/health', (req, res) => {
+router.get('/health', async (req, res) => {
+  try {
+    await connectDB();
+  } catch (err) {
+    // dbState will reflect failure below
+  }
   const dbState = mongoose.connection.readyState;
   const dbStatusMap = {
     0: 'Disconnected',
@@ -27,6 +33,9 @@ router.get('/health', (req, res) => {
 
 // Deep health check for monitoring probes and production deployment readiness
 router.get('/health/deep', async (req, res) => {
+  try {
+    await connectDB();
+  } catch (err) {}
   const dbState = mongoose.connection.readyState;
   let dbLatencyMs = -1;
 
