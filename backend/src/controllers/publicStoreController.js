@@ -816,11 +816,6 @@ const createPublicOrder = async (req, res) => {
     const shippingFee = verifiedSubtotal >= 499 ? 0 : 50;
     const totalAmount = verifiedSubtotal + shippingFee;
 
-    // Generate unique order number
-    const dateCode = Date.now().toString().slice(-6);
-    const randCode = Math.floor(100 + Math.random() * 900);
-    const orderNumber = `ORD-${dateCode}-${randCode}`;
-
     // Atomically decrement stock
     for (const item of verifiedItems) {
       if (item.variantId) {
