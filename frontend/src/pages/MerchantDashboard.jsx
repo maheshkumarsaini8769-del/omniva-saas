@@ -73,6 +73,11 @@ import {
   QrCode,
   Smartphone,
   Monitor,
+  Ticket,
+  Tag,
+  Percent,
+  BadgePercent,
+  Gift,
 } from 'lucide-react';
 import axios from 'axios';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
@@ -113,6 +118,7 @@ export const MerchantDashboard = () => {
       orders: 'Orders & Fulfillment',
       products: 'Products Catalog',
       categories: 'Categories Showcase',
+      coupons: 'Coupons & Promo Offers',
       'customer-view': 'Customer View (Storefront)',
       leads: 'Leads & CRM Pipeline',
       customers: 'Customers Directory',
@@ -2190,6 +2196,70 @@ export const MerchantDashboard = () => {
     jars: DEFAULT_JAR_PRESETS.map(j => ({ ...j }))
   });
 
+  // Coupons & Promo Offers State
+  const [couponsList, setCouponsList] = useState([
+    {
+      _id: 'coup_desi15',
+      id: 'coup_desi15',
+      code: 'DESI15',
+      title: '15% Off Traditional Jars',
+      description: 'Get 15% discount on all orders above ₹399',
+      discountType: 'PERCENTAGE',
+      discountValue: 15,
+      minOrderValue: 399,
+      maxDiscount: 150,
+      isActive: true,
+      usageCount: 142,
+      createdAt: '2026-10-15',
+    },
+    {
+      _id: 'coup_save100',
+      id: 'coup_save100',
+      code: 'SAVE100',
+      title: 'Flat ₹100 Off Festive Offer',
+      description: 'Instant ₹100 discount on orders above ₹599',
+      discountType: 'FLAT',
+      discountValue: 100,
+      minOrderValue: 599,
+      maxDiscount: 100,
+      isActive: true,
+      usageCount: 89,
+      createdAt: '2026-10-12',
+    },
+    {
+      _id: 'coup_welcome10',
+      id: 'coup_welcome10',
+      code: 'WELCOME10',
+      title: '10% First Order Welcome',
+      description: 'Special 10% welcome discount for new customers',
+      discountType: 'PERCENTAGE',
+      discountValue: 10,
+      minOrderValue: 199,
+      maxDiscount: 100,
+      isActive: true,
+      usageCount: 310,
+      createdAt: '2026-10-01',
+    },
+  ]);
+  const [showAddCouponModal, setShowAddCouponModal] = useState(false);
+  const [newCouponForm, setNewCouponForm] = useState({
+    code: '',
+    title: '',
+    description: '',
+    discountType: 'PERCENTAGE',
+    discountValue: '15',
+    minOrderValue: '399',
+    maxDiscount: '150',
+    isActive: true,
+  });
+
+  const [showBulkDiscountModal, setShowBulkDiscountModal] = useState(false);
+  const [bulkDiscountForm, setBulkDiscountForm] = useState({
+    discountPercent: 15,
+    scope: 'ALL',
+    categoryName: 'ALL',
+  });
+
   const handleEditProductImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2526,6 +2596,10 @@ export const MerchantDashboard = () => {
             cat: catName,
             categoryId: catObj?._id || p.categoryId,
             price: `₹${rawPrice}`,
+            compareAtPrice: p.compareAtPrice || Math.round(rawPrice * 1.3),
+            discountPercent: (p.compareAtPrice && p.compareAtPrice > rawPrice)
+              ? Math.round(((p.compareAtPrice - rawPrice) / p.compareAtPrice) * 100)
+              : 23,
             stock: rawStock,
             status: rawStock > 10 ? 'In stock' : (rawStock > 0 ? 'Low stock' : 'Out of stock'),
             statusColor: rawStock > 10 ? 'bg-emerald-50 text-emerald-700' : (rawStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
@@ -2662,6 +2736,7 @@ export const MerchantDashboard = () => {
   useEffect(() => {
     fetchProductsAndCategories();
     fetchOrders();
+    fetchCoupons();
   }, []);
 
   useEffect(() => {
@@ -2685,6 +2760,9 @@ export const MerchantDashboard = () => {
     }
     if (activeTab === 'products' || activeTab === 'categories') {
       fetchProductsAndCategories();
+    }
+    if (activeTab === 'coupons') {
+      fetchCoupons();
     }
     if (activeTab === 'leads') {
       fetchCrmLeads();
@@ -3290,6 +3368,7 @@ export const MerchantDashboard = () => {
       cat: prod.cat || categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)',
       newCatInput: '',
       price: numPrice,
+      compareAtPrice: prod.compareAtPrice ? String(prod.compareAtPrice).replace(/[^0-9.]/g, '') : String(Math.round(baseP * 1.3)),
       stock: baseStock,
       img: prod.img || '',
       status: prod.status || 'In stock',
@@ -3359,6 +3438,7 @@ export const MerchantDashboard = () => {
     const activeJars = editProductForm.jars || [];
     const baseJar = activeJars.find(j => j.enabled);
     const numericPrice = parseFloat(String(editProductForm.price).replace(/[^0-9.]/g, '')) || (baseJar ? baseJar.price : 299);
+    const numericCompare = parseFloat(String(editProductForm.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(numericPrice * 1.3);
     const enabledJarsStock = activeJars.filter(j => j.enabled).reduce((acc, j) => acc + (parseInt(j.stock) || 0), 0);
     const numericStock = enabledJarsStock > 0 ? enabledJarsStock : (parseInt(editProductForm.stock) >= 0 ? parseInt(editProductForm.stock) : 50);
 
@@ -3366,6 +3446,7 @@ export const MerchantDashboard = () => {
       name: j.name,
       sku: editProductForm.sku ? `${editProductForm.sku}-${j.name.split(' ')[0]}` : '',
       price: Number(j.price) || numericPrice,
+      compareAtPrice: j.compareAtPrice ? Number(j.compareAtPrice) : Math.round((Number(j.price) || numericPrice) * 1.3),
       stockQuantity: Number(j.stock) || 20
     }));
 
@@ -3378,6 +3459,7 @@ export const MerchantDashboard = () => {
           categoryId: targetCatId,
           categoryName: enteredCat,
           price: numericPrice,
+          compareAtPrice: numericCompare,
           stockQuantity: numericStock,
           images: [finalImg],
           variants: variantsPayload,
@@ -3396,6 +3478,8 @@ export const MerchantDashboard = () => {
       cat: enteredCat,
       categoryId: targetCatId,
       price: `₹${numericPrice}`,
+      compareAtPrice: numericCompare,
+      discountPercent: numericCompare > numericPrice ? Math.round(((numericCompare - numericPrice) / numericCompare) * 100) : 23,
       stock: numericStock,
       status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
       statusColor: numericStock > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (numericStock > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'),
@@ -3441,6 +3525,150 @@ export const MerchantDashboard = () => {
       setActionSuccessToast(`🗑️ Product "${prodToDelete.name}" removed from catalog.`);
       setTimeout(() => setActionSuccessToast(''), 4000);
     }
+  };
+
+  // ==================== COUPON & STOREWIDE DISCOUNT HANDLERS ====================
+  const fetchCoupons = async () => {
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get('/api/coupons', { headers: authHeaders });
+      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        setCouponsList(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Could not fetch coupons:', err.message);
+    }
+  };
+
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault();
+    if (!newCouponForm.code || !newCouponForm.code.trim()) {
+      alert('Please enter a coupon code');
+      return;
+    }
+    const cleanCode = newCouponForm.code.trim().toUpperCase();
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const couponPayload = {
+      code: cleanCode,
+      title: newCouponForm.title || `${cleanCode} Special Offer`,
+      description: newCouponForm.description || '',
+      discountType: newCouponForm.discountType || 'PERCENTAGE',
+      discountValue: Number(newCouponForm.discountValue) || 15,
+      minOrderValue: Number(newCouponForm.minOrderValue) || 0,
+      maxDiscount: Number(newCouponForm.maxDiscount) || 0,
+      isActive: Boolean(newCouponForm.isActive),
+    };
+
+    try {
+      const res = await axios.post('/api/coupons', couponPayload, { headers: authHeaders });
+      if (res.data?.data) {
+        setCouponsList(prev => [res.data.data, ...prev.filter(c => c.code !== cleanCode)]);
+      } else {
+        setCouponsList(prev => [{ _id: `coup_${Date.now()}`, ...couponPayload, usageCount: 0, createdAt: new Date().toISOString() }, ...prev]);
+      }
+    } catch (err) {
+      setCouponsList(prev => [{ _id: `coup_${Date.now()}`, ...couponPayload, usageCount: 0, createdAt: new Date().toISOString() }, ...prev]);
+    }
+
+    setShowAddCouponModal(false);
+    setNewCouponForm({
+      code: '',
+      title: '',
+      description: '',
+      discountType: 'PERCENTAGE',
+      discountValue: '15',
+      minOrderValue: '399',
+      maxDiscount: '150',
+      isActive: true,
+    });
+    setActionSuccessToast(`🎉 Coupon "${cleanCode}" created & activated successfully! Customers can now apply it at checkout.`);
+    setTimeout(() => setActionSuccessToast(''), 4500);
+  };
+
+  const handleToggleCouponStatus = async (coupon) => {
+    const nextStatus = !coupon.isActive;
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    setCouponsList(prev => prev.map(c => (c._id === coupon._id || c.code === coupon.code) ? { ...c, isActive: nextStatus } : c));
+    setActionSuccessToast(`Coupon "${coupon.code}" is now ${nextStatus ? 'ACTIVE ✅' : 'PAUSED ⏸️'}`);
+    setTimeout(() => setActionSuccessToast(''), 3000);
+
+    if (coupon._id) {
+      try {
+        await axios.put(`/api/coupons/${coupon._id}`, { isActive: nextStatus }, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Could not update coupon on backend:', err.message);
+      }
+    }
+  };
+
+  const handleDeleteCoupon = async (coupon) => {
+    if (!window.confirm(`Are you sure you want to delete coupon "${coupon.code}"?`)) return;
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    setCouponsList(prev => prev.filter(c => c._id !== coupon._id && c.code !== coupon.code));
+    setActionSuccessToast(`🗑️ Coupon "${coupon.code}" deleted.`);
+    setTimeout(() => setActionSuccessToast(''), 3000);
+
+    if (coupon._id) {
+      try {
+        await axios.delete(`/api/coupons/${coupon._id}`, { headers: authHeaders });
+      } catch (err) {
+        console.warn('Could not delete coupon on backend:', err.message);
+      }
+    }
+  };
+
+  const handleApplyBulkDiscount = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const pct = Math.max(1, Math.min(90, Number(bulkDiscountForm.discountPercent) || 15));
+    const isAll = bulkDiscountForm.scope === 'ALL' || bulkDiscountForm.categoryName === 'ALL';
+    const targetCat = bulkDiscountForm.categoryName;
+
+    setProductsList(prev => prev.map(p => {
+      if (!isAll && p.cat !== targetCat) return p;
+      const currentPriceNum = parseFloat(String(p.price).replace(/[^0-9.]/g, '')) || 299;
+      const compareAtNum = p.compareAtPrice ? (parseFloat(String(p.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(currentPriceNum * 1.3)) : Math.round(currentPriceNum * 1.3);
+      const discountedPrice = Math.max(1, Math.round(compareAtNum * (1 - pct / 100)));
+
+      const updatedJars = (p.jars || []).map(j => {
+        const jCompare = j.compareAtPrice ? (parseFloat(String(j.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(j.price * 1.3)) : Math.round(j.price * 1.3);
+        return {
+          ...j,
+          compareAtPrice: jCompare,
+          price: Math.max(1, Math.round(jCompare * (1 - pct / 100)))
+        };
+      });
+
+      return {
+        ...p,
+        compareAtPrice: compareAtNum,
+        price: `₹${discountedPrice}`,
+        discountPercent: pct,
+        jars: updatedJars
+      };
+    }));
+
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      await axios.post('/api/products/bulk-discount', {
+        discountPercent: pct,
+        applyToAll: isAll,
+        categoryName: isAll ? null : targetCat,
+      }, { headers: authHeaders });
+    } catch (err) {
+      console.warn('Bulk discount backend update notice:', err.message);
+    }
+
+    setShowBulkDiscountModal(false);
+    setActionSuccessToast(`🎉 ${pct}% Discount applied to ${isAll ? 'ALL products' : `products in "${targetCat}"`}! Storefront cards will now display ${pct}% OFF badges and slashed MRP.`);
+    setTimeout(() => setActionSuccessToast(''), 5000);
   };
 
   const handleSaveManualOrder = (e) => {
@@ -3555,7 +3783,7 @@ export const MerchantDashboard = () => {
     // Check dynamic module assignment assigned by Super Admin
     if (tenant?.enabledModules) {
       const em = tenant.enabledModules;
-      if (['orders', 'products', 'categories'].includes(tab)) {
+      if (['orders', 'products', 'categories', 'coupons'].includes(tab)) {
         return Boolean(em.products);
       }
       if (tab === 'service-bookings') {
@@ -3647,6 +3875,7 @@ export const MerchantDashboard = () => {
               {navItem('orders', 'Orders & Fulfillment', ShoppingBag)}
               {navItem('products', 'Products (Catalog)', Package)}
               {navItem('categories', 'Categories', LayoutGrid)}
+              {navItem('coupons', 'Coupons & Offers', Ticket)}
             </>
           )}
 
@@ -5189,13 +5418,29 @@ export const MerchantDashboard = () => {
                     Manage pricing, SKU, photo and stock for each product here.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkDiscountModal(true)}
+                    className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+                    title="Apply discount percentage across every product"
+                  >
+                    <Percent className="w-3.5 h-3.5 text-amber-600" /> ⚡ Storewide Discount
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('coupons')}
+                    className="px-3.5 py-2 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+                    title="Manage storefront coupons and promo codes"
+                  >
+                    <Ticket className="w-3.5 h-3.5 text-emerald-600" /> 🎟️ Coupon Offers ({couponsList.length})
+                  </button>
                   <button
                     type="button"
                     onClick={() => setActiveTab('categories')}
                     className="px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
                   >
-                    <LayoutGrid className="w-3.5 h-3.5" /> 📂 Go to Categories Page ({categoriesList.length})
+                    <LayoutGrid className="w-3.5 h-3.5" /> 📂 Categories ({categoriesList.length})
                   </button>
                   <button
                     type="button"
@@ -5351,7 +5596,30 @@ export const MerchantDashboard = () => {
                               {p.cat}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-black text-slate-900">{p.price}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="font-black text-slate-900 text-xs">{p.price}</span>
+                                {p.compareAtPrice && (
+                                  <span className="text-[10px] text-slate-400 line-through">
+                                    ₹{typeof p.compareAtPrice === 'number' ? p.compareAtPrice : String(p.compareAtPrice).replace(/[^0-9.]/g, '')}
+                                  </span>
+                                )}
+                              </div>
+                              {(() => {
+                                const currentPriceNum = parseFloat(String(p.price).replace(/[^0-9.]/g, '')) || 0;
+                                const compareAtNum = p.compareAtPrice ? (parseFloat(String(p.compareAtPrice).replace(/[^0-9.]/g, '')) || 0) : 0;
+                                const discount = (compareAtNum > currentPriceNum && compareAtNum > 0)
+                                  ? Math.round(((compareAtNum - currentPriceNum) / compareAtNum) * 100)
+                                  : (p.discountPercent || 23);
+                                return (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md mt-0.5 w-fit">
+                                    <span>🔥</span> {discount}% OFF
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          </td>
                           <td className="py-3 px-4 font-bold text-slate-800">
                             <div className="flex items-center gap-2">
                               <span>{p.stock}</span>
@@ -5568,6 +5836,259 @@ export const MerchantDashboard = () => {
                           <span>Change Photo</span>
                         </button>
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== 4C. COUPONS & PROMOTIONAL OFFERS (PAGE 3) ==================== */}
+          {activeTab === 'coupons' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-indigo-600" />
+                    Coupons &amp; Promotional Offers
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Live Storefront Deals
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Create discount voucher codes, festive deals, and storewide product discounts for your storefront.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkDiscountModal(true)}
+                    className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Percent className="w-3.5 h-3.5 text-amber-600" /> ⚡ Storewide Product Discount
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCouponModal(true)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> + Create New Coupon
+                  </button>
+                </div>
+              </div>
+
+              {/* 4 Stat Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 font-medium">Active Coupons</div>
+                  <div className="text-2xl font-black text-indigo-600 mt-2">
+                    {couponsList.filter(c => c.isActive).length} Codes
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {couponsList.filter(c => !c.isActive).length} paused / draft
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 font-medium">Total Orders Saved</div>
+                  <div className="text-2xl font-black text-emerald-600 mt-2">
+                    {couponsList.reduce((acc, c) => acc + (c.usageCount || 0), 0)} Orders
+                  </div>
+                  <div className="text-[11px] text-emerald-700 font-medium mt-0.5">Across all campaigns</div>
+                </div>
+
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 font-medium">Customer Savings</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">
+                    ₹{couponsList.reduce((acc, c) => acc + ((c.usageCount || 0) * (c.discountType === 'FLAT' ? c.discountValue : 65)), 0).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-indigo-600 font-medium mt-0.5">Direct conversion booster</div>
+                </div>
+
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                  <div className="text-xs text-slate-500 font-medium">Har Product Par Discount</div>
+                  <div className="text-sm font-bold text-amber-700 truncate mt-2 flex items-center gap-1">
+                    <span>🔥</span> Up to 25% OFF Slashed MRP
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkDiscountModal(true)}
+                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 mt-0.5 font-bold cursor-pointer"
+                  >
+                    Adjust Storewide Discount &rarr;
+                  </button>
+                </div>
+              </div>
+
+              {/* Storewide Product Discount Quick Banner */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-base shadow-sm shrink-0">
+                    %
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">
+                      Har Product Par Discount (Every Product Discount)
+                    </h3>
+                    <p className="text-xs text-slate-600">
+                      Apply storewide or category-wise discounts in 1 click. Storefront automatically shows crossed-out MRP and discount badges on every card!
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDiscountForm({ discountPercent: 10, scope: 'ALL', categoryName: 'ALL' });
+                      handleApplyBulkDiscount();
+                    }}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
+                  >
+                    10% OFF All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDiscountForm({ discountPercent: 15, scope: 'ALL', categoryName: 'ALL' });
+                      handleApplyBulkDiscount();
+                    }}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
+                  >
+                    15% OFF All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDiscountForm({ discountPercent: 20, scope: 'ALL', categoryName: 'ALL' });
+                      handleApplyBulkDiscount();
+                    }}
+                    className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
+                  >
+                    20% OFF All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkDiscountModal(true)}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
+                  >
+                    Custom %
+                  </button>
+                </div>
+              </div>
+
+              {/* Coupons List Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {couponsList.map((coupon, cIdx) => (
+                  <div
+                    key={coupon._id || coupon.id || cIdx}
+                    className={`bg-white border rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md transition flex flex-col justify-between ${
+                      coupon.isActive ? 'border-slate-200 hover:border-indigo-400' : 'border-slate-200/60 opacity-75 bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
+                          coupon.isActive
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {coupon.isActive ? '● ACTIVE LIVE' : '⏸️ PAUSED'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          Redeemed {coupon.usageCount || 0} times
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 bg-slate-50 border border-dashed border-indigo-300 p-2.5 rounded-xl">
+                        <div className="flex items-center gap-1.5">
+                          <Ticket className="w-4 h-4 text-indigo-600" />
+                          <span className="font-mono font-black text-indigo-950 text-base tracking-wider">
+                            {coupon.code}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(coupon.code);
+                            setActionSuccessToast(`Copied code "${coupon.code}" to clipboard!`);
+                            setTimeout(() => setActionSuccessToast(''), 2500);
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-600 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer shadow-2xs"
+                        >
+                          Copy Code
+                        </button>
+                      </div>
+
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm">
+                          {coupon.title || `${coupon.code} Offer`}
+                        </h4>
+                        {coupon.description && (
+                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                            {coupon.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1 text-xs pt-1 border-t border-slate-100">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Discount Benefit:</span>
+                          <span className="font-black text-emerald-600">
+                            {coupon.discountType === 'PERCENTAGE'
+                              ? `${coupon.discountValue}% OFF`
+                              : `Flat ₹${coupon.discountValue} OFF`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Minimum Cart Order:</span>
+                          <span className="font-semibold text-slate-800">
+                            {coupon.minOrderValue > 0 ? `₹${coupon.minOrderValue}` : 'No minimum'}
+                          </span>
+                        </div>
+                        {coupon.maxDiscount > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Max Discount Limit:</span>
+                            <span className="font-semibold text-slate-800">₹{coupon.maxDiscount}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCouponStatus(coupon)}
+                        className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
+                          coupon.isActive
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        }`}
+                      >
+                        {coupon.isActive ? 'Pause Code' : 'Activate Code'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const shareUrl = `${window.location.origin}/store/${businessSlug}?coupon=${coupon.code}`;
+                          navigator.clipboard.writeText(shareUrl);
+                          setActionSuccessToast(`Copied promotional store link with coupon "${coupon.code}"!`);
+                          setTimeout(() => setActionSuccessToast(''), 3000);
+                        }}
+                        className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl cursor-pointer"
+                        title="Copy Customer Promo Link"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCoupon(coupon)}
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl cursor-pointer"
+                        title="Delete Coupon"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -10050,7 +10571,7 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-slate-600 font-semibold block mb-1">Selling Price (₹) *</label>
                   <input
@@ -10070,11 +10591,22 @@ export const MerchantDashboard = () => {
                         return { ...prev, price: val, jars: updatedJars };
                       });
                     }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Opening Stock (Units) *</label>
+                  <label className="text-slate-600 font-semibold block mb-1">Original MRP (₹)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="399"
+                    value={newProductForm.compareAtPrice || ''}
+                    onChange={(e) => setNewProductForm({ ...newProductForm, compareAtPrice: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-semibold block mb-1">Stock (Units) *</label>
                   <input
                     type="number"
                     required
@@ -10082,10 +10614,39 @@ export const MerchantDashboard = () => {
                     placeholder="50"
                     value={newProductForm.stock}
                     onChange={(e) => setNewProductForm({ ...newProductForm, stock: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold"
                   />
                 </div>
               </div>
+
+              {/* Dynamic Discount Indicator */}
+              {(() => {
+                const sp = parseFloat(newProductForm.price) || 0;
+                const mrp = parseFloat(newProductForm.compareAtPrice) || 0;
+                const pct = mrp > sp && mrp > 0 ? Math.round(((mrp - sp) / mrp) * 100) : null;
+                return (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🏷️</span>
+                      <div>
+                        <span className="font-bold text-emerald-950">
+                          {pct ? `${pct}% Customer Discount Active` : 'Selling at Normal Price'}
+                        </span>
+                        {pct && (
+                          <span className="text-emerald-700 text-[11px] block">
+                            Customer saves ₹{mrp - sp} per unit!
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {pct && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px]">
+                        {pct}% OFF BADGE
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Jar Sizes & Packaging Variants Manager */}
               <div className="space-y-2.5 border-t border-slate-100 pt-3">
@@ -10425,7 +10986,7 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-slate-700 font-bold block mb-1">Selling Price (₹) *</label>
                   <input
@@ -10439,7 +11000,18 @@ export const MerchantDashboard = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-slate-700 font-bold block mb-1">In-Stock Quantity (Units) *</label>
+                  <label className="text-slate-700 font-bold block mb-1">Original MRP (₹)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="399"
+                    value={editProductForm.compareAtPrice || ''}
+                    onChange={(e) => setEditProductForm({ ...editProductForm, compareAtPrice: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-black text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">In-Stock (Units) *</label>
                   <input
                     type="number"
                     required
@@ -10451,6 +11023,35 @@ export const MerchantDashboard = () => {
                   />
                 </div>
               </div>
+
+              {/* Dynamic Discount Indicator */}
+              {(() => {
+                const sp = parseFloat(editProductForm.price) || 0;
+                const mrp = parseFloat(editProductForm.compareAtPrice) || 0;
+                const pct = mrp > sp && mrp > 0 ? Math.round(((mrp - sp) / mrp) * 100) : null;
+                return (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🏷️</span>
+                      <div>
+                        <span className="font-bold text-emerald-950">
+                          {pct ? `${pct}% Customer Discount Active` : 'Selling at Normal Price'}
+                        </span>
+                        {pct && (
+                          <span className="text-emerald-700 text-[11px] block">
+                            Customer saves ₹{mrp - sp} per unit on this product!
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {pct && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px]">
+                        {pct}% OFF BADGE
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -10749,6 +11350,235 @@ export const MerchantDashboard = () => {
                     Save Changes
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Coupon Modal */}
+      {showAddCouponModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-indigo-600" />
+                  <span>Create New Storefront Coupon</span>
+                </h3>
+                <p className="text-xs text-slate-400">Add a promotional discount code for customers to use at checkout</p>
+              </div>
+              <button onClick={() => setShowAddCouponModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateCoupon} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Coupon Code *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. FESTIVE20"
+                    value={newCouponForm.code}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono font-black text-sm uppercase tracking-wider"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Discount Type *</label>
+                  <select
+                    value={newCouponForm.discountType}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, discountType: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold cursor-pointer"
+                  >
+                    <option value="PERCENTAGE">Percentage (% OFF)</option>
+                    <option value="FLAT">Flat Cash (₹ OFF)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Offer Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Festive Special 20% OFF on all jars"
+                  value={newCouponForm.title}
+                  onChange={(e) => setNewCouponForm({ ...newCouponForm, title: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">
+                    {newCouponForm.discountType === 'PERCENTAGE' ? 'Discount (%) *' : 'Discount (₹) *'}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max={newCouponForm.discountType === 'PERCENTAGE' ? 90 : 5000}
+                    placeholder={newCouponForm.discountType === 'PERCENTAGE' ? '20' : '100'}
+                    value={newCouponForm.discountValue}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, discountValue: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-black text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Min. Order (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="399"
+                    value={newCouponForm.minOrderValue}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, minOrderValue: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-black text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 font-bold block mb-1">Max Cap (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="150"
+                    value={newCouponForm.maxDiscount}
+                    onChange={(e) => setNewCouponForm({ ...newCouponForm, maxDiscount: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-black text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Description / Conditions</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Valid on all handcrafted mango and mixed pickles above ₹399."
+                  value={newCouponForm.description}
+                  onChange={(e) => setNewCouponForm({ ...newCouponForm, description: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="coupon-active-toggle"
+                  checked={newCouponForm.isActive}
+                  onChange={(e) => setNewCouponForm({ ...newCouponForm, isActive: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                />
+                <label htmlFor="coupon-active-toggle" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                  Activate immediately on storefront (Customers can apply right away)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCouponModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 text-xs shadow-md transition cursor-pointer"
+                >
+                  Create &amp; Publish Coupon
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Storewide Bulk Product Discount Modal */}
+      {showBulkDiscountModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <Percent className="w-5 h-5 text-amber-500" />
+                  <span>Har Product Par Discount (Storewide Discount Tool)</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Update selling prices and display % OFF badges on every product in your store
+                </p>
+              </div>
+              <button onClick={() => setShowBulkDiscountModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
+            </div>
+
+            <form onSubmit={handleApplyBulkDiscount} className="space-y-4 text-xs">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1.5 text-amber-900">
+                <div className="font-bold flex items-center gap-1.5 text-xs">
+                  <span>⚡</span> Instant Catalog Slashed Pricing
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Applying this discount sets each product’s Selling Price from its Original MRP, and turns on a green <strong>“XX% OFF”</strong> badge and crossed-out price (~~₹399~~) on every product card!
+                </p>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Discount Percentage (% OFF) *</label>
+                <div className="flex gap-2">
+                  {[10, 15, 20, 25, 30].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setBulkDiscountForm({ ...bulkDiscountForm, discountPercent: pct })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-black transition cursor-pointer border ${
+                        Number(bulkDiscountForm.discountPercent) === pct
+                          ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    placeholder="Custom % (e.g. 18)"
+                    value={bulkDiscountForm.discountPercent}
+                    onChange={(e) => setBulkDiscountForm({ ...bulkDiscountForm, discountPercent: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-black text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 font-bold block mb-1">Target Products Scope</label>
+                <select
+                  value={bulkDiscountForm.categoryName}
+                  onChange={(e) => setBulkDiscountForm({ ...bulkDiscountForm, categoryName: e.target.value, scope: e.target.value === 'ALL' ? 'ALL' : 'CATEGORY' })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold cursor-pointer"
+                >
+                  <option value="ALL">All Products (Entire 20-Product Catalog)</option>
+                  {categoriesList.map(c => (
+                    <option key={c.id || c.name} value={c.name}>Only "{c.name}" Category</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDiscountModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-500 text-xs shadow-md transition cursor-pointer"
+                >
+                  Apply {bulkDiscountForm.discountPercent}% Discount Now
+                </button>
               </div>
             </form>
           </div>

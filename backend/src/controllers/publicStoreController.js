@@ -5,6 +5,8 @@ const Product = require('../models/Product');
 const ServicePackage = require('../models/ServicePackage');
 const Order = require('../models/Order');
 const Lead = require('../models/Lead');
+const Coupon = require('../models/Coupon');
+const { DEFAULT_COUPONS } = require('./couponController');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
 
@@ -504,7 +506,8 @@ const getPublicStore = async (req, res) => {
               isAvailable: true,
             },
           ],
-          packages: []
+          packages: [],
+          coupons: DEFAULT_COUPONS.filter((c) => c.isActive),
         }
       });
     }
@@ -517,7 +520,7 @@ const getPublicStore = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Storefront not found or inactive' });
     }
 
-    const [categories, products, packages] = await Promise.all([
+    const [categories, products, packages, coupons] = await Promise.all([
       Category.find({ businessId: tenant._id, isActive: true })
         .sort({ orderIndex: 1, name: 1 })
         .select('name slug description image orderIndex'),
@@ -527,7 +530,12 @@ const getPublicStore = async (req, res) => {
         .select('name slug description price compareAtPrice images variants stockQuantity trackQuantity isAvailable tags categoryId'),
       ServicePackage.find({ businessId: tenant._id, isAvailable: true })
         .sort({ price: 1 })
-        .select('name slug category description duration price advanceTokenPercent deliverables images maxCapacityPerDay isAvailable')
+        .select('name slug category description duration price advanceTokenPercent deliverables images maxCapacityPerDay isAvailable'),
+      Coupon.find({
+        businessId: tenant._id,
+        isActive: true,
+        $or: [{ expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+      }).select('code title description discountType discountValue minOrderValue maxDiscount expiresAt'),
     ]);
 
     res.json({
@@ -537,6 +545,7 @@ const getPublicStore = async (req, res) => {
         categories,
         products,
         packages,
+        coupons: coupons.length > 0 ? coupons : DEFAULT_COUPONS.filter((c) => c.isActive),
       },
     });
   } catch (error) {
@@ -605,6 +614,8 @@ const createPublicOrder = async (req, res) => {
       shippingAddress,
       items,
       paymentMethod = 'COD',
+      couponCode = '',
+      discount = 0,
       attribution = {},
       notes,
     } = req.body;
@@ -646,6 +657,8 @@ const createPublicOrder = async (req, res) => {
     const dateCode = Date.now().toString().slice(-6);
     const randCode = Math.floor(100 + Math.random() * 900);
     const orderNumber = `ORD-${dateCode}-${randCode}`;
+    const appliedDiscount = Math.max(0, Number(discount) || 0);
+    const cleanCouponCode = (couponCode || '').toString().trim().toUpperCase();
 
     if (mongoose.connection.readyState !== 1) {
       // Cloud preview / serverless offline order creation
@@ -668,7 +681,7 @@ const createPublicOrder = async (req, res) => {
       });
 
       const shippingFee = calcSubtotal >= 499 ? 0 : 50;
-      const totalAmount = calcSubtotal + shippingFee;
+      const totalAmount = Math.max(0, calcSubtotal - appliedDiscount + shippingFee);
       const trackingUrl = `https://omniva-saas.vercel.app/orders/track?orderNumber=${orderNumber}&phone=${cleanCustomerPhone}`;
 
       return res.status(201).json({
@@ -685,6 +698,8 @@ const createPublicOrder = async (req, res) => {
           items: orderItems,
           subtotal: calcSubtotal,
           shippingFee,
+          discount: appliedDiscount,
+          couponCode: cleanCouponCode,
           totalAmount,
           paymentMethod,
           paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',
@@ -814,7 +829,7 @@ const createPublicOrder = async (req, res) => {
 
     // Shipping rules: Free shipping over ₹499, otherwise ₹50
     const shippingFee = verifiedSubtotal >= 499 ? 0 : 50;
-    const totalAmount = verifiedSubtotal + shippingFee;
+    const totalAmount = Math.max(0, verifiedSubtotal - appliedDiscount + shippingFee);
 
     // Atomically decrement stock
     for (const item of verifiedItems) {
@@ -870,6 +885,8 @@ const createPublicOrder = async (req, res) => {
       items: verifiedItems,
       subtotal: verifiedSubtotal,
       shippingFee,
+      discount: appliedDiscount,
+      couponCode: cleanCouponCode,
       totalAmount,
       paymentMethod,
       paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',

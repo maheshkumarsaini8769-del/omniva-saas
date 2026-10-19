@@ -25,7 +25,10 @@ import {
   X,
   Gift,
   MessageSquare,
-  MessageCircle
+  MessageCircle,
+  Ticket,
+  Tag,
+  Percent
 } from 'lucide-react';
 
 export const PublicStorefront = () => {
@@ -42,6 +45,12 @@ export const PublicStorefront = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('CART'); // 'CART' | 'CHECKOUT' | 'SUCCESS'
   const [placedOrder, setPlacedOrder] = useState(null);
+
+  // Coupon state
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccess, setCouponSuccess] = useState('');
 
   // Checkout form fields
   const [customerName, setCustomerName] = useState('');
@@ -119,6 +128,42 @@ export const PublicStorefront = () => {
     utmContent: searchParams.get('utm_content') || '',
     fbclid: searchParams.get('fbclid') || '',
   };
+
+  const STOREFRONT_DEFAULT_COUPONS = [
+    {
+      _id: 'coup_desi15',
+      code: 'DESI15',
+      title: '15% Off Traditional Jars',
+      description: 'Get 15% discount on all orders above ₹399',
+      discountType: 'PERCENTAGE',
+      discountValue: 15,
+      minOrderValue: 399,
+      maxDiscount: 150,
+      isActive: true,
+    },
+    {
+      _id: 'coup_save100',
+      code: 'SAVE100',
+      title: 'Flat ₹100 Off Festive Offer',
+      description: 'Instant ₹100 discount on orders above ₹599',
+      discountType: 'FLAT',
+      discountValue: 100,
+      minOrderValue: 599,
+      maxDiscount: 100,
+      isActive: true,
+    },
+    {
+      _id: 'coup_welcome10',
+      code: 'WELCOME10',
+      title: '10% First Order Welcome',
+      description: 'Special 10% welcome discount for new customers',
+      discountType: 'PERCENTAGE',
+      discountValue: 10,
+      minOrderValue: 199,
+      maxDiscount: 100,
+      isActive: true,
+    },
+  ];
 
   const DEFAULT_FALLBACK_STORE = {
     store: {
@@ -596,7 +641,8 @@ export const PublicStorefront = () => {
         stockQuantity: 25,
         isAvailable: true,
       },
-    ]
+    ],
+    coupons: STOREFRONT_DEFAULT_COUPONS,
   };
 
   useEffect(() => {
@@ -736,10 +782,66 @@ export const PublicStorefront = () => {
   };
 
   const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Live Coupon Discount Calculation
+  let discountAmount = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.minOrderValue && cartSubtotal < appliedCoupon.minOrderValue) {
+      discountAmount = 0;
+    } else {
+      if (appliedCoupon.discountType === 'PERCENTAGE') {
+        const pctDiscount = Math.round((cartSubtotal * (Number(appliedCoupon.discountValue) || 0)) / 100);
+        discountAmount = appliedCoupon.maxDiscount ? Math.min(pctDiscount, Number(appliedCoupon.maxDiscount)) : pctDiscount;
+      } else {
+        discountAmount = Math.min(cartSubtotal, Number(appliedCoupon.discountValue) || 0);
+      }
+    }
+  }
+
+  const discountedSubtotal = Math.max(0, cartSubtotal - discountAmount);
   const freeShippingThreshold = 499;
-  const isFreeShipping = cartSubtotal >= freeShippingThreshold;
+  const isFreeShipping = discountedSubtotal >= freeShippingThreshold;
   const shippingFee = cart.length === 0 ? 0 : isFreeShipping ? 0 : 50;
-  const totalAmount = cartSubtotal + shippingFee;
+  const totalAmount = cart.length === 0 ? 0 : discountedSubtotal + shippingFee;
+
+  const handleApplyCoupon = (codeToApply) => {
+    setCouponError('');
+    setCouponSuccess('');
+    const code = (codeToApply || couponCodeInput || '').trim().toUpperCase();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    const availableCoupons = storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS;
+    const found = availableCoupons.find(
+      (c) => c.code?.toUpperCase() === code && c.isActive !== false
+    );
+
+    if (!found) {
+      setCouponError(`Coupon "${code}" is invalid or expired.`);
+      return;
+    }
+
+    if (found.minOrderValue && cartSubtotal < found.minOrderValue) {
+      setCouponError(`Min order value for ${code} is ₹${found.minOrderValue}. Add items worth ₹${found.minOrderValue - cartSubtotal} more!`);
+      return;
+    }
+
+    setAppliedCoupon(found);
+    setCouponCodeInput(found.code);
+    const savedAmount = found.discountType === 'PERCENTAGE'
+      ? (found.maxDiscount ? Math.min(Math.round((cartSubtotal * found.discountValue) / 100), found.maxDiscount) : Math.round((cartSubtotal * found.discountValue) / 100))
+      : Math.min(cartSubtotal, found.discountValue || 0);
+    setCouponSuccess(`Coupon ${found.code} applied! Saved ₹${savedAmount}.`);
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponError('');
+    setCouponSuccess('');
+  };
 
   // Exit-Intent Listener
   useEffect(() => {
@@ -843,8 +945,9 @@ export const PublicStorefront = () => {
     let text = '';
     if (cart.length > 0) {
       const itemsList = cart.map((item, idx) => `${idx + 1}. ${item.quantity}x ${item.name} (${item.variantName || 'Standard'}) - ₹${item.price * item.quantity}`).join('\n');
+      const couponLine = appliedCoupon ? `\n🎟️ Coupon Applied: *${appliedCoupon.code}* (-₹${discountAmount})` : '';
       text = encodeURIComponent(
-        `Hello ${storeTitle}! I would like to order the following items via WhatsApp:\n\n${itemsList}\n\n*Total Amount: ₹${totalAmount}*\n\nPlease confirm availability & Cash on Delivery (COD) dispatch!`
+        `Hello ${storeTitle}! I would like to order the following items via WhatsApp:\n\n${itemsList}${couponLine}\n\n*Total Amount: ₹${totalAmount}*\n\nPlease confirm availability & Cash on Delivery (COD) dispatch!`
       );
     } else {
       text = encodeURIComponent(
@@ -941,6 +1044,8 @@ export const PublicStorefront = () => {
           paymentMethod,
           notes,
           attribution,
+          couponCode: appliedCoupon?.code || null,
+          discount: discountAmount || 0,
         }),
       });
 
@@ -1479,6 +1584,116 @@ export const PublicStorefront = () => {
                   </div>
                 )}
 
+                {/* Coupons / Promo Offers in Cart Drawer */}
+                {cart.length > 0 && (
+                  <div className="bg-gradient-to-br from-amber-50/70 via-indigo-50/40 to-emerald-50/40 rounded-2xl p-3.5 border border-amber-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                        <Ticket className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Coupons &amp; Offers</span>
+                      </span>
+                      {appliedCoupon && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                          Active: {appliedCoupon.code}
+                        </span>
+                      )}
+                    </div>
+
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            %
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-emerald-900 text-xs flex items-center gap-1.5">
+                              <span>{appliedCoupon.code}</span>
+                              <span className="text-[10px] font-medium text-emerald-700">({appliedCoupon.title})</span>
+                            </div>
+                            <div className="text-[11px] text-emerald-700 font-semibold">
+                              You save ₹{discountAmount} on this order!
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-white px-2.5 py-1 rounded-lg border border-rose-200 hover:border-rose-300 shadow-xs cursor-pointer active:scale-95"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="relative flex-1">
+                            <input
+                              type="text"
+                              value={couponCodeInput}
+                              onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleApplyCoupon();
+                                }
+                              }}
+                              placeholder="Enter coupon (e.g. DESI15)"
+                              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold uppercase placeholder:normal-case placeholder:font-normal focus:border-indigo-500 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyCoupon()}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer shrink-0"
+                          >
+                            Apply
+                          </button>
+                        </div>
+
+                        {couponError && (
+                          <p className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {couponError}
+                          </p>
+                        )}
+                        {couponSuccess && (
+                          <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            {couponSuccess}
+                          </p>
+                        )}
+
+                        {/* Live Available Store Deals Chips */}
+                        {((storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS)).length > 0 && (
+                          <div className="pt-1.5 border-t border-slate-200/70">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-amber-500" />
+                              <span>Live Store Discounts:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS).filter(c => c.isActive !== false).map((c) => (
+                                <button
+                                  key={c.code}
+                                  type="button"
+                                  onClick={() => handleApplyCoupon(c.code)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-dashed border-indigo-300 text-indigo-700 text-[11px] font-bold transition cursor-pointer hover:border-indigo-500 active:scale-95 shadow-2xs"
+                                  title={c.description}
+                                >
+                                  <Tag className="w-3 h-3 text-indigo-500" />
+                                  <span>{c.code}</span>
+                                  <span className="text-[10px] text-emerald-600 font-extrabold ml-0.5">
+                                    ({c.discountType === 'PERCENTAGE' ? `${c.discountValue}% OFF` : `₹${c.discountValue} FLAT`})
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Price breakdown */}
                 {cart.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs">
@@ -1486,6 +1701,15 @@ export const PublicStorefront = () => {
                       <span>Subtotal:</span>
                       <span className="text-slate-900 font-medium">₹{cartSubtotal}</span>
                     </div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between text-emerald-600 font-bold">
+                        <span className="flex items-center gap-1">
+                          <Ticket className="w-3.5 h-3.5" />
+                          <span>Coupon Discount ({appliedCoupon?.code}):</span>
+                        </span>
+                        <span>-₹{discountAmount}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-slate-600">
                       <span>Delivery Fee:</span>
                       <span className={isFreeShipping ? 'text-emerald-600 font-bold' : 'text-slate-900 font-bold'}>
@@ -1575,6 +1799,15 @@ export const PublicStorefront = () => {
                         </div>
                       ))}
                     </div>
+                    {discountAmount > 0 && (
+                      <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200 text-emerald-600 font-bold">
+                        <span className="flex items-center gap-1">
+                          <Ticket className="w-3.5 h-3.5" />
+                          <span>Coupon Discount ({appliedCoupon?.code}):</span>
+                        </span>
+                        <span>-₹{discountAmount}</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-200">
                       <span className="text-slate-500">Delivery:</span>
                       <span className={isFreeShipping ? 'text-emerald-600 font-bold' : 'text-slate-900 font-bold'}>
@@ -1585,6 +1818,48 @@ export const PublicStorefront = () => {
                       <span>Total Amount:</span>
                       <span className="text-emerald-600 text-sm">₹{totalAmount}</span>
                     </div>
+                  </div>
+                )}
+
+                {/* Checkout Quick Coupon Box */}
+                {cart.length > 0 && (
+                  <div className="bg-gradient-to-r from-amber-50/60 to-indigo-50/40 p-2.5 rounded-xl border border-amber-200/70 text-xs">
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                          <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Coupon <strong className="font-mono text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-300">{appliedCoupon.code}</strong> applied (-₹{discountAmount})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                            placeholder="Have a coupon? (e.g. DESI15)"
+                            className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold uppercase placeholder:normal-case focus:border-indigo-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleApplyCoupon()}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                        {couponError && <p className="text-[10px] text-rose-600 font-medium">{couponError}</p>}
+                        {couponSuccess && <p className="text-[10px] text-emerald-600 font-bold">{couponSuccess}</p>}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1739,6 +2014,15 @@ export const PublicStorefront = () => {
                     <span className="text-slate-500">Total Amount:</span>
                     <span className="font-bold text-emerald-600">₹{placedOrder.totalAmount}</span>
                   </div>
+                  {placedOrder.discount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>Discount ({placedOrder.couponCode || 'Promo'}):</span>
+                      </span>
+                      <span>-₹{placedOrder.discount}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-slate-500">Payment Mode:</span>
                     <span className="text-slate-900 font-semibold">{placedOrder.paymentMethod}</span>
@@ -1747,8 +2031,8 @@ export const PublicStorefront = () => {
 
                 <div className="space-y-2 pt-2">
                   <a
-                    href={`https://wa.me/91${customerPhone}?text=${encodeURIComponent(
-                      `Hi! I have placed order ${placedOrder.orderNumber} on ${store.businessName}.`
+                    href={`https://wa.me/91${(storeData?.store?.phone || store.phone || '9876543210').replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(
+                      `Hi! I have placed order ${placedOrder.orderNumber} for ₹${placedOrder.totalAmount} on ${store.businessName}. Please share dispatch tracking!`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -2056,10 +2340,15 @@ export const PublicStorefront = () => {
                 </div>
                 <p className="text-[11px] text-emerald-700">Use this coupon code at checkout or mention it in WhatsApp chat!</p>
                 <button
-                  onClick={() => setIsExitPopupOpen(false)}
-                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl"
+                  type="button"
+                  onClick={() => {
+                    handleApplyCoupon('SAVE100');
+                    setIsExitPopupOpen(false);
+                    setIsCartOpen(true);
+                  }}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 transition"
                 >
-                  Continue Shopping
+                  Apply SAVE100 &amp; View Cart
                 </button>
               </div>
             )}

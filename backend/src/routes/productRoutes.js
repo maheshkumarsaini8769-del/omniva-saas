@@ -12,6 +12,7 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
+  applyBulkDiscount,
 } = require('../controllers/productController');
 
 const allowedMerchantRoles = [
@@ -39,6 +40,10 @@ router.route('/categories')
 router.route('/categories/:id')
   .put(protect, authorize(...managerRoles), tenantScope, moduleGate('products'), updateCategory)
   .delete(protect, authorize(...managerRoles), tenantScope, moduleGate('products'), deleteCategory);
+
+// Bulk Discount
+router.route('/products/bulk-discount')
+  .post(protect, authorize(...managerRoles), tenantScope, moduleGate('products'), applyBulkDiscount);
 
 // Products
 router.route('/products')
