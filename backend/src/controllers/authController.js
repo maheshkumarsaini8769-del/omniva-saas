@@ -122,9 +122,11 @@ const login = async (req, res) => {
     // Cloud Demo Mode Fallback if MongoDB is not connected
     if (mongoose.connection.readyState !== 1) {
       const normEmail = (email || '').toLowerCase().trim();
+      const validPass = ['password123', 'admin123', 'rahul@123', 'admin@123'].includes((password || '').toLowerCase());
+
       if (
         (normEmail === 'rahul@desirasoi.com' || normEmail === 'demo@omniva.io' || normEmail === 'admin@omniva.io') &&
-        (password === 'password123' || password === 'admin123')
+        validPass
       ) {
         const token = generateToken({
           id: '6acf096038d323550330be65',
@@ -169,9 +171,53 @@ const login = async (req, res) => {
         });
       }
 
+      if (normEmail === 'vikram@royalfilms.com' && validPass) {
+        const token = generateToken({
+          id: '6acf096038d323550330be70',
+          role: 'MERCHANT_OWNER',
+          businessId: '6acf096038d323550330be71',
+        });
+        return res.json({
+          success: true,
+          message: 'Studio Login successful (Cloud Demo Mode)',
+          token,
+          user: {
+            id: '6acf096038d323550330be70',
+            name: 'Vikram Singh',
+            email: 'vikram@royalfilms.com',
+            role: 'MERCHANT_OWNER',
+            phone: '9876543211',
+          },
+          tenant: {
+            id: '6acf096038d323550330be71',
+            businessName: 'Royal Films Studio',
+            slug: 'royal-films-studio-1',
+            businessType: 'SERVICE',
+            templateCode: 'SERVICE',
+            enabledModules: {
+              automations: true,
+              crmLeads: true,
+              marketingAds: true,
+              products: false,
+              serviceBookings: true,
+              travelBookings: true,
+              inventory: false,
+              orders: false,
+            },
+            planTier: 'GROWTH',
+            status: 'ACTIVE',
+            branding: {
+              logo: '',
+              primaryColor: '#f59e0b',
+              secondaryColor: '#ec4899',
+            },
+          },
+        });
+      }
+
       if (
         (normEmail === 'superadmin@omniva.io' || normEmail === 'superadmin@admin.com') &&
-        (password === 'password123' || password === 'admin123')
+        validPass
       ) {
         const token = generateToken({
           id: '6acf096038d323550330be63',

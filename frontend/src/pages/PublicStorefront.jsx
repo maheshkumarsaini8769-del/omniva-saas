@@ -1054,6 +1054,11 @@ export const PublicStorefront = () => {
         setPlacedOrder(data.data);
         setCheckoutStep('SUCCESS');
         setCart([]);
+        try {
+          const existing = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
+          const updated = [data.data, ...existing.filter((o) => o.orderNumber !== data.data.orderNumber)];
+          localStorage.setItem('omniva_live_orders', JSON.stringify(updated.slice(0, 50)));
+        } catch (e) {}
       } else {
         alert(data.message || 'Failed to place order');
       }

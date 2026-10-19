@@ -9,6 +9,7 @@ const Coupon = require('../models/Coupon');
 const { DEFAULT_COUPONS } = require('./couponController');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
+const { addStoredOrder } = require('../utils/sharedOrderStore');
 
 // @desc    Get public storefront data (Tenant info, categories, active products, service packages)
 // @route   GET /api/public/store/:slug
@@ -684,30 +685,35 @@ const createPublicOrder = async (req, res) => {
       const totalAmount = Math.max(0, calcSubtotal - appliedDiscount + shippingFee);
       const trackingUrl = `https://omniva-saas.vercel.app/orders/track?orderNumber=${orderNumber}&phone=${cleanCustomerPhone}`;
 
+      const createdOrderData = {
+        _id: `ord_${Date.now()}`,
+        orderId: `ord_${Date.now()}`,
+        orderNumber,
+        businessId: '6acf096038d323550330be64',
+        customerName,
+        customerPhone: cleanCustomerPhone,
+        customerEmail: customerEmail || '',
+        shippingAddress,
+        items: orderItems,
+        subtotal: calcSubtotal,
+        shippingFee,
+        discount: appliedDiscount,
+        couponCode: cleanCouponCode,
+        totalAmount,
+        paymentMethod,
+        paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',
+        orderStatus: 'NEW',
+        trackingUrl,
+        itemsCount: orderItems.length,
+        createdAt: new Date(),
+      };
+
+      addStoredOrder(createdOrderData);
+
       return res.status(201).json({
         success: true,
         message: 'Order placed successfully',
-        data: {
-          _id: `ord_${Date.now()}`,
-          orderId: `ord_${Date.now()}`,
-          orderNumber,
-          customerName,
-          customerPhone: cleanCustomerPhone,
-          customerEmail: customerEmail || '',
-          shippingAddress,
-          items: orderItems,
-          subtotal: calcSubtotal,
-          shippingFee,
-          discount: appliedDiscount,
-          couponCode: cleanCouponCode,
-          totalAmount,
-          paymentMethod,
-          paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',
-          orderStatus: 'NEW',
-          trackingUrl,
-          itemsCount: orderItems.length,
-          createdAt: new Date(),
-        },
+        data: createdOrderData,
       });
     }
 
@@ -985,6 +991,8 @@ const createPublicOrder = async (req, res) => {
       }).catch((capiErr) => console.error('[CAPI Purchase Event Error]:', capiErr.message));
     }
 
+    addStoredOrder(order.toObject ? order.toObject() : order);
+
     res.status(201).json({
       success: true,
       message: 'Order placed successfully',
@@ -1024,23 +1032,27 @@ const createPublicOrder = async (req, res) => {
     });
     const fee = subtotal >= 499 ? 0 : 50;
 
+    const catchOrderData = {
+      _id: `ord_${Date.now()}`,
+      orderId: `ord_${Date.now()}`,
+      orderNumber: fallbackOrderNumber,
+      customerName: req.body?.customerName || 'Customer',
+      customerPhone: cleanPhone,
+      totalAmount: subtotal + fee,
+      paymentMethod: req.body?.paymentMethod || 'COD',
+      orderStatus: 'NEW',
+      shippingFee: fee,
+      itemsCount: formattedItems.length,
+      items: formattedItems,
+      createdAt: new Date(),
+    };
+
+    addStoredOrder(catchOrderData);
+
     return res.status(201).json({
       success: true,
       message: 'Order placed successfully',
-      data: {
-        _id: `ord_${Date.now()}`,
-        orderId: `ord_${Date.now()}`,
-        orderNumber: fallbackOrderNumber,
-        customerName: req.body?.customerName || 'Customer',
-        customerPhone: cleanPhone,
-        totalAmount: subtotal + fee,
-        paymentMethod: req.body?.paymentMethod || 'COD',
-        orderStatus: 'NEW',
-        shippingFee: fee,
-        itemsCount: formattedItems.length,
-        items: formattedItems,
-        createdAt: new Date(),
-      },
+      data: catchOrderData,
     });
   }
 };
