@@ -10,8 +10,8 @@ const sanitizeObject = (obj) => {
 
   const cleaned = {};
   for (const [key, val] of Object.entries(obj)) {
-    // Strip keys with leading $ or containing . (except in allowed nested objects)
-    if (key.startsWith('$') || key.includes('.')) {
+    // Strip keys with leading $ or containing . (allow Meta webhook hub.* query parameters)
+    if (key.startsWith('$') || (key.includes('.') && !key.startsWith('hub.'))) {
       continue;
     }
     if (typeof val === 'object' && val !== null) {

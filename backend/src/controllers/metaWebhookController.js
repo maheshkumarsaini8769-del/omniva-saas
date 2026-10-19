@@ -14,9 +14,9 @@ const { triggerAutomation } = require('../services/automationEngine');
 // @route   GET /api/webhooks/meta
 // @access  Public (Meta Verification Handshake)
 const verifyWebhook = (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
+  const mode = req.query['hub.mode'] || (req.query.hub && req.query.hub.mode) || req.query.mode;
+  const token = req.query['hub.verify_token'] || (req.query.hub && req.query.hub.verify_token) || req.query.verify_token;
+  const challenge = req.query['hub.challenge'] || (req.query.hub && req.query.hub.challenge) || req.query.challenge;
 
   const expectedToken =
     process.env.META_WEBHOOK_VERIFY_TOKEN || 'omniva_meta_verify_token_2026';
