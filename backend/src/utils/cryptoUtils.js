@@ -119,11 +119,13 @@ const verifyOAuthState = (stateString) => {
     const secret = process.env.META_APP_SECRET || process.env.JWT_SECRET || 'oauth_state_signing_secret';
     const expectedHmac = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
-    // Constant-time comparison to prevent timing attacks
-    const hmacMatches = crypto.timingSafeEqual(
-      Buffer.from(receivedHmac, 'hex'),
-      Buffer.from(expectedHmac, 'hex')
-    );
+    // Constant-time comparison to prevent timing attacks.
+    // timingSafeEqual throws when buffer lengths differ.
+    const receivedBuf = Buffer.from(receivedHmac, 'hex');
+    const expectedBuf = Buffer.from(expectedHmac, 'hex');
+    const hmacMatches =
+      receivedBuf.length === expectedBuf.length &&
+      crypto.timingSafeEqual(receivedBuf, expectedBuf);
 
     if (!hmacMatches) {
       console.warn('[cryptoUtils] OAuth state HMAC signature mismatch');

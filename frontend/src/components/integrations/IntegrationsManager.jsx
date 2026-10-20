@@ -33,6 +33,8 @@ export const IntegrationsManager = () => {
   const [savingKey, setSavingKey] = useState(null); // 'all' or section name
   const [testingKey, setTestingKey] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastError, setToastError] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [showSecrets, setShowSecrets] = useState({});
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
@@ -71,8 +73,9 @@ export const IntegrationsManager = () => {
   // Reference for dirty state checking
   const [initialState, setInitialState] = useState(null);
 
-  const showToast = (msg) => {
+  const showToast = (msg, isError = false) => {
     setToastMessage(msg);
+    setToastError(isError);
     setTimeout(() => setToastMessage(''), 4500);
   };
 
@@ -95,10 +98,15 @@ export const IntegrationsManager = () => {
         if (data.success && data.integrations) {
           setIntegrations(data.integrations);
           setInitialState(JSON.stringify(data.integrations));
+          setLoadError('');
+        } else {
+          setLoadError(data.message || 'The server did not return integration settings.');
         }
+      } else {
+        setLoadError(`Unable to load integration settings (status ${res.status}).`);
       }
     } catch (err) {
-      console.warn('Fallback loading integrations:', err);
+      setLoadError(err.message || 'Unable to load integration settings from the server.');
     } finally {
       setLoading(false);
     }
@@ -143,18 +151,17 @@ export const IntegrationsManager = () => {
         body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.integrations) {
-          setIntegrations(data.integrations);
-          setInitialState(JSON.stringify(data.integrations));
-        }
-        showToast(`✓ ${sectionKey.toUpperCase()} settings saved successfully!`);
-      } else {
-        showToast('Settings updated.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Save failed with status ${res.status}`);
       }
+      if (data.integrations) {
+        setIntegrations(data.integrations);
+        setInitialState(JSON.stringify(data.integrations));
+      }
+      showToast(`${sectionKey.toUpperCase()} settings saved successfully.`);
     } catch (err) {
-      showToast('Settings saved locally.');
+      showToast(err.message || 'Unable to save integration settings.', true);
     } finally {
       setSavingKey(null);
     }
@@ -174,18 +181,17 @@ export const IntegrationsManager = () => {
         body: JSON.stringify(integrations),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.integrations) {
-          setIntegrations(data.integrations);
-          setInitialState(JSON.stringify(data.integrations));
-        }
-        showToast('✓ All integration channels saved and synchronized successfully!');
-      } else {
-        showToast('Integration settings updated.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Save failed with status ${res.status}`);
       }
+      if (data.integrations) {
+        setIntegrations(data.integrations);
+        setInitialState(JSON.stringify(data.integrations));
+      }
+      showToast('All integration channels saved and synchronized.');
     } catch (err) {
-      showToast('Settings saved locally.');
+      showToast(err.message || 'Unable to save integration settings.', true);
     } finally {
       setSavingKey(null);
     }
@@ -208,30 +214,27 @@ export const IntegrationsManager = () => {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setTestResults((prev) => ({
-          ...prev,
-          [serviceType]: {
-            success: true,
-            message: data.message || 'Connection test successful!',
-            timestamp: data.timestamp || new Date().toLocaleTimeString(),
-          },
-        }));
-        showToast(`⚡ ${data.message || 'Connection test successful!'}`);
-      } else {
-        setTestResults((prev) => ({
-          ...prev,
-          [serviceType]: {
-            success: true,
-            message: 'Connection verified healthy.',
-            timestamp: new Date().toLocaleTimeString(),
-          },
-        }));
-        showToast('Connection verified.');
-      }
+      const data = await res.json().catch(() => ({}));
+      const success = res.ok && data.success !== false;
+      setTestResults((prev) => ({
+        ...prev,
+        [serviceType]: {
+          success,
+          message: data.message || (success ? 'Connection test successful.' : `Connection test failed (status ${res.status}).`),
+          timestamp: data.timestamp || new Date().toLocaleTimeString(),
+        },
+      }));
+      showToast(data.message || (success ? 'Connection test successful.' : 'Connection test failed.'), !success);
     } catch (err) {
-      showToast('Connection verified.');
+      setTestResults((prev) => ({
+        ...prev,
+        [serviceType]: {
+          success: false,
+          message: err.message || 'Connection test failed.',
+          timestamp: new Date().toLocaleTimeString(),
+        },
+      }));
+      showToast(err.message || 'Connection test failed.', true);
     } finally {
       setTestingKey(null);
     }
@@ -285,11 +288,22 @@ export const IntegrationsManager = () => {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/40 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top duration-300">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          {toastError ? (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage('')} className="ml-2 text-slate-400 hover:text-white cursor-pointer">
             ✕
           </button>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{loadError}</span>
         </div>
       )}
 
@@ -631,7 +645,7 @@ export const IntegrationsManager = () => {
               className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Play className={`w-3 h-3 ${testingKey === 'whatsapp' ? 'animate-spin' : ''}`} />
-              <span>{testingKey === 'whatsapp' ? 'Verifying...' : 'Verify Number'}</span>
+              <span>{testingKey === 'whatsapp' ? 'Checking...' : 'Build Chat Link'}</span>
             </button>
 
             <button
@@ -764,7 +778,7 @@ export const IntegrationsManager = () => {
               className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Play className={`w-3 h-3 ${testingKey === 'payment' ? 'animate-spin' : ''}`} />
-              <span>{testingKey === 'payment' ? 'Checking...' : 'Test Gateway Keys'}</span>
+              <span>{testingKey === 'payment' ? 'Checking...' : 'Validate Key Format'}</span>
             </button>
 
             <button
@@ -900,7 +914,7 @@ export const IntegrationsManager = () => {
               className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Play className={`w-3 h-3 ${testingKey === 'courier' ? 'animate-spin' : ''}`} />
-              <span>{testingKey === 'courier' ? 'Checking...' : 'Check Serviceability'}</span>
+              <span>{testingKey === 'courier' ? 'Checking...' : 'Validate Config'}</span>
             </button>
 
             <button
@@ -1005,7 +1019,7 @@ export const IntegrationsManager = () => {
               className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Play className={`w-3 h-3 ${testingKey === 'webhooks' ? 'animate-spin' : ''}`} />
-              <span>{testingKey === 'webhooks' ? 'Sending...' : 'Send Test Ping'}</span>
+              <span>{testingKey === 'webhooks' ? 'Checking...' : 'Validate URL'}</span>
             </button>
 
             <button

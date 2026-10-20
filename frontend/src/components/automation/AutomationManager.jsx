@@ -42,6 +42,8 @@ export const AutomationManager = () => {
   const [editingRule, setEditingRule] = useState(null);
   const [selectedLogForDetail, setSelectedLogForDetail] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [toastError, setToastError] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [testingRuleId, setTestingRuleId] = useState(null);
 
   // New / Edit Rule Form State
@@ -53,176 +55,21 @@ export const AutomationManager = () => {
     conditionValue: '',
     actionType: 'SEND_WHATSAPP',
     actionTarget: 'customer',
-    actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been confirmed at Desi Achar House. We will dispatch your freshly packed parcel shortly. Thank you!',
+    actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been confirmed. We will dispatch your order shortly. Thank you!',
   });
 
   const getToken = () => localStorage.getItem('omniva_token') || localStorage.getItem('token') || '';
 
-  const showToast = (msg) => {
+  const showToast = (msg, isError = false) => {
     setToastMessage(msg);
+    setToastError(isError);
     setTimeout(() => setToastMessage(''), 4000);
   };
-
-  const DEFAULT_RULES = [
-    {
-      _id: 'rule_01',
-      id: 'rule_01',
-      name: 'Order Placed Instant WhatsApp Confirmation',
-      trigger: 'ORDER_CREATED',
-      isActive: true,
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: 'customer',
-        template: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been received at Desi Achar House. We are preparing your fresh artisanal pickles for dispatch.'
-      },
-      executionCount: 142,
-      lastRunAt: '12 mins ago',
-      successRate: '100%'
-    },
-    {
-      _id: 'rule_02',
-      id: 'rule_02',
-      name: 'Order Dispatched Courier Tracking Alert',
-      trigger: 'ORDER_SHIPPED',
-      isActive: true,
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: 'customer',
-        template: 'Hello {{customerName}}! Your order {{orderNumber}} has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Live parcel tracking: {{trackingUrl}}'
-      },
-      executionCount: 89,
-      lastRunAt: '35 mins ago',
-      successRate: '100%'
-    },
-    {
-      _id: 'rule_03',
-      id: 'rule_03',
-      name: 'Duplicate / Double Order Verification Alert',
-      trigger: 'ORDER_CREATED',
-      isActive: true,
-      condition: { field: 'isDuplicate', operator: 'EQUALS', value: 'true' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: 'customer',
-        template: 'Hello {{customerName}}! We noticed duplicate orders placed from your phone number for Desi Achar House. Could you please confirm if you would like both parcels shipped?'
-      },
-      executionCount: 23,
-      lastRunAt: '2 hours ago',
-      successRate: '96%'
-    },
-    {
-      _id: 'rule_04',
-      id: 'rule_04',
-      name: 'Meta Ads Lead Instant WhatsApp Greeting',
-      trigger: 'LEAD_INGESTED',
-      isActive: true,
-      condition: { field: 'source', operator: 'EQUALS', value: 'INSTAGRAM' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: 'customer',
-        template: 'Hello {{customerName}}! Thank you for enquiring on our Instagram Ad. Check out our handcrafted pickles menu and use coupon code DESI15 for 15% off your first order!'
-      },
-      executionCount: 215,
-      lastRunAt: '5 mins ago',
-      successRate: '99%'
-    },
-    {
-      _id: 'rule_05',
-      id: 'rule_05',
-      name: 'Outbound ERP / Google Sheets Webhook Sync',
-      trigger: 'ORDER_CONFIRMED',
-      isActive: true,
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'OUTBOUND_WEBHOOK',
-        target: 'https://hooks.zapier.com/hooks/catch/desiachar/orders',
-        template: '{"orderId":"{{orderNumber}}","amount":{{totalAmount}},"customer":"{{customerName}}"}'
-      },
-      executionCount: 74,
-      lastRunAt: '1 hour ago',
-      successRate: '100%'
-    },
-    {
-      _id: 'rule_06',
-      id: 'rule_06',
-      name: 'Low Stock Kitchen Alert (Stock < 10 Jars)',
-      trigger: 'STOCK_LOW',
-      isActive: true,
-      condition: { field: 'stock', operator: 'LESS_THAN', value: '10' },
-      action: {
-        type: 'IN_APP_ALERT',
-        target: 'merchant_admin',
-        template: '⚠️ Low Stock Alert: {{productName}} inventory is below 10 jars. Please prepare a new batch!'
-      },
-      executionCount: 16,
-      lastRunAt: 'Yesterday',
-      successRate: '100%'
-    }
-  ];
-
-  const DEFAULT_LOGS = [
-    {
-      id: 'log_901',
-      ruleName: 'Order Dispatched Courier Tracking Alert',
-      trigger: 'ORDER_SHIPPED',
-      actionType: 'SEND_WHATSAPP',
-      recipient: '+91 98290 88219 (Vikramaditya S.)',
-      status: 'SUCCESS',
-      statusCode: 200,
-      timestamp: 'Just now',
-      details: 'WhatsApp tracking message dispatched with Delhivery AWB DEL-8492014 & live link'
-    },
-    {
-      id: 'log_902',
-      ruleName: 'Meta Ads Lead Instant WhatsApp Greeting',
-      trigger: 'LEAD_INGESTED',
-      actionType: 'SEND_WHATSAPP',
-      recipient: '+91 98112 33445 (Priya Sharma)',
-      status: 'SUCCESS',
-      statusCode: 200,
-      timestamp: '5 mins ago',
-      details: 'Instant greeting sent with 15% discount coupon DESI15'
-    },
-    {
-      id: 'log_903',
-      ruleName: 'Order Placed Instant WhatsApp Confirmation',
-      trigger: 'ORDER_CREATED',
-      actionType: 'SEND_WHATSAPP',
-      recipient: '+91 94140 12398 (Anil Choudhary)',
-      status: 'SUCCESS',
-      statusCode: 200,
-      timestamp: '18 mins ago',
-      details: 'Order #ORD-7491 confirmation message delivered'
-    },
-    {
-      id: 'log_904',
-      ruleName: 'Outbound ERP / Google Sheets Webhook Sync',
-      trigger: 'ORDER_CONFIRMED',
-      actionType: 'OUTBOUND_WEBHOOK',
-      recipient: 'https://hooks.zapier.com/hooks/catch/desiachar/orders',
-      status: 'SUCCESS',
-      statusCode: 200,
-      timestamp: '32 mins ago',
-      details: 'Payload dispatched successfully, HTTP 200 OK from Zapier webhook'
-    },
-    {
-      id: 'log_905',
-      ruleName: 'Duplicate / Double Order Verification Alert',
-      trigger: 'ORDER_CREATED',
-      actionType: 'SEND_WHATSAPP',
-      recipient: '+91 98290 77665 (Sunil Verma)',
-      status: 'SUCCESS',
-      statusCode: 200,
-      timestamp: '1 hour ago',
-      details: 'Flagged duplicate order #ORD-7489, customer verified 1 parcel only'
-    }
-  ];
 
   const fetchRulesAndLogs = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const token = getToken();
       const headers = {
         'Content-Type': 'application/json',
@@ -234,15 +81,19 @@ export const AutomationManager = () => {
         fetch(`${API_BASE}/logs`, { headers }).catch(() => null)
       ]);
 
+      const failed = [];
+
       if (rulesRes && rulesRes.ok) {
         const rulesData = await rulesRes.json().catch(() => ({}));
         if (rulesData.success && Array.isArray(rulesData.data)) {
           setRules(rulesData.data);
         } else {
-          setRules(DEFAULT_RULES);
+          setRules([]);
+          failed.push('rules');
         }
       } else {
-        setRules(DEFAULT_RULES);
+        setRules([]);
+        failed.push('rules');
       }
 
       if (logsRes && logsRes.ok) {
@@ -250,15 +101,21 @@ export const AutomationManager = () => {
         if (logsData.success && Array.isArray(logsData.data)) {
           setLogs(logsData.data);
         } else {
-          setLogs(DEFAULT_LOGS);
+          setLogs([]);
+          failed.push('logs');
         }
       } else {
-        setLogs(DEFAULT_LOGS);
+        setLogs([]);
+        failed.push('logs');
+      }
+
+      if (failed.length > 0) {
+        setLoadError(`Unable to load automation ${failed.join(' and ')} from the server.`);
       }
     } catch (err) {
-      console.warn('Using default automation rules fallback:', err);
-      setRules(DEFAULT_RULES);
-      setLogs(DEFAULT_LOGS);
+      setRules([]);
+      setLogs([]);
+      setLoadError(err.message || 'Unable to load automation data from the server.');
     } finally {
       setLoading(false);
     }
@@ -272,10 +129,6 @@ export const AutomationManager = () => {
     const newStatus = !rule.isActive;
     const ruleId = rule._id || rule.id;
 
-    // Optimistic UI update
-    setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? { ...r, isActive: newStatus } : r)));
-    showToast(newStatus ? `⚡ Rule "${rule.name}" activated!` : `⏸️ Rule "${rule.name}" paused.`);
-
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE}/rules/${ruleId}`, {
@@ -286,14 +139,15 @@ export const AutomationManager = () => {
         },
         body: JSON.stringify({ isActive: newStatus })
       });
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.success && data.data) {
-          setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? data.data : r)));
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.message || `Unable to update the rule (status ${res.status}).`);
       }
+
+      setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? data.data : r)));
+      showToast(newStatus ? `Rule "${rule.name}" activated.` : `Rule "${rule.name}" paused.`);
     } catch (err) {
-      console.warn('Rule toggle updated locally:', err);
+      showToast(err.message || 'Unable to update the automation rule.', true);
     }
   };
 
@@ -301,27 +155,22 @@ export const AutomationManager = () => {
     const ruleId = rule._id || rule.id;
     setTestingRuleId(ruleId);
 
-    const testMockData = {
-      customerName: 'Rahul Sharma',
-      orderNumber: 'ORD-9821',
-      totalAmount: '1,299',
-      courierName: 'Delhivery Express',
-      trackingNumber: 'DEL-8492014',
-      trackingUrl: `${window.location.origin}/orders/track?orderNumber=ORD-9821&phone=9829012345`,
-      productName: 'Kair Sangri Handcrafted Pickle (1kg)',
-      menuUrl: `${window.location.origin}/store/desi-achar-house`,
-      source: 'INSTAGRAM',
+    const testPayload = {
+      customerName: 'Test Customer',
+      orderNumber: 'TEST-ORDER',
+      totalAmount: '0',
+      courierName: 'Test Courier',
+      trackingNumber: 'TEST-TRACKING',
+      trackingUrl: `${window.location.origin}/orders/track`,
+      productName: 'Test Product',
+      menuUrl: window.location.origin,
+      source: 'TEST',
       isDuplicate: 'false',
     };
 
-    let processedMsg = rule.action?.template || '';
-    Object.keys(testMockData).forEach(k => {
-      processedMsg = processedMsg.replaceAll(`{{${k}}}`, testMockData[k]);
-    });
-
     try {
       const token = getToken();
-      await fetch(`${API_BASE}/test`, {
+      const res = await fetch(`${API_BASE}/test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -329,53 +178,32 @@ export const AutomationManager = () => {
         },
         body: JSON.stringify({
           trigger: rule.trigger,
-          ruleId: rule._id || rule.id,
-          testData: testMockData
+          ruleId,
+          testData: testPayload
         })
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Test request failed (status ${res.status}).`);
+      }
 
-      // Increment execution counter in local state
-      setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? {
-        ...r,
-        executionCount: (r.executionCount || 0) + 1,
-        lastRunAt: 'Just now'
-      } : r)));
-
-      // Refetch live audit logs from backend
-      const logsRes = await fetch(`${API_BASE}/logs`, {
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(() => null);
-
-      if (logsRes && logsRes.ok) {
-        const logsData = await logsRes.json().catch(() => ({}));
-        if (logsData.success && Array.isArray(logsData.data)) {
-          setLogs(logsData.data);
-        }
+      const matched = Array.isArray(data.results) ? data.results.length : 0;
+      if (data.dryRun) {
+        showToast(
+          matched > 0
+            ? `Test validated ${matched} rule(s). No external messages or webhooks were sent.`
+            : 'Test evaluated. No rules matched the supplied test data.'
+        );
       } else {
-        // Prepend simulated log
-        const newLog = {
-          id: 'log_' + Date.now(),
-          ruleName: rule.name,
-          trigger: rule.trigger,
-          actionType: rule.action?.type || 'SEND_WHATSAPP',
-          recipient: rule.action?.target === 'customer' ? '+91 98290 12345 (Rahul Sharma)' : (rule.action?.target || 'Customer'),
-          status: 'SUCCESS',
-          statusCode: 200,
-          timestamp: 'Just now (Simulated Test)',
-          details: processedMsg
-        };
-        setLogs(prev => [newLog, ...prev]);
+        showToast(
+          matched > 0
+            ? `Test evaluated. ${matched} action result(s) returned by the server.`
+            : 'Test evaluated. No action results were returned.'
+        );
       }
-
-      showToast(`🚀 Test Trigger Success: "${rule.name}" fired! Check Live Audit Logs.`);
-
-      // If WhatsApp action, offer to preview live on WhatsApp
-      if (rule.action?.type === 'SEND_WHATSAPP') {
-        const waUrl = `https://wa.me/919829012345?text=${encodeURIComponent(processedMsg)}`;
-        window.open(waUrl, '_blank');
-      }
+      await fetchRulesAndLogs();
     } catch (err) {
-      showToast(`Rule evaluated locally with test payload.`);
+      showToast(err.message || 'Unable to run the automation test.', true);
     } finally {
       setTestingRuleId(null);
     }
@@ -383,24 +211,28 @@ export const AutomationManager = () => {
 
   const handleDeleteRule = async (ruleId) => {
     if (!window.confirm('Are you sure you want to delete this automation rule?')) return;
-    setRules(prev => prev.filter(r => r._id !== ruleId && r.id !== ruleId));
-    showToast('Automation rule deleted successfully.');
 
     try {
       const token = getToken();
-      await fetch(`${API_BASE}/rules/${ruleId}`, {
+      const res = await fetch(`${API_BASE}/rules/${ruleId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Delete failed with status ${res.status}`);
+      }
+      setRules(prev => prev.filter(r => r._id !== ruleId && r.id !== ruleId));
+      showToast('Automation rule deleted.');
     } catch (err) {
-      console.warn('Deleted locally:', err);
+      showToast(err.message || 'Unable to delete the automation rule.', true);
     }
   };
 
   const handleSaveRule = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      alert('Please enter a rule name');
+      showToast('Please enter a rule name.', true);
       return;
     }
 
@@ -417,65 +249,38 @@ export const AutomationManager = () => {
         target: form.actionTarget,
         template: form.actionTemplate,
       },
-      isActive: true,
+      isActive: editingRule ? editingRule.isActive : true,
     };
 
-    const tempId = editingRule ? (editingRule._id || editingRule.id) : ('temp_rule_' + Date.now());
-
-    if (editingRule) {
-      setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? { ...r, ...payload } : r)));
-      showToast(`Rule "${form.name}" updated successfully!`);
-    } else {
-      const optimisticRule = {
-        ...payload,
-        _id: tempId,
-        id: tempId,
-        executionCount: 0,
-        lastRunAt: 'Never',
-        successRate: '100%'
-      };
-      setRules(prev => [optimisticRule, ...prev]);
-      showToast(`⚡ New automation rule "${form.name}" created and active!`);
-    }
-
-    setShowCreateModal(false);
-    setEditingRule(null);
+    const ruleId = editingRule ? (editingRule._id || editingRule.id) : null;
 
     try {
       const token = getToken();
-      if (editingRule) {
-        const res = await fetch(`${API_BASE}/rules/${tempId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (data.success && data.data) {
-            setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? data.data : r)));
-          }
-        }
-      } else {
-        const res = await fetch(`${API_BASE}/rules`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (data.success && data.data) {
-            setRules(prev => prev.map(r => (r._id === tempId || r.id === tempId ? data.data : r)));
-          }
-        }
+      const res = await fetch(ruleId ? `${API_BASE}/rules/${ruleId}` : `${API_BASE}/rules`, {
+        method: ruleId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.message || `Unable to save the rule (status ${res.status}).`);
       }
+
+      if (ruleId) {
+        setRules(prev => prev.map(r => (r._id === ruleId || r.id === ruleId ? data.data : r)));
+        showToast(`Rule "${payload.name}" updated.`);
+      } else {
+        setRules(prev => [data.data, ...prev]);
+        showToast(`Automation rule "${payload.name}" created.`);
+      }
+
+      setShowCreateModal(false);
+      setEditingRule(null);
     } catch (err) {
-      console.warn('Saved locally:', err);
+      showToast(err.message || 'Unable to save the automation rule.', true);
     }
   };
 
@@ -502,37 +307,27 @@ export const AutomationManager = () => {
       conditionValue: '',
       actionType: 'SEND_WHATSAPP',
       actionTarget: 'customer',
-      actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} is confirmed at Desi Achar House. We will dispatch your package shortly.'
+      actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been confirmed. We will dispatch your order shortly.'
     },
     {
-      name: 'Courier Dispatched with Live Tracking Link',
+      name: 'Courier Dispatched with Tracking Link',
       trigger: 'ORDER_SHIPPED',
       conditionField: 'always',
       conditionOperator: 'ALWAYS',
       conditionValue: '',
       actionType: 'SEND_WHATSAPP',
       actionTarget: 'customer',
-      actionTemplate: 'Hello {{customerName}}! 🚚 Your parcel has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Live location: {{trackingUrl}}'
+      actionTemplate: 'Hello {{customerName}}! 🚚 Your parcel has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Tracking link: {{trackingUrl}}'
     },
     {
-      name: 'Abandoned Cart 10% Discount Recovery',
-      trigger: 'ABANDONED_CHECKOUT',
-      conditionField: 'always',
-      conditionOperator: 'ALWAYS',
-      conditionValue: '',
-      actionType: 'SEND_WHATSAPP',
-      actionTarget: 'customer',
-      actionTemplate: 'Hello {{customerName}}! You left handcrafted pickles in your cart. Complete your order now and enjoy 10% off with coupon code: ACHAR10.'
-    },
-    {
-      name: 'Meta Ads Lead Welcome Greeting',
+      name: 'Meta Lead Welcome Greeting',
       trigger: 'LEAD_INGESTED',
       conditionField: 'source',
       conditionOperator: 'EQUALS',
-      conditionValue: 'INSTAGRAM',
+      conditionValue: 'META_ADS',
       actionType: 'SEND_WHATSAPP',
       actionTarget: 'customer',
-      actionTemplate: 'Hello {{customerName}}! Thank you for reaching out via our Instagram ad. View our complete catalog of homemade pickles here: {{menuUrl}}'
+      actionTemplate: 'Hello {{customerName}}! Thank you for reaching out. View our catalog here: {{menuUrl}}'
     }
   ];
 
@@ -558,8 +353,10 @@ export const AutomationManager = () => {
         return { label: '🚚 Order Shipped / Dispatched', color: 'bg-purple-50 text-purple-800 border-purple-200' };
       case 'LEAD_INGESTED':
         return { label: '🎯 Meta Ads Lead Ingested', color: 'bg-pink-50 text-pink-800 border-pink-200' };
-      case 'ABANDONED_CHECKOUT':
-        return { label: '⏳ Abandoned Checkout', color: 'bg-amber-50 text-amber-800 border-amber-200' };
+      case 'BOOKING_CREATED':
+        return { label: '📅 Booking Requested', color: 'bg-cyan-50 text-cyan-800 border-cyan-200' };
+      case 'BOOKING_CONFIRMED':
+        return { label: '✅ Booking Confirmed', color: 'bg-teal-50 text-teal-800 border-teal-200' };
       case 'STOCK_LOW':
         return { label: '⚠️ Low Stock Alert', color: 'bg-rose-50 text-rose-800 border-rose-200' };
       default:
@@ -588,9 +385,20 @@ export const AutomationManager = () => {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-indigo-500/40 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top duration-300">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          {toastError ? (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMessage}</span>
           <button onClick={() => setToastMessage('')} className="ml-2 text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{loadError}</span>
         </div>
       )}
 
@@ -604,7 +412,7 @@ export const AutomationManager = () => {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-extrabold text-white">Workflows &amp; Automation Engine</h2>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold uppercase">
-                Active 24/7
+                Tenant-scoped
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -652,7 +460,7 @@ export const AutomationManager = () => {
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Active Rules
           </div>
           <div className="text-2xl font-black text-slate-900 mt-1">{activeCount} / {rules.length}</div>
-          <div className="text-[11px] text-emerald-600 font-bold mt-0.5">Running in real-time</div>
+          <div className="text-[11px] text-emerald-600 font-bold mt-0.5">Active on incoming triggers</div>
         </div>
 
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs">
@@ -786,9 +594,15 @@ export const AutomationManager = () => {
                         <div className="text-xs text-slate-500 flex items-center gap-3">
                           <span>Executions: <strong className="text-slate-800">{rule.executionCount || 0} times</strong></span>
                           <span>·</span>
-                          <span>Last Run: <strong className="text-slate-800">{rule.lastRunAt || 'Never'}</strong></span>
-                          <span>·</span>
-                          <span className="text-emerald-700 font-bold">Success: {rule.successRate || '100%'}</span>
+                          <span>
+                            Last Run:{' '}
+                            <strong className="text-slate-800">
+                              {rule.lastRunAt ||
+                                (rule.lastExecutedAt
+                                  ? new Date(rule.lastExecutedAt).toLocaleString()
+                                  : 'Never')}
+                            </strong>
+                          </span>
                         </div>
                       </div>
 
@@ -800,7 +614,7 @@ export const AutomationManager = () => {
                           disabled={isTesting}
                           onClick={() => handleTestRule(rule)}
                           className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                          title="Simulate test run with mock order data"
+                          title="Run a test evaluation with sample data"
                         >
                           <Play className={`w-3 h-3 text-indigo-600 ${isTesting ? 'animate-spin' : ''}`} />
                           <span>{isTesting ? 'Testing...' : '⚡ Test Trigger'}</span>
@@ -879,8 +693,8 @@ export const AutomationManager = () => {
         <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
           <div className="p-4 px-6 border-b border-slate-200/80 flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">Live Automation Execution Logs</h3>
-              <p className="text-[11px] text-slate-400">Real-time trace of triggered workflows, WhatsApp message deliveries, and webhooks</p>
+              <h3 className="font-bold text-slate-900 text-sm">Automation Execution Logs</h3>
+              <p className="text-[11px] text-slate-400">Recorded trace of workflow triggers, WhatsApp attempts, and webhooks</p>
             </div>
             <button
               onClick={fetchRulesAndLogs}
@@ -975,7 +789,7 @@ export const AutomationManager = () => {
                   <Zap className="w-5 h-5 text-indigo-600" />
                   <span>{editingRule ? 'Edit Automation Rule' : 'Create New Automation Rule'}</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Automate WhatsApp notifications, live courier tracking, or webhooks</p>
+                <p className="text-xs text-slate-400 mt-0.5">Automate WhatsApp notifications, courier tracking messages, or webhooks</p>
               </div>
               <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 cursor-pointer">✕</button>
             </div>
@@ -1005,7 +819,8 @@ export const AutomationManager = () => {
                     <option value="ORDER_CONFIRMED">✅ Order Confirmed (Accepted by Merchant)</option>
                     <option value="ORDER_SHIPPED">🚚 Order Shipped / Dispatched (Handed to Courier)</option>
                     <option value="LEAD_INGESTED">🎯 Meta Ads Lead Ingested (FB/Instagram Lead)</option>
-                    <option value="ABANDONED_CHECKOUT">⏳ Abandoned Checkout (Incomplete Checkout)</option>
+                    <option value="BOOKING_CREATED">📅 Booking Requested</option>
+                    <option value="BOOKING_CONFIRMED">✅ Booking Confirmed (Payment Captured)</option>
                     <option value="STOCK_LOW">⚠️ Low Stock Alert (Inventory Depleted)</option>
                   </select>
                 </div>

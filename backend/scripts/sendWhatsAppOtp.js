@@ -1,15 +1,13 @@
 const https = require('https');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-/**
- * Script to test WhatsApp Cloud API OTP / Message dispatch
- * Usage:
- *   node sendWhatsAppOtp.js <PHONE_NUMBER_ID> <RECIPIENT_PHONE_WITH_COUNTRY_CODE> [OTP_CODE]
- * 
- * Example:
- *   node sendWhatsAppOtp.js 1029384756 919876543210 5849
- */
-
-const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN || 'EAGfBr3iq1SUBSsZAuHBeXeVFRYuznRoZAFDEvPK7UpmLe0Ro1aeQ1PGZBLAgW0EcZBpUYmggM8WuxDDtSZCSYfuZCmzutG0kqMtAZBNZAmDNwNsNAerwe16PQFBB8p6fyCnj0MPGz9wE22fcpHQriGru4Jlx7ZCgG2BIpUXe8ZB3BsYc0vvC4EXFAKkccB0Ppy30e1wQMzpMWhM0pSpYNZBxUg5Qxh7cI8gcSUTPnWEnUJ0qVgWGI4YdhLTdqDI8jmpNmMO6yxuY9g2fYcOx1D9AfZBvzAZDZD';
+// No hardcoded token: credentials must come from the environment.
+const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+if (!ACCESS_TOKEN) {
+  console.error('[FATAL] META_ACCESS_TOKEN environment variable is required.');
+  if (require.main === module) process.exit(1);
+}
 
 async function sendWhatsAppMessage(phoneNumberId, toPhone, otpCode = '123456') {
   if (!phoneNumberId || !toPhone) {

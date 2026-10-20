@@ -81,18 +81,34 @@ const upgradePlan = async (req, res) => {
         message: 'Invalid plan tier. Available: STARTER, GROWTH, PRO',
       });
     }
+    if (!['MONTHLY', 'ANNUAL'].includes(billingCycle)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid billing cycle. Available: MONTHLY, ANNUAL',
+      });
+    }
 
     const tenant = await Tenant.findById(req.businessId);
     if (!tenant) {
       return res.status(404).json({ success: false, message: 'Tenant not found' });
     }
 
+    // Preserve the current usage window. Changing plans must not reset the
+    // monthly quota counters or let a merchant escape an exhausted limit.
+    const existingStart = tenant.subscription?.currentPeriodStart || new Date();
+    const periodDays = billingCycle === 'ANNUAL' ? 365 : 30;
+
     tenant.planTier = planTier;
     tenant.subscription = {
       status: 'ACTIVE',
       billingCycle,
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      currentPeriodStart: existingStart,
+      currentPeriodEnd: new Date(
+        Math.max(
+          existingStart.getTime(),
+          Date.now()
+        ) + periodDays * 24 * 60 * 60 * 1000
+      ),
     };
 
     await tenant.save();
@@ -147,8 +163,6 @@ const getFinancialAnalytics = async (req, res) => {
 
     const aov = totalOrdersCount > 0 ? Math.round(grossSales / totalOrdersCount) : 0;
     const cancellationRate = totalOrdersCount > 0 ? ((cancelledOrdersCount / totalOrdersCount) * 100).toFixed(1) : 0;
-    const estimatedPaymentGatewayFee = Math.round(onlineSales * 0.02); // 2% standard PGF
-    const estimatedNetProfit = Math.round(netSales * 0.45); // 45% healthy margin benchmark
 
     res.json({
       success: true,
@@ -163,8 +177,6 @@ const getFinancialAnalytics = async (req, res) => {
         cancelledOrdersCount,
         cancellationRate: Number(cancellationRate),
         aov,
-        estimatedPaymentGatewayFee,
-        estimatedNetProfit,
       },
     });
   } catch (error) {

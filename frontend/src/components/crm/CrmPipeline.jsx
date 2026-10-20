@@ -133,12 +133,13 @@ export const CrmPipeline = () => {
   const handleOpenConvertModal = () => {
     if (!selectedLead) return;
     setConvertFormData({
-      street: selectedLead.customFields?.address || '',
-      city: selectedLead.customFields?.city || '',
-      pincode: '110001',
-      price: selectedLead.budget > 0 ? selectedLead.budget : 299,
-      productName: selectedLead.customFields?.productName || selectedLead.campaignName || 'Direct Inquired Product',
-      paymentMethod: 'COD',
+      // customFields is a Mongoose Map; prefer .get() and fall back for plain objects.
+      street: selectedLead.customFields?.get?.('address') || selectedLead.customFields?.address || '',
+      city: selectedLead.customFields?.get?.('city') || selectedLead.customFields?.city || '',
+      pincode: selectedLead.customFields?.get?.('pincode') || selectedLead.customFields?.pincode || '',
+      price: selectedLead.budget > 0 ? selectedLead.budget : '',
+      productName: selectedLead.customFields?.get?.('productName') || selectedLead.customFields?.productName || '',
+      paymentMethod: '',
       notes: '',
     });
     setIsConvertModalOpen(true);
@@ -149,8 +150,20 @@ export const CrmPipeline = () => {
     if (!selectedLead) return;
 
     const cleanPin = (convertFormData.pincode || '').replace(/\D/g, '');
+    if (!convertFormData.street?.trim() || !convertFormData.city?.trim()) {
+      alert('Enter the delivery street address and city before converting this lead.');
+      return;
+    }
     if (cleanPin.length !== 6 || !/^[1-9][0-9]{5}$/.test(cleanPin)) {
-      alert('⚠️ Invalid PIN Code! Please enter a valid 6-digit Indian postal PIN code (e.g. 110001, 400001).');
+      alert('Invalid PIN Code! Please enter a valid 6-digit Indian postal PIN code (e.g. 110001, 400001).');
+      return;
+    }
+    if (!convertFormData.productName?.trim() || !(Number(convertFormData.price) > 0)) {
+      alert('Enter a line-item name and a positive price before converting this lead.');
+      return;
+    }
+    if (!convertFormData.paymentMethod) {
+      alert('Select COD or ONLINE as the payment method.');
       return;
     }
 
@@ -716,7 +729,7 @@ export const CrmPipeline = () => {
                   type="text"
                   value={newLeadData.campaignName}
                   onChange={(e) => setNewLeadData({ ...newLeadData, campaignName: e.target.value })}
-                  placeholder="e.g. Diwali Homemade Achar 2026"
+                  placeholder="e.g. Diwali Campaign 2026"
                   className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none"
                 />
               </div>
@@ -789,6 +802,7 @@ export const CrmPipeline = () => {
                   <input
                     type="number"
                     required
+                    min="1"
                     value={convertFormData.price}
                     onChange={(e) => setConvertFormData({ ...convertFormData, price: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-indigo-500 font-bold"
@@ -801,6 +815,7 @@ export const CrmPipeline = () => {
                     onChange={(e) => setConvertFormData({ ...convertFormData, paymentMethod: e.target.value })}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none"
                   >
+                    <option value="" disabled>Select payment method</option>
                     <option value="COD">Cash on Delivery (COD)</option>
                     <option value="ONLINE">Paid Online (UPI / Card)</option>
                   </select>

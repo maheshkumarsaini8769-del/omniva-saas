@@ -168,36 +168,11 @@ const getLeads = async (req, res) => {
         ]),
       ]);
     } else {
-      leads = [
-        {
-          _id: 'lead_demo_1',
-          name: 'Sunita Aggarwal',
-          phone: '9876543211',
-          email: 'sunita@gmail.com',
-          source: 'META_ADS',
-          status: 'QUALIFIED',
-          campaignName: 'Diwali Festive Combo Promo',
-          budget: 1500,
-          createdAt: new Date()
-        },
-        {
-          _id: 'lead_demo_2',
-          name: 'Vikram Rajput',
-          phone: '9812345679',
-          email: 'vikram@rajputfoods.com',
-          source: 'WHATSAPP',
-          status: 'CONTACTED',
-          campaignName: 'Restaurant B2B Bulk Inquiry',
-          budget: 5000,
-          createdAt: new Date(Date.now() - 3600000 * 4)
-        }
-      ];
-      totalCount = 2;
-      pipelineAggregate = [
-        { _id: 'NEW', count: 1, totalBudget: 500 },
-        { _id: 'CONTACTED', count: 1, totalBudget: 5000 },
-        { _id: 'QUALIFIED', count: 1, totalBudget: 1500 }
-      ];
+      // Database unavailable: return an empty pipeline instead of inventing
+      // customer leads that do not exist.
+      leads = [];
+      totalCount = 0;
+      pipelineAggregate = [];
     }
 
     // Build standard pipeline counts
@@ -438,6 +413,11 @@ const logCall = async (req, res) => {
   try {
     const { durationSeconds, outcome, notes } = req.body;
 
+    const allowedOutcomes = ['CONNECTED', 'NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'CALLBACK_REQUESTED'];
+    if (!allowedOutcomes.includes(outcome)) {
+      return res.status(400).json({ success: false, message: 'Select a valid call outcome' });
+    }
+
     const lead = await Lead.findOne({
       _id: req.params.id,
       businessId: req.businessId,
@@ -452,7 +432,7 @@ const logCall = async (req, res) => {
 
     const newLog = {
       durationSeconds: Number(durationSeconds) || 0,
-      outcome: outcome || 'CONNECTED',
+      outcome,
       notes: notes || '',
       loggedBy: req.user._id,
       loggedByName: req.user.name,
@@ -646,7 +626,7 @@ const convertLeadToOrder = async (req, res) => {
       productName,
       price,
       quantity = 1,
-      paymentMethod = 'COD',
+      paymentMethod,
       notes,
     } = req.body;
 
@@ -662,86 +642,181 @@ const convertLeadToOrder = async (req, res) => {
       });
     }
 
-    // Determine target Product for Order validation
-    let targetProductId = productId;
-    let itemPrice = price !== undefined ? Number(price) : (lead.budget > 0 ? lead.budget : 299);
-    let itemName = productName || lead.customFields?.get?.('productName') || 'Product from Lead Deal';
-    let itemImage = '';
+    const parsedQty = Number(quantity);
+    if (!Number.isInteger(parsedQty) || parsedQty < 1) {
+      return res.status(400).json({ success: false, message: 'Quantity must be a positive whole number' });
+    }
+    const qty = parsedQty;
 
-    if (targetProductId && mongoose.Types.ObjectId.isValid(targetProductId)) {
-      const prod = await Product.findOne({ _id: targetProductId, businessId: req.businessId });
-      if (prod) {
-        itemName = prod.name;
-        if (!price) itemPrice = prod.price;
-        itemImage = prod.images?.[0] || '';
+    const cleanPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
+    if (!['COD', 'ONLINE'].includes(cleanPaymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select a payment method (COD or ONLINE) before converting the lead',
+      });
+    }
+
+    // Never invent an address or PIN code. Use the submitted values or data
+    // already recorded on the lead, and fail closed when either is incomplete.
+    const addressStreet = String(street || lead.customFields?.get?.('address') || '').trim();
+    const addressCity = String(city || lead.customFields?.get?.('city') || '').trim();
+    const addressState = String(state || lead.customFields?.get?.('state') || '').trim();
+    const addressPin = String(pincode || lead.customFields?.get?.('pincode') || '').replace(/\D/g, '');
+    if (!addressStreet || !addressCity || !/^[1-9][0-9]{5}$/.test(addressPin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A complete delivery address with a valid 6-digit Indian PIN code is required',
+      });
+    }
+
+    const requestedItemName = String(
+      productName || lead.customFields?.get?.('productName') || ''
+    ).trim();
+    const requestedPrice = Number(price) > 0 ? Number(price) : Number(lead.budget) > 0 ? Number(lead.budget) : 0;
+    if (!productId && (!requestedItemName || requestedPrice <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A line-item name and positive price are required when converting without a catalog product',
+      });
+    }
+
+    // Determine target Product for Order validation. Prices always come from
+    // the catalog when a product is selected; the browser cannot set them.
+    let targetProductId = null;
+    let itemVariantId = null;
+    let itemPrice = requestedPrice;
+    let itemName = requestedItemName;
+    let itemImage = '';
+    let productForStock = null;
+
+    if (productId) {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ success: false, message: 'Invalid product ID' });
+      }
+      const prod = await Product.findOne({ _id: productId, businessId: req.businessId });
+      if (!prod) {
+        return res.status(404).json({ success: false, message: 'Product not found in this catalog' });
+      }
+      targetProductId = prod._id;
+      itemName = prod.name;
+      itemPrice = Number(prod.price) || 0;
+      itemImage = prod.images?.[0] || '';
+      productForStock = prod;
+
+      if (prod.variants && prod.variants.length > 0) {
+        const variant =
+          (req.body.variantId && prod.variants.id(req.body.variantId)) || prod.variants[0];
+        if (variant) {
+          itemVariantId = variant._id.toString();
+          itemPrice = Number(variant.price) || itemPrice;
+          itemName = `${prod.name} (${variant.name})`;
+        }
       }
     } else {
-      // Find any existing business product or fallback placeholder
-      const existingProduct = await Product.findOne({ businessId: req.businessId });
-      if (existingProduct) {
-        targetProductId = existingProduct._id;
-        if (!productName) itemName = existingProduct.name;
-        if (!price && lead.budget === 0) itemPrice = existingProduct.price;
-        itemImage = existingProduct.images?.[0] || '';
-      } else {
-        // Create an ad-hoc product placeholder
-        const createdProd = await Product.create({
-          businessId: req.businessId,
-          name: itemName,
-          price: itemPrice,
-          isAvailable: true,
-        });
-        targetProductId = createdProd._id;
-      }
+      // A manual lead conversion without a catalog product is a custom line
+      // item. Use a non-persisted ObjectId so it cannot pollute the catalog.
+      targetProductId = new mongoose.Types.ObjectId();
     }
 
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
-    const subtotal = itemPrice * quantity;
+    const subtotal = itemPrice * qty;
     const totalAmount = subtotal;
 
-    // Create the Order directly
-    const cleanPin = (pincode || lead.customFields?.get?.('pincode') || '110001').toString().replace(/\D/g, '');
-    const validPin = cleanPin.length === 6 && /^[1-9][0-9]{5}$/.test(cleanPin) ? cleanPin : '110001';
+    // Reserve stock before creating the order so repeated conversions cannot
+    // oversell, and roll it back if the order write fails.
+    let stockDecremented = false;
+    if (productForStock && productForStock.trackQuantity !== false) {
+      let result;
+      if (itemVariantId) {
+        result = await Product.updateOne(
+          {
+            _id: productForStock._id,
+            'variants._id': itemVariantId,
+            'variants.stockQuantity': { $gte: qty },
+          },
+          { $inc: { 'variants.$.stockQuantity': -qty } }
+        );
+      } else {
+        result = await Product.updateOne(
+          { _id: productForStock._id, stockQuantity: { $gte: qty } },
+          { $inc: { stockQuantity: -qty } }
+        );
+      }
+      if (result.modifiedCount === 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for ${productForStock.name}`,
+        });
+      }
+      stockDecremented = true;
+    }
 
-    const newOrder = await Order.create({
-      businessId: req.businessId,
-      orderNumber,
-      customerName: lead.name,
-      customerPhone: lead.phone,
-      customerEmail: lead.email || '',
-      shippingAddress: {
-        street: street || lead.customFields?.get?.('address') || 'Direct Inquired Address',
-        city: city || lead.customFields?.get?.('city') || 'Local City',
-        state: state || '',
-        pincode: validPin,
-        landmark: landmark || '',
-      },
-      items: [
-        {
-          productId: targetProductId,
-          name: itemName,
-          price: itemPrice,
-          quantity: quantity,
-          subtotal: subtotal,
-          image: itemImage,
+    // Create the Order directly
+    let newOrder;
+    try {
+      newOrder = await Order.create({
+        businessId: req.businessId,
+        orderNumber,
+        customerName: lead.name,
+        customerPhone: lead.phone,
+        customerEmail: lead.email || '',
+        shippingAddress: {
+          street: addressStreet,
+          city: addressCity,
+          state: addressState,
+          pincode: addressPin,
+          landmark: landmark || '',
         },
-      ],
-      subtotal,
-      shippingFee: 0,
-      discount: 0,
-      totalAmount,
-      paymentMethod: paymentMethod || 'COD',
-      paymentStatus: paymentMethod === 'ONLINE' ? 'PAID' : 'PENDING',
-      orderStatus: 'CONFIRMED',
-      timeline: [
-        {
-          status: 'CONFIRMED',
-          note: `Converted directly from CRM Lead by ${req.user.name || 'Staff'}${notes ? ': ' + notes : ''}`,
-          updatedBy: req.user.name || 'Staff',
-          timestamp: new Date(),
-        },
-      ],
-    });
+        items: [
+          {
+            productId: targetProductId,
+            variantId: itemVariantId,
+            name: itemName,
+            price: itemPrice,
+            quantity: qty,
+            subtotal: subtotal,
+            image: itemImage,
+          },
+        ],
+        subtotal,
+        shippingFee: 0,
+        discount: 0,
+        totalAmount,
+        paymentMethod: cleanPaymentMethod,
+        // A lead conversion creates an unpaid order. ONLINE payments become PAID
+        // only after the signed Razorpay webhook confirms the captured amount.
+        paymentStatus: 'PENDING',
+        orderStatus: 'CONFIRMED',
+        stockDecremented,
+        timeline: [
+          {
+            status: 'CONFIRMED',
+            note: `Converted directly from CRM Lead by ${req.user.name || 'Staff'}${notes ? ': ' + notes : ''}`,
+            updatedBy: req.user.name || 'Staff',
+            timestamp: new Date(),
+          },
+        ],
+      });
+    } catch (orderErr) {
+      if (stockDecremented) {
+        try {
+          if (itemVariantId) {
+            await Product.updateOne(
+              { _id: productForStock._id, 'variants._id': itemVariantId },
+              { $inc: { 'variants.$.stockQuantity': qty } }
+            );
+          } else {
+            await Product.updateOne(
+              { _id: productForStock._id },
+              { $inc: { stockQuantity: qty } }
+            );
+          }
+        } catch (restoreErr) {
+          console.warn('[CRM Conversion Stock Rollback Warning]:', restoreErr.message);
+        }
+      }
+      throw orderErr;
+    }
 
     // Mark Lead as WON and record note
     lead.status = 'WON';

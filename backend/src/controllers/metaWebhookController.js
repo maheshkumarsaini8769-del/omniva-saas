@@ -18,8 +18,11 @@ const verifyWebhook = (req, res) => {
   const token = req.query['hub.verify_token'] || (req.query.hub && req.query.hub.verify_token) || req.query.verify_token;
   const challenge = req.query['hub.challenge'] || (req.query.hub && req.query.hub.challenge) || req.query.challenge;
 
-  const expectedToken =
-    process.env.META_WEBHOOK_VERIFY_TOKEN || 'omniva_meta_verify_token_2026';
+  const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  if (!expectedToken) {
+    console.error('[Meta Webhook] META_WEBHOOK_VERIFY_TOKEN is not configured');
+    return res.status(503).json({ success: false, message: 'Webhook verify token not configured' });
+  }
 
   if (mode === 'subscribe' && token === expectedToken) {
     console.log('[Meta Webhook] Verification handshake successful');
@@ -35,29 +38,36 @@ const verifyWebhook = (req, res) => {
 // @access  Public (Meta Webhook Ingestion)
 const handleMetaWebhook = async (req, res) => {
   try {
-    // 1. Signature Verification (if App Secret is configured)
+    // 1. Signature Verification
     const signature = req.headers['x-hub-signature-256'];
     const appSecret = process.env.META_APP_SECRET;
 
-    if (appSecret && signature && req.rawBody) {
+    if (appSecret) {
+      // When a secret is configured, the signature is mandatory.
+      if (!signature || !req.rawBody) {
+        console.warn('[Meta Webhook] Missing signature header; request rejected.');
+        return res.status(403).json({ success: false, message: 'Missing X-Hub-Signature-256' });
+      }
       const isValid = verifyMetaWebhookSignature(req.rawBody, signature, appSecret);
       if (!isValid) {
         console.warn('[Meta Webhook] Signature verification failed! Request rejected.');
         return res.status(403).json({ success: false, message: 'Invalid X-Hub-Signature-256' });
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      console.error('[Meta Webhook] META_APP_SECRET is not configured. Rejecting webhook.');
+      return res.status(503).json({ success: false, message: 'Webhook secret not configured' });
     }
 
-    const { object, entry } = req.body || {};
+    const { entry } = req.body || {};
     const tenantSlug = req.query.tenantSlug || req.query.slug || '';
 
-    // Promptly acknowledge Meta with 200 OK within 3000ms
-    res.status(200).json({ success: true, message: 'EVENT_RECEIVED' });
-
-    // Process webhook entries asynchronously
     if (!entry || !Array.isArray(entry)) {
-      return;
+      return res.status(200).json({ success: true, message: 'EVENT_RECEIVED' });
     }
 
+    // Process lead events before acknowledging. If ingestion fails, return a
+    // non-2xx status so Meta retries instead of silently losing the lead.
+    const processing = [];
     for (const item of entry) {
       const pageId = String(item.id || '');
       const changes = item.changes || [];
@@ -76,18 +86,30 @@ const handleMetaWebhook = async (req, res) => {
             continue;
           }
 
-          // Asynchronously process the leadgen event
-          processLeadgenEvent(pageId, leadgenId, formId, adId, value, tenantSlug).catch((err) => {
-            console.error('[Meta Webhook] Error processing leadgen event:', err);
-          });
+          processing.push(
+            processLeadgenEvent(pageId, leadgenId, formId, adId, value, tenantSlug)
+          );
         }
       }
     }
+
+    const results = await Promise.allSettled(processing);
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length > 0) {
+      failures.forEach((failure) =>
+        console.error('[Meta Webhook] Lead ingestion failed:', failure.reason?.message || failure.reason)
+      );
+      return res.status(500).json({
+        success: false,
+        message: 'One or more lead events could not be ingested; retry requested',
+      });
+    }
+
+    return res.status(200).json({ success: true, message: 'EVENT_RECEIVED' });
   } catch (error) {
     console.error('[Meta Webhook Handler Error]', error);
-    // Ensure 200 OK is sent if not already sent
     if (!res.headersSent) {
-      res.status(200).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 };
@@ -118,50 +140,35 @@ const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue
       }
     }
 
-    let parsedLead = null;
-
-    // 2. Fetch full lead record from Meta Graph API using page access token
-    if (plainPageToken) {
-      try {
-        const rawLead = await fetchLeadDetails(leadgenId, plainPageToken);
-        parsedLead = parseLeadFields(rawLead);
-      } catch (graphErr) {
-        console.warn(`[processLeadgenEvent] Graph API fetch failed for lead ${leadgenId}:`, graphErr.message);
-      }
+    // 2. Fetch the full lead record from Meta Graph API using the page token.
+    // Never fabricate a phone number or customer name from a webhook envelope.
+    if (!plainPageToken) {
+      throw new Error(`No page access token available for page ${pageId}`);
     }
 
-    // 3. Fallback: If mock or test lead payload provided in webhook body
-    if (!parsedLead) {
-      parsedLead = {
-        name: payloadValue.name || payloadValue.full_name || `Meta Lead #${leadgenId.slice(-4)}`,
-        phone: payloadValue.phone || payloadValue.phone_number || '9876500000',
-        email: payloadValue.email || '',
-        campaignName: payloadValue.campaign_name || 'Meta Instant Form Campaign',
-        adSetName: payloadValue.adset_name || '',
-        adName: payloadValue.ad_name || `Ad ${adId || 'Creative'}`,
-        platform: payloadValue.platform || 'fb',
-        metaLeadId: leadgenId,
-        metaFormId: formId || '',
-        metaFormName: payloadValue.form_name || '',
-        metaAdId: adId || '',
-        formAnswers: [],
-        customMap: {},
-      };
+    let parsedLead;
+    try {
+      const rawLead = await fetchLeadDetails(leadgenId, plainPageToken);
+      parsedLead = parseLeadFields(rawLead);
+    } catch (graphErr) {
+      console.warn(`[processLeadgenEvent] Graph API fetch failed for lead ${leadgenId}:`, graphErr.message);
+      throw graphErr;
     }
 
-    // 4. Resolve tenantId
+    if (!parsedLead || (!parsedLead.phone && !parsedLead.email)) {
+      throw new Error(`Meta lead ${leadgenId} did not contain usable contact details`);
+    }
+
+    // 3. Resolve tenantId from a verified integration or an explicit tenant slug.
     let businessId = integration?.businessId;
     if (!businessId && tenantSlug) {
-      const targetTenant = await Tenant.findOne({ slug: tenantSlug });
+      const targetTenant = await Tenant.findOne({ slug: tenantSlug, status: 'ACTIVE' });
       if (targetTenant) businessId = targetTenant._id;
-    }
-    if (!businessId) {
-      const activeTenant = await Tenant.findOne({ status: 'ACTIVE' });
-      businessId = activeTenant?._id;
     }
 
     if (!businessId) {
-      console.warn('[processLeadgenEvent] No target business tenant found for lead:', leadgenId);
+      // Never guess a tenant. An unmapped webhook must not write into another merchant's CRM.
+      console.warn('[processLeadgenEvent] No mapped business tenant for lead:', leadgenId);
       return;
     }
 
@@ -183,7 +190,7 @@ const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue
         timestamp: new Date(),
         type: 'WEBHOOK',
         status: 'SUCCESS',
-        message: `Real-time Meta Lead received for ${parsedLead.name} (${parsedLead.phone}). Form: "${parsedLead.metaFormName || formId || 'Default'}"`,
+        message: `Meta lead received for ${parsedLead.name}. Form: "${parsedLead.metaFormName || formId || 'Unknown form'}"`,
         importedCount: 1,
         pageId,
         formId,
@@ -197,6 +204,7 @@ const processLeadgenEvent = async (pageId, leadgenId, formId, adId, payloadValue
     }
   } catch (err) {
     console.error('[processLeadgenEvent] Ingestion pipeline failed:', err);
+    throw err;
   }
 };
 

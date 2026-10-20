@@ -35,8 +35,8 @@ export const BookingManager = () => {
   const [showPkgModal, setShowPkgModal] = useState(false);
   const [pkgName, setPkgName] = useState('');
   const [pkgPrice, setPkgPrice] = useState('');
-  const [pkgDuration, setPkgDuration] = useState('Full Day');
-  const [pkgAdvance, setPkgAdvance] = useState('20');
+  const [pkgDuration, setPkgDuration] = useState('');
+  const [pkgAdvance, setPkgAdvance] = useState('');
   const [pkgDeliverables, setPkgDeliverables] = useState('');
   const [pkgDesc, setPkgDesc] = useState('');
 
@@ -145,7 +145,7 @@ export const BookingManager = () => {
     const config = {
       PENDING: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400', label: 'Pending Enquiry' },
       CONFIRMED: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', label: 'Confirmed' },
-      IN_PROGRESS: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400', label: 'Shoot/Tour In Progress' },
+      IN_PROGRESS: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400', label: 'In Progress' },
       COMPLETED: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', label: 'Completed' },
       CANCELLED: { bg: 'bg-rose-500/10', border: 'border-rose-500/30', text: 'text-rose-400', label: 'Cancelled' },
     };
@@ -598,7 +598,7 @@ export const BookingManager = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Pre-Wedding Cinematic Shoot"
+                  placeholder="e.g. Standard Consultation / 3-Day Tour"
                   value={pkgName}
                   onChange={(e) => setPkgName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
@@ -631,7 +631,7 @@ export const BookingManager = () => {
                 <label className="text-slate-700 font-medium block mb-1">Duration</label>
                 <input
                   type="text"
-                  placeholder="e.g. 6 Hours / Full Day"
+                  placeholder="e.g. 6 Hours / 3 Days"
                   value={pkgDuration}
                   onChange={(e) => setPkgDuration(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
@@ -641,7 +641,7 @@ export const BookingManager = () => {
                 <label className="text-slate-700 font-medium block mb-1">Deliverables (comma separated)</label>
                 <input
                   type="text"
-                  placeholder="e.g. 1 Drone, 2 Cameras, Teaser Video, 200 Edits"
+                  placeholder="e.g. Included service, item, or session"
                   value={pkgDeliverables}
                   onChange={(e) => setPkgDeliverables(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"

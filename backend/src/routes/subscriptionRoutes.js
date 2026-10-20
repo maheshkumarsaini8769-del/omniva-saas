@@ -26,7 +26,13 @@ router.use(authorize(...allowedMerchantRoles));
 router.use(tenantScope);
 
 router.get('/usage', getSubscriptionUsage);
-router.post('/upgrade', upgradePlan);
+// Plan changes affect billing and reset-sensitive quota windows. Only the
+// merchant owner (or platform admin) may make them, never ordinary staff.
+router.post(
+  '/upgrade',
+  authorize('SUPER_ADMIN', 'SUPER_STAFF', 'MERCHANT_OWNER'),
+  upgradePlan
+);
 router.get('/analytics', getFinancialAnalytics);
 
 module.exports = router;

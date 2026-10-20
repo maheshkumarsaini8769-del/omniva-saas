@@ -1,5 +1,16 @@
 const crypto = require('crypto');
 
+// Meta matches phone hashes on E.164 digits (country code, no symbols).
+// Normalize before hashing so "+91 98765 43210" and "919876543210" match.
+const normalizePhone = (phone) => {
+  if (!phone) return null;
+  const digits = String(phone).replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
+  return digits;
+};
+
 // Helper to hash user data (email, phone) using SHA-256 for Meta privacy compliance
 const hashData = (str) => {
   if (!str) return null;
@@ -34,28 +45,28 @@ const sendCapiEvent = async ({
     event_name: eventName,
     event_time: Math.floor(Date.now() / 1000),
     event_id: eventId || `ev_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-    event_source_url: eventSourceUrl || `https://${tenant?.slug || 'store'}.omniva.io`,
+    event_source_url: eventSourceUrl || undefined,
     action_source: 'website',
     user_data: {
       em: userData.email ? [hashData(userData.email)] : [],
-      ph: userData.phone ? [hashData(userData.phone)] : [],
+      ph: userData.phone ? [hashData(normalizePhone(userData.phone))] : [],
       fbc: userData.fbclid ? `fb.1.${Date.now()}.${userData.fbclid}` : undefined,
     },
     custom_data: {
       currency: customData.currency || 'INR',
       value: customData.value || 0,
-      content_name: customData.contentName || 'Omniva Conversion',
+      content_name: customData.contentName || undefined,
     },
   };
 
-  // If credentials are not yet configured or in mock test mode, safely simulate & log
+  // Missing or placeholder credentials must fail closed. A simulated event must
+  // never be reported to the merchant as a successful Meta delivery.
   if (!pixelId || !capiToken || capiToken.startsWith('mock_')) {
     return {
-      success: true,
-      mode: 'SIMULATION',
-      message: 'CAPI event formatted and validated successfully (Test Simulation)',
+      success: false,
+      mode: 'NOT_CONFIGURED',
+      message: 'Meta CAPI is not configured. Add a real Pixel ID and access token before testing.',
       eventId: payload.event_id,
-      hashedPayload: payload,
     };
   }
 
@@ -88,5 +99,6 @@ const sendCapiEvent = async ({
 
 module.exports = {
   hashData,
+  normalizePhone,
   sendCapiEvent,
 };

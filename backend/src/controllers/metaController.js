@@ -22,11 +22,10 @@ const getMetaSettings = async (req, res) => {
       settings: {
         metaPixelId: tenant.settings?.metaPixelId || '',
         hasCapiToken: !!tenant.settings?.metaCapiToken,
-        capiTokenMasked: tenant.settings?.metaCapiToken
-          ? `••••••••${tenant.settings.metaCapiToken.slice(-6)}`
-          : '',
+        capiTokenMasked: tenant.settings?.metaCapiToken ? '••••••••••••••••' : '',
         webhookUrl,
-        verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || 'omniva_meta_verify_token_2026',
+        verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
+        verifyTokenConfigured: Boolean(process.env.META_WEBHOOK_VERIFY_TOKEN),
       },
     });
   } catch (error) {
@@ -73,7 +72,7 @@ const updateMetaSettings = async (req, res) => {
 // @access  Protected (Merchant Owner)
 const testCapiDispatch = async (req, res) => {
   try {
-    const { eventName = 'Lead', testEmail = 'test@customer.com', testPhone = '9876543210', value = 999 } = req.body;
+    const { eventName = 'Lead', testEmail = '', testPhone = '', value = 0 } = req.body;
 
     const tenant = await Tenant.findById(req.businessId);
     if (!tenant) {
@@ -84,7 +83,7 @@ const testCapiDispatch = async (req, res) => {
       tenant,
       eventName,
       eventId: `test_${Date.now()}`,
-      eventSourceUrl: `https://${tenant.slug}.omniva.io/checkout`,
+      eventSourceUrl: req.headers.origin || process.env.FRONTEND_URL || undefined,
       userData: {
         email: testEmail,
         phone: testPhone,
@@ -156,22 +155,30 @@ const getAttributionAnalytics = async (req, res) => {
     const totalRev = calcRev(orders);
     const directRev = Math.max(0, totalRev - (instaRev + fbRev + waRev));
 
-    const totalMetaOrders = instaOrders.length + fbOrders.length;
+    const totalMetaOrders =
+      instaOrders.filter((o) => o.orderStatus !== 'CANCELLED').length +
+      fbOrders.filter((o) => o.orderStatus !== 'CANCELLED').length;
     const totalMetaRev = instaRev + fbRev;
 
-    // Aggregate dynamic campaigns from real orders & leads
+    // Aggregate campaigns only when an order or lead has a real UTM campaign.
+    // Unattributed traffic is never relabeled as a Meta campaign.
     const campaignMap = {};
     orders.forEach((o) => {
-      const cmp = o.attribution?.utmCampaign || 'Organic Storefront';
+      const cmp = String(o.attribution?.utmCampaign || '').trim();
+      if (!cmp) return;
       if (!campaignMap[cmp]) {
+        const source = String(o.attribution?.utmSource || '').toLowerCase();
         campaignMap[cmp] = {
           name: cmp,
-          platform: cmp.toLowerCase().includes('insta') ? 'INSTAGRAM' : 'FACEBOOK',
+          platform: source.includes('instagram')
+            ? 'INSTAGRAM'
+            : source.includes('facebook')
+            ? 'FACEBOOK'
+            : 'META_ADS',
           orders: 0,
           revenue: 0,
           leads: 0,
-          spend: 12000,
-          status: 'ACTIVE',
+          spend: null,
         };
       }
       if (o.orderStatus !== 'CANCELLED') {
@@ -181,76 +188,34 @@ const getAttributionAnalytics = async (req, res) => {
     });
 
     leads.forEach((l) => {
-      const cmp = l.campaignName || l.utmCampaign || 'Organic Storefront';
+      const cmp = String(l.campaignName || l.utmCampaign || '').trim();
+      if (!cmp) return;
       if (!campaignMap[cmp]) {
         campaignMap[cmp] = {
           name: cmp,
-          platform: 'META_ADS',
+          platform: l.platform === 'ig' ? 'INSTAGRAM' : l.platform === 'fb' ? 'FACEBOOK' : 'META_ADS',
           orders: 0,
           revenue: 0,
           leads: 0,
-          spend: 8000,
-          status: 'ACTIVE',
+          spend: null,
         };
       }
       campaignMap[cmp].leads += 1;
     });
 
-    let topCampaigns = Object.values(campaignMap);
-    if (topCampaigns.length === 0) {
-      topCampaigns = [
-        {
-          name: 'Diwali Festive Combo Promo',
-          platform: 'INSTAGRAM',
-          spend: 18000,
-          leads: 104,
-          orders: 24,
-          revenue: 61400,
-          roas: '3.4x',
-          cpa: '₹750',
-          status: 'ACTIVE',
-        },
-        {
-          name: 'Instagram Reels Video Showcase',
-          platform: 'INSTAGRAM',
-          spend: 12500,
-          leads: 72,
-          orders: 19,
-          revenue: 44200,
-          roas: '3.5x',
-          cpa: '₹658',
-          status: 'ACTIVE',
-        },
-        {
-          name: 'Facebook Feed & Carousel Catalog',
-          platform: 'FACEBOOK',
-          spend: 10000,
-          leads: 55,
-          orders: 14,
-          revenue: 33500,
-          roas: '3.3x',
-          cpa: '₹714',
-          status: 'ACTIVE',
-        },
-        {
-          name: 'WhatsApp Direct Click-to-Chat',
-          platform: 'WHATSAPP',
-          spend: 8000,
-          leads: 41,
-          orders: 16,
-          revenue: 26800,
-          roas: '3.3x',
-          cpa: '₹500',
-          status: 'ACTIVE',
-        },
-      ];
-    } else {
-      topCampaigns = topCampaigns.map((c) => ({
-        ...c,
-        roas: c.spend > 0 ? (c.revenue / c.spend).toFixed(1) + 'x' : '3.2x',
-        cpa: c.orders > 0 ? '₹' + Math.round(c.spend / c.orders) : '₹680',
-      }));
-    }
+    const topCampaigns = Object.values(campaignMap).map((c) => ({
+      ...c,
+      roas: c.spend > 0 ? (c.revenue / c.spend).toFixed(1) + 'x' : null,
+      cpa: c.spend > 0 && c.orders > 0 ? '₹' + Math.round(c.spend / c.orders) : null,
+    }));
+
+
+    const tenant = await Tenant.findById(req.businessId)
+      .select('settings.metaPixelId settings.metaCapiToken')
+      .lean();
+    const capiConfigured = Boolean(
+      tenant?.settings?.metaPixelId && tenant?.settings?.metaCapiToken
+    );
 
     res.json({
       success: true,
@@ -260,30 +225,26 @@ const getAttributionAnalytics = async (req, res) => {
           totalMetaRevenue: totalMetaRev,
           totalOrders: orders.length,
           totalMetaOrders,
-          metaRevenueSharePct: totalRev > 0 ? Math.round((totalMetaRev / totalRev) * 100) : 68,
-          blendedRoas: '3.6x',
-          averageAov: orders.length > 0 ? Math.round(totalRev / orders.length) : 1240,
+          metaRevenueSharePct: totalRev > 0 ? Math.round((totalMetaRev / totalRev) * 100) : 0,
+          blendedRoas: null,
+          averageAov: orders.filter((o) => o.orderStatus !== 'CANCELLED').length > 0
+            ? Math.round(totalRev / orders.filter((o) => o.orderStatus !== 'CANCELLED').length)
+            : 0,
         },
         channels: {
-          instagram: { count: instaOrders.length, revenue: instaRev },
-          facebook: { count: fbOrders.length, revenue: fbRev },
-          whatsapp: { count: waOrders.length, revenue: waRev },
+          instagram: { count: instaOrders.filter((o) => o.orderStatus !== 'CANCELLED').length, revenue: instaRev },
+          facebook: { count: fbOrders.filter((o) => o.orderStatus !== 'CANCELLED').length, revenue: fbRev },
+          whatsapp: { count: waOrders.filter((o) => o.orderStatus !== 'CANCELLED').length, revenue: waRev },
           direct: { count: Math.max(0, orders.length - totalMetaOrders - waOrders.length), revenue: directRev },
         },
         campaigns: topCampaigns,
-        funnel: [
-          { stage: 'Ad Impressions', count: 48500, pct: '100%', color: 'bg-blue-600' },
-          { stage: 'Ad Clicks (CTR 4.2%)', count: 4820, pct: '10%', color: 'bg-indigo-600' },
-          { stage: 'Storefront Visits', count: 2460, pct: '51%', color: 'bg-purple-600' },
-          { stage: 'Added to Cart', count: 680, pct: '28%', color: 'bg-pink-600' },
-          { stage: 'Purchased / Completed', count: totalMetaOrders || 43, pct: '6.3%', color: 'bg-emerald-600' },
-        ],
         capiHealth: {
-          status: 'CONNECTED',
-          eventMatchQuality: '9.4 / 10',
-          serverDeduplicationRate: '99.8%',
-          activeSignals: ['Purchase', 'InitiateCheckout', 'AddToCart', 'ViewContent', 'Lead'],
-          lastSyncedAt: new Date(),
+          configured: capiConfigured,
+          status: capiConfigured ? 'CONFIGURED' : 'NOT_CONFIGURED',
+        },
+        adSpend: {
+          synced: false,
+          message: 'Meta Ads spend is not imported. Revenue and order counts are first-party order data.',
         },
       },
     });

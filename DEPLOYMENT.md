@@ -16,18 +16,27 @@ This guide details how to deploy the Omniva Multi-Tenant SaaS platform to produc
 
 Copy [.env.example](file:///home/mahesh/meta%20ads/.env.example) to `.env` or set these in your cloud provider's environment variables dashboard:
 
-| Variable | Description | Example Value |
+Production startup rejects missing, example, or weak values for the required secrets.
+
+| Variable | Description | Required |
 | :--- | :--- | :--- |
-| `PORT` | Listening port for the application | `5000` (or cloud default like `10000`) |
-| `NODE_ENV` | Runtime environment | `production` |
-| `MONGODB_URI` | MongoDB connection string | `mongodb+srv://user:pass@cluster0.mongodb.net/omniva_db` |
-| `JWT_SECRET` | Secret key for JWT authentication | 64-character random string |
-| `JWT_EXPIRES_IN` | Token validity duration | `7d` |
-| `CLIENT_URL` | Allowed origin for CORS & Webhook links | `https://your-domain.com` |
-| `META_ACCESS_TOKEN` | Meta Graph API System User Token | `EAA...` (From Meta Business Manager) |
-| `META_WEBHOOK_VERIFY_TOKEN` | Custom verification token for Meta Webhooks | `omniva_secure_verify_token_2026` |
-| `RAZORPAY_KEY_ID` | Optional: Razorpay Key ID | `rzp_live_...` |
-| `RAZORPAY_KEY_SECRET`| Optional: Razorpay Secret | `...` |
+| `PORT` | Listening port for the application | Yes |
+| `NODE_ENV` | Must be `production` in production | Yes |
+| `MONGODB_URI` | MongoDB connection string | Yes |
+| `JWT_SECRET` | Random signing secret, at least 32 characters (`openssl rand -hex 32`) | Yes |
+| `JWT_EXPIRES_IN` | Token validity duration, e.g. `7d` | Yes |
+| `CLIENT_URL` | Allowed origin for CORS and links | Yes |
+| `MASTER_SETUP_KEY` | Random key required to create the first Super Admin (`openssl rand -hex 32`) | Yes |
+| `TOKEN_ENCRYPTION_KEY` | 32-character or 64-character hex key for encrypting integration tokens | Yes |
+| `META_WEBHOOK_VERIFY_TOKEN` | Random private token configured in the Meta app webhook settings | Yes |
+| `META_APP_ID` | Meta app ID | For Meta integration |
+| `META_APP_SECRET` | Meta app secret | For Meta integration |
+| `META_REDIRECT_URI` | Meta OAuth callback URL | For Meta integration |
+| `META_ACCESS_TOKEN` | Optional global fallback System User token | Optional |
+| `RAZORPAY_KEY_ID` | Razorpay Key ID | For online payments |
+| `RAZORPAY_KEY_SECRET` | Razorpay Key Secret | For online payments |
+| `RAZORPAY_WEBHOOK_SECRET` | Razorpay webhook signing secret | Yes for payment webhooks |
+| `TRUST_PROXY` | Set `true` only behind a trusted reverse proxy | Optional |
 
 ---
 
@@ -90,11 +99,14 @@ A production-ready [Dockerfile](file:///home/mahesh/meta%20ads/Dockerfile) and [
    git clone https://github.com/<your-username>/<your-repo>.git /var/www/omniva
    cd /var/www/omniva
    cp .env.example backend/.env
-   nano backend/.env # Fill in production MongoDB URI and JWT_SECRET
+   nano backend/.env # Fill in every required secret from the checklist above
 
    # Install dependencies and build
    npm run install:all
    npm run build
+
+   # Create the indexes used by idempotent checkout and other models
+   cd backend && npm run db:sync-indexes
    ```
 
 3. **Start Application with PM2**:
@@ -158,8 +170,8 @@ Once deployed, verify the following health checks:
    Should return: `{"status":"healthy","platform":"Omniva SaaS Engine","database":{"status":"Connected"}}`
 
 2. **Public Storefront**:
-   `GET https://your-domain.com/store/desi-rasoi-achar-1`
-   Renders the storefront with products and live checkout.
+   `GET https://your-domain.com/store/<merchant-slug>`
+   Renders the real products and checkout for an active merchant.
 
 3. **Merchant Portal**:
    `GET https://your-domain.com/merchant/overview`
@@ -168,3 +180,19 @@ Once deployed, verify the following health checks:
 4. **Super Admin Portal**:
    `GET https://your-domain.com/admin/login`
    Allows platform owners to manage all merchant stores and billing.
+
+
+---
+
+## 5. Production Security Checklist
+
+Before exposing the platform publicly:
+
+1. Rotate every secret that has ever appeared in a local `.env`, commit, log, screenshot, or chat. Generate new Meta and MongoDB credentials instead of reusing exposed ones.
+2. Remove secrets from Git history before publishing the repository (for example with `git filter-repo --path .env --invert-paths`). Rotating the credential is still required even after history cleanup.
+3. Confirm `.env` files are ignored and only `.env.example` is tracked.
+4. Set unique production values for `JWT_SECRET`, `MASTER_SETUP_KEY`, `TOKEN_ENCRYPTION_KEY`, `RAZORPAY_WEBHOOK_SECRET`, and `META_WEBHOOK_VERIFY_TOKEN`.
+5. Remove demo tenants, test merchants, and seeded accounts before production. Seeded test accounts use weak shared passwords and must never remain accessible.
+6. Run `cd backend && npm run db:sync-indexes` against the production database.
+7. Verify `/api/health` and `/api/health/deep`, then test login, storefront checkout, order tracking, Razorpay webhook delivery, and Meta webhook verification with real credentials.
+8. Keep `backend/backups/` private. Snapshots contain tenant and customer data and must be encrypted and access-controlled.

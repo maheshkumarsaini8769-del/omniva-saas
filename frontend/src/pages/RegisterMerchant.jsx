@@ -88,7 +88,7 @@ export const RegisterMerchant = () => {
                   required
                   value={formData.businessName}
                   onChange={handleChange}
-                  placeholder="e.g. Shahi Achar or Royal Studios"
+                  placeholder="e.g. Your Business Name"
                   className="block w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -108,7 +108,7 @@ export const RegisterMerchant = () => {
                   onChange={handleChange}
                   className="block w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
                 >
-                  <option value="PRODUCT">Product Selling (Achar, Food, Clothing)</option>
+                  <option value="PRODUCT">Product Selling (Physical Goods)</option>
                   <option value="SERVICE">Service Booking (Photography, Studio, Salon)</option>
                   <option value="TRAVEL">Travel & Tourism (Tours, Packages)</option>
                   <option value="RESTAURANT">Restaurant & Food (Table / Menu)</option>
@@ -213,7 +213,7 @@ export const RegisterMerchant = () => {
               to="/login"
               className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold transition"
             >
-              Already registered? Sign in $\rightarrow$
+              Already registered? Sign in →
             </Link>
           </div>
         </div>

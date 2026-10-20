@@ -3,6 +3,9 @@ const Category = require('../models/Category');
 
 const mongoose = require('mongoose');
 
+// Escape regex metacharacters in user-supplied names before building a RegExp.
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // ==================== CATEGORIES ====================
 
 // @desc    Get all categories for merchant
@@ -34,7 +37,7 @@ const createCategory = async (req, res) => {
     const existing = await Category.findOne({
       businessId: req.businessId,
       $or: [
-        { name: { $regex: new RegExp(`^${trimmedName}$`, 'i') } },
+        { name: { $regex: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i') } },
         { slug: catSlug }
       ]
     });
@@ -176,7 +179,7 @@ const createProduct = async (req, res) => {
       const catObj = await Category.findOne({
         businessId: req.businessId,
         $or: [
-          { name: { $regex: new RegExp(`^${searchCat}$`, 'i') } },
+          { name: { $regex: new RegExp(`^${escapeRegex(searchCat)}$`, 'i') } },
           { slug: searchCat.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
         ]
       });
@@ -233,7 +236,7 @@ const updateProduct = async (req, res) => {
       const catObj = await Category.findOne({
         businessId: req.businessId,
         $or: [
-          { name: { $regex: new RegExp(`^${searchCat}$`, 'i') } },
+          { name: { $regex: new RegExp(`^${escapeRegex(searchCat)}$`, 'i') } },
           { slug: searchCat.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }
         ]
       });
@@ -270,20 +273,47 @@ const deleteProduct = async (req, res) => {
 // @access  Private (Merchant Admin)
 const applyBulkDiscount = async (req, res) => {
   try {
-    const { discountPercent = 10, categoryId = null, applyToAll = true } = req.body;
-    const pct = Math.max(1, Math.min(90, Number(discountPercent) || 10));
-
-    if (mongoose.connection.readyState !== 1) {
-      return res.json({
-        success: true,
-        message: `Bulk discount of ${pct}% applied across products successfully!`,
-        data: { discountPercent: pct, affectedCount: 20 },
+    const {
+      discountPercent,
+      categoryId = null,
+      categoryName = null,
+      applyToAll = true,
+    } = req.body;
+    const pct = Number(discountPercent);
+    if (!Number.isFinite(pct) || pct < 1 || pct > 90) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount percentage must be a number between 1 and 90',
       });
     }
 
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Product service is temporarily unavailable. Please try again.',
+      });
+    }
+
+    let resolvedCategoryId = categoryId;
+    if (!applyToAll) {
+      if (!resolvedCategoryId && categoryName) {
+        const category = await Category.findOne({
+          businessId: req.businessId,
+          name: categoryName,
+        }).select('_id');
+        resolvedCategoryId = category?._id || null;
+      }
+      if (!resolvedCategoryId) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid category is required when applying a category-scoped discount',
+        });
+      }
+    }
+
     const query = { businessId: req.businessId };
-    if (!applyToAll && categoryId) {
-      query.categoryId = categoryId;
+    if (!applyToAll) {
+      query.categoryId = resolvedCategoryId;
     }
 
     const products = await Product.find(query);

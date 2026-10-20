@@ -17,6 +17,7 @@ export const OrderTracking = () => {
   const [searchParams] = useSearchParams();
   const [orderNumber, setOrderNumber] = useState(searchParams.get('orderNumber') || '');
   const [phone, setPhone] = useState(searchParams.get('phone') || '');
+  const storeSlug = searchParams.get('slug') || '';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [order, setOrder] = useState(null);
@@ -31,10 +32,11 @@ export const OrderTracking = () => {
     try {
       setLoading(true);
       setError(null);
+      const storeQuery = storeSlug ? `&slug=${encodeURIComponent(storeSlug)}` : '';
       const res = await fetch(
         `/api/public/orders/track?orderNumber=${encodeURIComponent(
           orderNumber.trim()
-        )}&phone=${encodeURIComponent(phone.trim())}`
+        )}&phone=${encodeURIComponent(phone.trim())}${storeQuery}`
       );
       const data = await res.json();
       if (data.success) {
@@ -64,7 +66,7 @@ export const OrderTracking = () => {
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">Track Your Order</h1>
           <p className="text-xs text-slate-500">
-            Enter your order number and 10-digit mobile number to see real-time delivery status.
+            Enter your order number and 10-digit mobile number to see the current recorded delivery status.
           </p>
         </div>
 

@@ -1,9 +1,11 @@
+const mongoose = require('mongoose');
 const ServicePackage = require('../models/ServicePackage');
 const Booking = require('../models/Booking');
 const Tenant = require('../models/Tenant');
 const Lead = require('../models/Lead');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
+const { buildAppUrl } = require('../utils/appUrl');
 
 // ==================== PACKAGES ====================
 
@@ -52,11 +54,11 @@ const createServicePackage = async (req, res) => {
       businessId: req.businessId,
       name,
       slug: pkgSlug,
-      category: category || 'Photography',
+      category: category || '',
       description: description || '',
-      duration: duration || 'Full Day',
+      duration: duration || '',
       price: Number(price),
-      advanceTokenPercent: advanceTokenPercent !== undefined ? Number(advanceTokenPercent) : 20,
+      advanceTokenPercent: advanceTokenPercent !== undefined ? Number(advanceTokenPercent) : 0,
       deliverables: Array.isArray(deliverables) ? deliverables : [],
       images: Array.isArray(images) ? images : [],
       maxCapacityPerDay: maxCapacityPerDay ? Number(maxCapacityPerDay) : 1,
@@ -216,6 +218,12 @@ const updateBookingStatus = async (req, res) => {
 
     if (advancePaid !== undefined) {
       const adv = Number(advancePaid);
+      if (!Number.isFinite(adv) || adv < 0) {
+        return res.status(400).json({ success: false, message: 'Invalid advancePaid value' });
+      }
+      if (adv > booking.totalAmount) {
+        return res.status(400).json({ success: false, message: 'advancePaid cannot exceed totalAmount' });
+      }
       booking.advancePaid = adv;
       booking.balanceDue = Math.max(0, booking.totalAmount - adv);
       if (adv >= booking.totalAmount) {
@@ -313,17 +321,31 @@ const createPublicBooking = async (req, res) => {
       customerPhone,
       customerEmail,
       eventDate,
-      timeSlot = 'Full Day',
+      timeSlot,
       location = '',
       passengers = [],
       notes = '',
       attribution = {},
     } = req.body;
 
-    if (!customerName || !customerPhone || !eventDate) {
+    if (!customerName || !customerPhone || !eventDate || !String(timeSlot || '').trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Customer name, phone, and event date are required',
+        message: 'Customer name, phone, booking date, and time slot are required',
+      });
+    }
+
+    // Match createPublicOrder: normalize and validate Indian mobile numbers.
+    let cleanCustomerPhone = String(customerPhone).replace(/\D/g, '');
+    if (cleanCustomerPhone.length === 12 && cleanCustomerPhone.startsWith('91')) {
+      cleanCustomerPhone = cleanCustomerPhone.slice(2);
+    } else if (cleanCustomerPhone.length === 11 && cleanCustomerPhone.startsWith('0')) {
+      cleanCustomerPhone = cleanCustomerPhone.slice(1);
+    }
+    if (!/^[6-9]\d{9}$/.test(cleanCustomerPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid mobile number. Provide a valid 10-digit Indian phone number.',
       });
     }
 
@@ -332,24 +354,34 @@ const createPublicBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Business storefront not found or inactive' });
     }
 
-    let packageName = req.body.packageName || 'Custom Booking';
-    let totalAmount = Number(req.body.totalAmount) > 0 ? Number(req.body.totalAmount) : 5000;
-    let advanceTokenPercent = Number(req.body.advanceTokenPercent) > 0 ? Number(req.body.advanceTokenPercent) : 20;
+    let packageName = 'Custom Booking Request';
+    let totalAmount = 0;
+    let advanceTokenPercent = 0;
 
     if (packageId) {
-      const pkg = await ServicePackage.findOne({ _id: packageId, businessId: tenant._id, isAvailable: true });
-      if (pkg) {
-        packageName = pkg.name;
-        totalAmount = pkg.price;
-        advanceTokenPercent = pkg.advanceTokenPercent || 20;
+      if (!mongoose.Types.ObjectId.isValid(packageId)) {
+        return res.status(400).json({ success: false, message: 'Invalid service package' });
       }
+      const pkg = await ServicePackage.findOne({
+        _id: packageId,
+        businessId: tenant._id,
+        isAvailable: true,
+      });
+      if (!pkg) {
+        return res.status(404).json({ success: false, message: 'Service package not found or unavailable' });
+      }
+      packageName = pkg.name;
+      totalAmount = Number(pkg.price) || 0;
+      advanceTokenPercent = Number.isFinite(Number(pkg.advanceTokenPercent))
+        ? Number(pkg.advanceTokenPercent)
+        : 0;
     }
 
-    // Required token advance calculation
-    const calculatedAdvance = req.body.advancePaid !== undefined && Number(req.body.advancePaid) >= 0
-      ? Number(req.body.advancePaid)
-      : Math.round((totalAmount * advanceTokenPercent) / 100);
-    const balanceDue = Math.max(0, totalAmount - calculatedAdvance);
+    // A public booking request is not a payment. Prices come from the package,
+    // never from the browser, and no advance is recorded until a verified
+    // Razorpay webhook confirms the capture.
+    const expectedAdvance = Math.round((totalAmount * advanceTokenPercent) / 100);
+    const balanceDue = totalAmount;
 
     const dateCode = Date.now().toString().slice(-6);
     const randCode = Math.floor(100 + Math.random() * 900);
@@ -371,15 +403,17 @@ const createPublicBooking = async (req, res) => {
       packageId: packageId || null,
       packageName,
       customerName,
-      customerPhone,
+      customerPhone: cleanCustomerPhone,
       customerEmail: customerEmail || '',
       eventDate: new Date(eventDate),
       timeSlot,
       location,
       totalAmount,
-      advancePaid: calculatedAdvance,
+      advancePaid: 0,
+      advanceTokenPercent,
+      expectedAdvance,
       balanceDue,
-      paymentStatus: 'PARTIALLY_PAID',
+      paymentStatus: 'UNPAID',
       bookingStatus: 'PENDING',
       passengers: Array.isArray(passengers) ? passengers : [],
       notes,
@@ -412,12 +446,10 @@ const createPublicBooking = async (req, res) => {
 
     // Sync Customer / Enquiry into CRM Lead Pipeline
     try {
-      const cleanPhone = customerPhone.replace(/\D/g, '');
-      const existingLead = await Lead.findOne({ businessId: tenant._id, phone: cleanPhone });
+      const existingLead = await Lead.findOne({ businessId: tenant._id, phone: cleanCustomerPhone });
 
       if (existingLead) {
-        existingLead.status = 'QUALIFIED';
-        existingLead.budget = totalAmount;
+        existingLead.budget = Math.max(Number(existingLead.budget) || 0, Number(totalAmount) || 0);
         existingLead.notes.push({
           note: `Booking request ${bookingNumber} placed for ${packageName} on ${new Date(eventDate).toDateString()}`,
           authorName: 'Online Booking System',
@@ -428,13 +460,13 @@ const createPublicBooking = async (req, res) => {
         await Lead.create({
           businessId: tenant._id,
           name: customerName,
-          phone: cleanPhone,
+          phone: cleanCustomerPhone,
           email: customerEmail || '',
           source: 'WEBSITE',
-          campaignName: enrichedAttribution.utmCampaign || 'Organic Studio Booking',
+          campaignName: enrichedAttribution.utmCampaign || '',
           utmSource: enrichedAttribution.utmSource || '',
           utmCampaign: enrichedAttribution.utmCampaign || '',
-          status: 'QUALIFIED',
+          status: 'NEW',
           budget: totalAmount,
           notes: [
             {
@@ -455,10 +487,10 @@ const createPublicBooking = async (req, res) => {
         tenant,
         eventName: 'Schedule',
         eventId: booking.bookingNumber,
-        eventSourceUrl: req.headers.referer || `https://${slug}.omniva.io/book`,
+        eventSourceUrl: req.headers.referer || buildAppUrl(req, `/store/${slug}`) || undefined,
         userData: {
           email: customerEmail,
-          phone: customerPhone,
+          phone: cleanCustomerPhone,
           fbclid: enrichedAttribution.fbclid,
         },
         customData: {
@@ -479,7 +511,10 @@ const createPublicBooking = async (req, res) => {
         eventDate: booking.eventDate,
         totalAmount: booking.totalAmount,
         advancePaid: booking.advancePaid,
+        expectedAdvance: booking.expectedAdvance,
+        advanceTokenPercent: booking.advanceTokenPercent,
         balanceDue: booking.balanceDue,
+        paymentStatus: booking.paymentStatus,
         bookingStatus: booking.bookingStatus,
       },
     });

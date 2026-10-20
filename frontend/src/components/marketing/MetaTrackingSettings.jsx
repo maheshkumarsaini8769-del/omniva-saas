@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useAuth } from '../../context/useAuth';
 import { 
   Share2, 
   CheckCircle2, 
@@ -24,6 +25,7 @@ const getAuthHeaders = () => {
 };
 
 export const MetaTrackingSettings = () => {
+  const { user } = useAuth();
   const [settings, setSettings] = useState({
     metaPixelId: '',
     capiTokenMasked: '',
@@ -43,6 +45,8 @@ export const MetaTrackingSettings = () => {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [statusError, setStatusError] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -56,17 +60,18 @@ export const MetaTrackingSettings = () => {
           }
         }
       } catch (err) {
-        console.warn('Fallback fetching Meta settings:', err);
-        // Fallback default state
+        setLoadError(
+          err.response?.data?.message || 'Unable to load Meta tracking settings from the server.'
+        );
         setSettings({
-          metaPixelId: '987654321098765',
-          capiTokenMasked: '••••••••839211',
-          webhookUrl: `${window.location.origin}/api/webhooks/meta?tenantSlug=desi-rasoi-achar`,
-          verifyToken: 'omniva_meta_verify_token_2026',
-          hasCapiToken: true,
+          metaPixelId: '',
+          capiTokenMasked: '',
+          webhookUrl: '',
+          verifyToken: '',
+          hasCapiToken: false,
         });
-        setMetaPixelInput('987654321098765');
-        setIsConfirmed(true);
+        setMetaPixelInput('');
+        setIsConfirmed(false);
       } finally {
         setLoading(false);
       }
@@ -80,34 +85,39 @@ export const MetaTrackingSettings = () => {
     setSaving(true);
     setSaveSuccess(false);
     setStatusMessage('');
+    setStatusError(false);
     try {
       const payload = { metaPixelId: metaPixelInput };
       if (metaCapiInput.trim()) {
         payload.metaCapiToken = metaCapiInput.trim();
       }
       const res = await axios.put('/api/meta/settings', payload, { headers: getAuthHeaders() });
-      if (res.data.success) {
-        setSaveSuccess(true);
-        setMetaCapiInput('');
-        setIsConfirmed(true);
-        setStatusMessage('Facebook & Instagram Ads settings saved and confirmed successfully!');
-        
-        // Refresh
-        try {
-          const updated = await axios.get('/api/meta/settings', { headers: getAuthHeaders() });
-          if (updated.data?.settings) setSettings(updated.data.settings);
-        } catch {
-          setSettings(prev => ({ ...prev, metaPixelId: metaPixelInput, hasCapiToken: true }));
-        }
-        setTimeout(() => setSaveSuccess(false), 4000);
+      if (!res.data.success) {
+        throw new Error(res.data.message || 'The server did not confirm the settings update.');
       }
-    } catch (err) {
-      // Graceful local save fallback
-      setSettings(prev => ({ ...prev, metaPixelId: metaPixelInput, hasCapiToken: true }));
+
       setSaveSuccess(true);
+      setMetaCapiInput('');
       setIsConfirmed(true);
-      setStatusMessage('Settings saved locally. Ready for live Meta event streaming!');
+      setStatusMessage(res.data.message || 'Meta settings saved successfully.');
+
+      if (res.data.settings) {
+        setSettings((prev) => ({ ...prev, ...res.data.settings }));
+      }
+
+      // Refresh the masked token and webhook details from the server.
+      try {
+        const updated = await axios.get('/api/meta/settings', { headers: getAuthHeaders() });
+        if (updated.data?.settings) setSettings(updated.data.settings);
+      } catch {
+        // The save response is authoritative; the optional refresh can fail.
+      }
       setTimeout(() => setSaveSuccess(false), 4000);
+    } catch (err) {
+      setStatusError(true);
+      setStatusMessage(
+        err.response?.data?.message || err.message || 'Unable to save Meta settings.'
+      );
     } finally {
       setSaving(false);
     }
@@ -116,35 +126,36 @@ export const MetaTrackingSettings = () => {
   const handleTestCapi = async () => {
     setTestingCapi(true);
     setTestResult(null);
+    setStatusMessage('');
+    setStatusError(false);
     try {
       const res = await axios.post('/api/meta/test-capi', {
         eventName: 'Lead',
-        testEmail: 'customer.demo@achar.example',
-        testPhone: '9876543210',
-        value: 1250,
+        testEmail: user?.email || '',
+        value: 0,
       }, { headers: getAuthHeaders() });
-      setTestResult(res.data);
+
+      const result = res.data || {};
+      setTestResult(result);
+
+      if (!result.success) {
+        setIsConfirmed(false);
+        setStatusError(true);
+        setStatusMessage(result.message || 'Meta rejected the test event.');
+        return false;
+      }
+
       setIsConfirmed(true);
-      setStatusMessage('Test event confirmed! Meta CAPI received payload with verified SHA-256 hash.');
+      setStatusMessage(result.message || 'Test event accepted by Meta CAPI.');
+      return true;
     } catch (err) {
-      // Fallback simulated success
-      setTestResult({
-        success: true,
-        message: 'Meta CAPI simulation verified! Handshake acknowledged.',
-        result: {
-          mode: 'SIMULATION',
-          eventId: `test_${Date.now()}`,
-          hashedPayload: {
-            em: '7c6a5e0b8...sha256',
-            ph: 'a89c4d2e1...sha256',
-            event_name: 'Lead',
-            currency: 'INR',
-            value: 1250
-          }
-        }
-      });
-      setIsConfirmed(true);
-      setStatusMessage('Test conversion event verified! Ready to track live Facebook & Instagram ad conversions.');
+      const message =
+        err.response?.data?.message || err.message || 'Unable to dispatch a test event to Meta.';
+      setTestResult({ success: false, message });
+      setIsConfirmed(false);
+      setStatusError(true);
+      setStatusMessage(message);
+      return false;
     } finally {
       setTestingCapi(false);
     }
@@ -153,11 +164,12 @@ export const MetaTrackingSettings = () => {
   const handleVerifyConnection = async () => {
     setVerifying(true);
     setStatusMessage('');
+    setStatusError(false);
     try {
-      await new Promise(r => setTimeout(r, 600));
-      await handleTestCapi();
-      setIsConfirmed(true);
-      setStatusMessage('Connection Confirmed! Facebook & Instagram Ads sync is active & verified.');
+      const ok = await handleTestCapi();
+      if (ok) {
+        setStatusMessage('Connection test accepted by Meta CAPI.');
+      }
     } finally {
       setVerifying(false);
     }
@@ -191,7 +203,7 @@ export const MetaTrackingSettings = () => {
               <span>Facebook &amp; Instagram Ads Control Center</span>
               {isConfirmed ? (
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed &amp; Active 🟢
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Configured
                 </span>
               ) : (
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
@@ -200,7 +212,7 @@ export const MetaTrackingSettings = () => {
               )}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sync Meta Lead Ads directly into CRM and fire server-side Conversions API (CAPI) events with 100% data accuracy.
+              Sync Meta Lead Ads directly into CRM and fire server-side Conversions API (CAPI) events using hashed customer data.
             </p>
           </div>
         </div>
@@ -221,9 +233,26 @@ export const MetaTrackingSettings = () => {
         </div>
       </div>
 
+      {loadError && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{loadError}</span>
+        </div>
+      )}
+
       {statusMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div
+          className={`p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs border ${
+            statusError
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          }`}
+        >
+          {statusError ? (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          )}
           <span>{statusMessage}</span>
         </div>
       )}
@@ -241,7 +270,7 @@ export const MetaTrackingSettings = () => {
             </span>
           </div>
           <p className="text-slate-600 leading-relaxed">
-            Your Facebook Pixel ID, Conversions API Access Token, and lead webhook subscriptions are provisioned and monitored directly by your platform Super Admin. You do not need to generate or configure Graph API tokens.
+            Your Facebook Pixel ID, Conversions API Access Token, and lead webhook subscriptions are provisioned directly by your platform Super Admin. You do not need to generate or configure Graph API tokens.
           </p>
         </div>
       </div>
@@ -255,11 +284,11 @@ export const MetaTrackingSettings = () => {
               <span>Meta Instant Form Webhook Endpoint</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Connect this URL to your Meta App/Page so Facebook & Instagram leads flow instantly into your CRM.
+              Connect this URL to your Meta App/Page so Facebook & Instagram leads can flow into your CRM through the webhook.
             </p>
           </div>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Endpoint
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Webhook Endpoint
           </span>
         </div>
 
@@ -272,13 +301,15 @@ export const MetaTrackingSettings = () => {
               <input
                 type="text"
                 readOnly
-                value={settings.webhookUrl || `${window.location.origin}/api/webhooks/meta?tenantSlug=desi-rasoi-achar`}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none select-all"
+                value={settings.webhookUrl || ''}
+                placeholder="Webhook URL is not available"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none select-all"
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(settings.webhookUrl || `${window.location.origin}/api/webhooks/meta?tenantSlug=desi-rasoi-achar`, 'webhook')}
-                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer"
+                onClick={() => copyToClipboard(settings.webhookUrl, 'webhook')}
+                disabled={!settings.webhookUrl}
+                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Copy Webhook URL"
               >
                 {copiedWebhook ? <Check className="w-4 h-4 text-emerald-600 font-bold" /> : <Copy className="w-4 h-4" />}
@@ -294,13 +325,15 @@ export const MetaTrackingSettings = () => {
               <input
                 type="text"
                 readOnly
-                value={settings.verifyToken || 'omniva_meta_verify_token_2026'}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none select-all"
+                value={settings.verifyToken || ''}
+                placeholder="Verify token is not configured by the platform"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none select-all"
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(settings.verifyToken || 'omniva_meta_verify_token_2026', 'token')}
-                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer"
+                onClick={() => copyToClipboard(settings.verifyToken, 'token')}
+                disabled={!settings.verifyToken}
+                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Copy Verify Token"
               >
                 {copiedToken ? <Check className="w-4 h-4 text-emerald-600 font-bold" /> : <Copy className="w-4 h-4" />}
@@ -315,7 +348,7 @@ export const MetaTrackingSettings = () => {
             Meta Webhook Instructions:
           </div>
           <p className="text-slate-600">
-            In <strong>Facebook Developers</strong> &rarr; <strong>Webhooks</strong> &rarr; select <strong>Page</strong> &rarr; subscribe to <strong>leadgen</strong> &amp; <strong>messages</strong>. Enter the Callback URL and Verify Token above to enable automatic 2-second lead ingestion.
+            In <strong>Facebook Developers</strong> &rarr; <strong>Webhooks</strong> &rarr; select <strong>Page</strong> &rarr; subscribe to <strong>leadgen</strong> &amp; <strong>messages</strong>. Enter the Callback URL and Verify Token above to enable webhook lead ingestion.
           </p>
         </div>
       </div>
@@ -384,11 +417,11 @@ export const MetaTrackingSettings = () => {
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Save & Confirm Meta Settings'}
+              {saving ? 'Saving...' : 'Save Meta Settings'}
             </button>
             {saveSuccess && (
               <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> Settings Saved & Confirmed!
+                <CheckCircle2 className="w-4 h-4" /> Settings Saved
               </span>
             )}
           </div>
@@ -419,17 +452,37 @@ export const MetaTrackingSettings = () => {
         </div>
 
         {testResult && (
-          <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" />
-                Connection Status: {testResult.result?.mode || 'CONFIRMED'}
+          <div
+            className={`p-4 rounded-xl space-y-2 text-xs border ${
+              testResult.success
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-rose-50 text-rose-900 border-rose-200'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div
+                className={`font-bold flex items-center gap-1.5 ${
+                  testResult.success ? 'text-emerald-400' : 'text-rose-700'
+                }`}
+              >
+                {testResult.success ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <AlertCircle className="w-4 h-4" />
+                )}
+                Connection Status: {testResult.success ? 'CONFIRMED' : 'FAILED'}
               </div>
-              <span className="font-mono text-[10px] text-slate-400">
-                Event ID: {testResult.result?.eventId}
-              </span>
+              {testResult.result?.eventId && (
+                <span
+                  className={`font-mono text-[10px] ${
+                    testResult.success ? 'text-slate-400' : 'text-rose-500'
+                  }`}
+                >
+                  Event ID: {testResult.result.eventId}
+                </span>
+              )}
             </div>
-            <div className="text-slate-300 text-[11px]">
+            <div className={testResult.success ? 'text-slate-300 text-[11px]' : 'text-rose-700 text-[11px]'}>
               {testResult.message}
             </div>
             {testResult.result?.hashedPayload && (

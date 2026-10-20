@@ -3,6 +3,11 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
+// Tests must never send real WhatsApp messages to fake phone numbers, even when
+// the developer's environment contains live Cloud API credentials.
+process.env.WHATSAPP_ACCESS_TOKEN = '';
+process.env.WHATSAPP_PHONE_NUMBER_ID = '';
+
 const { app } = require('../src/server');
 const AutomationRule = require('../src/models/AutomationRule');
 const AutomationLog = require('../src/models/AutomationLog');
@@ -152,7 +157,7 @@ const runTests = async () => {
           },
           action: {
             type: 'OUTBOUND_WEBHOOK',
-            target: 'https://webhook.site/omniva-test-dispatch-disabled',
+            target: '',
             template: 'Order {{orderNumber}} placed for ₹{{totalAmount}}',
           },
         }),
@@ -229,7 +234,7 @@ const runTests = async () => {
     });
 
     // 7. Trigger Engine Execution via Storefront: Order under ₹500
-    await test('7. Storefront Order placement triggers automation (totalAmount < 500 skips VIP rule, executes ALWAYS rule)', async () => {
+    await test('7. Storefront Order placement logs skipped actions when no provider or webhook URL is configured', async () => {
       const res = await fetch(`${BASE_URL}/public/store/${merchantASlug}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -261,9 +266,9 @@ const runTests = async () => {
       const rule1 = await AutomationRule.findById(ruleA1Id);
       if (rule1.executionCount !== 0) throw new Error(`Expected Rule 1 executionCount 0, got ${rule1.executionCount}`);
 
-      // Check Rule 2 (Condition ALWAYS should execute)
+      // Check Rule 2 (Condition ALWAYS matches, but no webhook URL is configured)
       const rule2 = await AutomationRule.findById(ruleA2Id);
-      if (rule2.executionCount !== 1) throw new Error(`Expected Rule 2 executionCount 1, got ${rule2.executionCount}`);
+      if (rule2.executionCount !== 0) throw new Error(`Expected Rule 2 executionCount 0, got ${rule2.executionCount}`);
 
       // Check AutomationLog entry for Rule 2
       const log = await AutomationLog.findOne({
@@ -271,12 +276,13 @@ const runTests = async () => {
         ruleId: ruleA2Id,
       });
       if (!log) throw new Error('AutomationLog for Rule 2 not found');
-      if (log.status !== 'SUCCESS') throw new Error(`Expected status SUCCESS, got ${log.status}`);
+      if (log.status !== 'SKIPPED') throw new Error(`Expected status SKIPPED, got ${log.status}`);
+      if (!log.errorMessage.toLowerCase().includes('no outbound webhook url')) throw new Error('Missing skip reason for unconfigured webhook');
       if (!log.payloadSummary.includes('Order')) throw new Error('Payload summary not formatted properly');
     });
 
     // 8. Trigger Engine Execution via Storefront: Order over ₹500
-    await test('8. Storefront Order placement with totalAmount > 500 executes both rules', async () => {
+    await test('8. Storefront Order placement with totalAmount > 500 records both actions without fake success', async () => {
       const res = await fetch(`${BASE_URL}/public/store/${merchantASlug}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -309,15 +315,19 @@ const runTests = async () => {
       const rule1 = await AutomationRule.findById(ruleA1Id);
       const rule2 = await AutomationRule.findById(ruleA2Id);
 
-      if (rule1.executionCount !== 1) throw new Error(`Expected Rule 1 executionCount 1, got ${rule1.executionCount}`);
-      if (rule2.executionCount !== 2) throw new Error(`Expected Rule 2 executionCount 2, got ${rule2.executionCount}`);
+      if (rule1.executionCount !== 0) throw new Error(`Expected Rule 1 executionCount 0, got ${rule1.executionCount}`);
+      if (rule2.executionCount !== 0) throw new Error(`Expected Rule 2 executionCount 0, got ${rule2.executionCount}`);
 
-      // Check VIP WhatsApp log has interpolated customer name
+      // Check the WhatsApp action is recorded as skipped (no provider configured),
+      // while still proving the template was interpolated correctly.
       const vipLog = await AutomationLog.findOne({
         businessId: merchantATenantId,
         ruleId: ruleA1Id,
       });
       if (!vipLog) throw new Error('VIP AutomationLog not found');
+      if (vipLog.status === 'SUCCESS') throw new Error('WhatsApp action must not report SUCCESS without a real delivery');
+      if (!['SKIPPED', 'FAILED'].includes(vipLog.status)) throw new Error(`Unexpected WhatsApp log status: ${vipLog.status}`);
+      if (!vipLog.errorMessage) throw new Error('Missing WhatsApp failure/skip reason');
       if (!vipLog.payloadSummary.includes('Rajesh Khanna')) {
         throw new Error(`Token interpolation failed. Summary: ${vipLog.payloadSummary}`);
       }

@@ -6,10 +6,32 @@ const ServicePackage = require('../models/ServicePackage');
 const Order = require('../models/Order');
 const Lead = require('../models/Lead');
 const Coupon = require('../models/Coupon');
-const { DEFAULT_COUPONS } = require('./couponController');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
-const { addStoredOrder } = require('../utils/sharedOrderStore');
+const { buildAppUrl } = require('../utils/appUrl');
+
+// Restore stock when a multi-item decrement or the subsequent order insert fails.
+// Without this, an out-of-stock item later in the cart leaves earlier items
+// permanently decremented even though no order was created.
+const restoreDecrementedStock = async (decrementedItems) => {
+  for (const item of [...decrementedItems].reverse()) {
+    try {
+      if (item.variantId) {
+        await Product.updateOne(
+          { _id: item.productId, 'variants._id': item.variantId },
+          { $inc: { 'variants.$.stockQuantity': item.quantity } }
+        );
+      } else {
+        await Product.updateOne(
+          { _id: item.productId },
+          { $inc: { stockQuantity: item.quantity } }
+        );
+      }
+    } catch (restoreErr) {
+      console.error('[Stock Rollback Error]:', restoreErr.message);
+    }
+  }
+};
 
 // @desc    Get public storefront data (Tenant info, categories, active products, service packages)
 // @route   GET /api/public/store/:slug
@@ -19,502 +41,14 @@ const getPublicStore = async (req, res) => {
     const { slug } = req.params;
 
     if (mongoose.connection.readyState !== 1) {
-      // Cloud preview demo store fallback
-      return res.json({
-        success: true,
-        data: {
-          store: {
-            businessName: 'Desi Rasoi Achar',
-            slug: slug || 'desi-rasoi-achar-1',
-            businessType: 'PRODUCT',
-            templateCode: 'PRODUCT',
-            enabledModules: {
-              automations: true,
-              crmLeads: true,
-              marketingAds: true,
-              products: true,
-              serviceBookings: false,
-              travelBookings: false,
-              inventory: true,
-              orders: true
-            },
-            branding: {
-              logo: '',
-              primaryColor: '#4f46e5',
-              secondaryColor: '#06b6d4'
-            },
-            contact: {
-              email: 'rahul@desirasoi.com',
-              phone: '9876543210'
-            }
-          },
-          categories: [
-            {
-              _id: 'cat_mango',
-              name: 'Mango Delights (Aam)',
-              slug: 'mango-delights',
-              description: 'Traditional sun-dried raw mango pickles infused with cold-pressed mustard oil and aromatic spices',
-              image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 1,
-            },
-            {
-              _id: 'cat_red_chilli',
-              name: 'Stuffed Red Chilli (Lal Mirch)',
-              slug: 'stuffed-red-chilli',
-              description: 'Authentic Banarasi thick winter red chillies hand-stuffed with roasted heirloom masala',
-              image: 'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 2,
-            },
-            {
-              _id: 'cat_green_chilli',
-              name: 'Green Chilli & Hari Mirch',
-              slug: 'green-chilli',
-              description: 'Spicy Rajasthani slit green chillies, tipore, and lemon-soaked tangy bites',
-              image: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 3,
-            },
-            {
-              _id: 'cat_garlic',
-              name: 'Garlic & Spicy Blends',
-              slug: 'garlic-spicy',
-              description: 'Golden whole garlic cloves and spicy thecha tempered in pure mustard oil',
-              image: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 4,
-            },
-            {
-              _id: 'cat_citrus',
-              name: 'Citrus & Lemon (Nimbu)',
-              slug: 'citrus-lemon',
-              description: 'Zero-oil sun-matured Kagzi lemon pickles with Himalayan rock salt and digestive carom',
-              image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 5,
-            },
-            {
-              _id: 'cat_sweet',
-              name: 'Sweet & Khatta Meetha',
-              slug: 'sweet-chunda',
-              description: 'Gujarati sweet mango chunda, royal fruit murabbas, and sweet-sour lime preserves',
-              image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 6,
-            },
-            {
-              _id: 'cat_mixed',
-              name: 'Heritage Mixed & Winter Veg',
-              slug: 'heritage-mixed',
-              description: 'Pachranga mixed winter veggies, cauliflower, carrots, and Punjabi village specials',
-              image: 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 7,
-            },
-            {
-              _id: 'cat_amla',
-              name: 'Amla & Health Herbal',
-              slug: 'amla-health',
-              description: 'Wild forest amla, organic fresh haldi, and ginger pickles rich in natural antioxidants',
-              image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 8,
-            },
-            {
-              _id: 'cat_royal',
-              name: 'Royal & Dry Fruit Delicacies',
-              slug: 'royal-dryfruit',
-              description: 'Rajasthani Ker Sangri, spiced cashew nuts, and royal desert delicacies',
-              image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 9,
-            },
-            {
-              _id: 'cat_gift',
-              name: 'Festive & Luxury Gift Boxes',
-              slug: 'festive-combos',
-              description: 'Curated 3-in-1 and 4-in-1 handcrafted wooden tasting hampers and celebration gift sets',
-              image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80',
-              orderIndex: 10,
-            },
-          ],
-          products: [
-            // 1. Mango Delights
-            {
-              _id: 'prod_m1',
-              name: 'Desi Kacchi Kairi Mango Achar',
-              slug: 'desi-kacchi-kairi-mango-achar',
-              categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
-              category: 'Mango Delights (Aam)',
-              description: 'Handcrafted with unblemished Ramkela raw mangoes, roasted fenugreek, nigella seeds, and pure cold-pressed mustard oil. Sun-cured for 21 days for maximum crunch.',
-              price: 299,
-              compareAtPrice: 399,
-              images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 60 },
-                { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 85 },
-                { name: '1 Kg Family Pack', price: 549, compareAtPrice: 749, stockQuantity: 50 },
-              ],
-              stockQuantity: 85,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_m2',
-              name: 'Hing & Methi Sun-Dried Raw Mango',
-              slug: 'hing-methi-sun-dried-mango',
-              categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
-              category: 'Mango Delights (Aam)',
-              description: 'Infused with aromatic compounding Hathras asafoetida (hing) and hand-pounded yellow mustard. Tangy, zesty, and zero artificial preservatives.',
-              price: 329,
-              compareAtPrice: 429,
-              images: ['https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 40 },
-                { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
-                { name: '1 Kg Family Pack', price: 599, compareAtPrice: 799, stockQuantity: 45 },
-              ],
-              stockQuantity: 70,
-              isAvailable: true,
-            },
-
-            // 2. Stuffed Red Chilli
-            {
-              _id: 'prod_rc1',
-              name: 'Banarasi Hand-Stuffed Red Chilli Pickle',
-              slug: 'banarasi-hand-stuffed-red-chilli',
-              categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
-              category: 'Stuffed Red Chilli (Lal Mirch)',
-              description: 'World-renowned Banarasi thick winter red chillies cored by hand and tightly filled with roasted amchur, fennel, and spiced mustard blend.',
-              price: 349,
-              compareAtPrice: 449,
-              images: ['https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 219, compareAtPrice: 289, stockQuantity: 50 },
-                { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
-                { name: '1 Kg Family Pack', price: 629, compareAtPrice: 849, stockQuantity: 40 },
-              ],
-              stockQuantity: 65,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_rc2',
-              name: 'Smoked Mustard Stuffed Lal Mirch',
-              slug: 'smoked-mustard-stuffed-lal-mirch',
-              categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
-              category: 'Stuffed Red Chilli (Lal Mirch)',
-              description: 'A fiery, smoky variant of stuffed red peppers cured in wood-pressed mustard oil with a punch of crushed black cumin and ajwain.',
-              price: 369,
-              compareAtPrice: 469,
-              images: ['https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 229, compareAtPrice: 299, stockQuantity: 40 },
-                { name: '500g Glass Jar', price: 369, compareAtPrice: 469, stockQuantity: 55 },
-                { name: '1 Kg Family Pack', price: 659, compareAtPrice: 899, stockQuantity: 30 },
-              ],
-              stockQuantity: 55,
-              isAvailable: true,
-            },
-
-            // 3. Green Chilli & Hari Mirch
-            {
-              _id: 'prod_gc1',
-              name: 'Rajasthani Hari Mirch Tipore & Slit Chilli',
-              slug: 'rajasthani-hari-mirch-tipore',
-              categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
-              category: 'Green Chilli & Hari Mirch',
-              description: 'Fresh Rajasthani green chillies tossed with cracked coriander, turmeric, fennel, and lemon juice. The ultimate lunch companion.',
-              price: 249,
-              compareAtPrice: 329,
-              images: ['https://images.unsplash.com/photo-1589135233689-d56b00b0d367?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 159, compareAtPrice: 219, stockQuantity: 70 },
-                { name: '500g Glass Jar', price: 249, compareAtPrice: 329, stockQuantity: 90 },
-                { name: '1 Kg Family Pack', price: 449, compareAtPrice: 599, stockQuantity: 45 },
-              ],
-              stockQuantity: 90,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_gc2',
-              name: 'Lemon & Green Chilli Tangy Zing',
-              slug: 'lemon-green-chilli-tangy-zing',
-              categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
-              category: 'Green Chilli & Hari Mirch',
-              description: 'Bite-sized whole green peppers aged alongside sour yellow Kagzi lemon wedges in mineral-rich pink Himalayan rock salt.',
-              price: 269,
-              compareAtPrice: 349,
-              images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 50 },
-                { name: '500g Glass Jar', price: 269, compareAtPrice: 349, stockQuantity: 75 },
-                { name: '1 Kg Family Pack', price: 489, compareAtPrice: 649, stockQuantity: 35 },
-              ],
-              stockQuantity: 75,
-              isAvailable: true,
-            },
-
-            // 4. Garlic & Spicy Blends
-            {
-              _id: 'prod_g1',
-              name: 'Desi Spicy Garlic Pickle (Lahsun Ka Achar)',
-              slug: 'desi-spicy-garlic-pickle',
-              categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
-              category: 'Garlic & Spicy Blends',
-              description: 'Whole peeled golden garlic cloves simmered slowly in fiery Kashmiri red chilli paste, mustard, and roasted cumin. Great for digestion.',
-              price: 319,
-              compareAtPrice: 419,
-              images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 60 },
-                { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
-                { name: '1 Kg Family Pack', price: 579, compareAtPrice: 779, stockQuantity: 40 },
-              ],
-              stockQuantity: 80,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_g2',
-              name: 'Kolhapuri Garlic Thecha & Mustard Relish',
-              slug: 'kolhapuri-garlic-thecha-relish',
-              categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
-              category: 'Garlic & Spicy Blends',
-              description: 'Coarsely pounded raw garlic and roasted green chillies tempered with hot peanut oil and freshly toasted sesame seeds.',
-              price: 289,
-              compareAtPrice: 379,
-              images: ['https://images.unsplash.com/photo-1621996346565-e3d5d6281699?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 50 },
-                { name: '500g Glass Jar', price: 289, compareAtPrice: 379, stockQuantity: 65 },
-                { name: '1 Kg Family Pack', price: 529, compareAtPrice: 699, stockQuantity: 30 },
-              ],
-              stockQuantity: 65,
-              isAvailable: true,
-            },
-
-            // 5. Citrus & Lemon (Nimbu)
-            {
-              _id: 'prod_c1',
-              name: 'Kagzi Nimbu Tangy Pickle (Zero Oil)',
-              slug: 'kagzi-nimbu-tangy-pickle',
-              categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
-              category: 'Citrus & Lemon (Nimbu)',
-              description: 'Paper-thin skin Kagzi lemons cured under the midday sun for 30 days with Himalayan rock salt, ajwain, and black pepper. Completely oil-free.',
-              price: 279,
-              compareAtPrice: 359,
-              images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 70 },
-                { name: '500g Glass Jar', price: 279, compareAtPrice: 359, stockQuantity: 95 },
-                { name: '1 Kg Family Pack', price: 499, compareAtPrice: 649, stockQuantity: 45 },
-              ],
-              stockQuantity: 95,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_c2',
-              name: 'Sweet & Sour Khatta Meetha Lemon Pickle',
-              slug: 'khatta-meetha-lemon-pickle',
-              categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
-              category: 'Citrus & Lemon (Nimbu)',
-              description: 'Juicy lemons sweetened with organic jaggery syrup and cinnamon quills. Cured until dark, syrupy, and deeply flavorful.',
-              price: 299,
-              compareAtPrice: 399,
-              images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 60 },
-                { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 75 },
-                { name: '1 Kg Family Pack', price: 549, compareAtPrice: 729, stockQuantity: 40 },
-              ],
-              stockQuantity: 75,
-              isAvailable: true,
-            },
-
-            // 6. Sweet & Khatta Meetha
-            {
-              _id: 'prod_sw1',
-              name: 'Traditional Gujarati Sweet Mango Chunda',
-              slug: 'traditional-gujarati-sweet-mango-chunda',
-              categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
-              category: 'Sweet & Khatta Meetha',
-              description: 'Grated green mangoes sun-cooked in raw unrefined sugar crystals, Kashmiri saffron strands, cardamom pods, and cinnamon.',
-              price: 339,
-              compareAtPrice: 439,
-              images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 65 },
-                { name: '500g Glass Jar', price: 339, compareAtPrice: 439, stockQuantity: 85 },
-                { name: '1 Kg Family Pack', price: 619, compareAtPrice: 799, stockQuantity: 40 },
-              ],
-              stockQuantity: 85,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_sw2',
-              name: 'Organic Gur Keri Raw Mango Launji',
-              slug: 'organic-gur-keri-mango-launji',
-              categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
-              category: 'Sweet & Khatta Meetha',
-              description: 'Slow-simmered raw mango pieces in pure organic sugarcane jaggery (gur), plump golden raisins, and roasted kalonji.',
-              price: 319,
-              compareAtPrice: 409,
-              images: ['https://images.unsplash.com/photo-1553279768-865429fa0078?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 50 },
-                { name: '500g Glass Jar', price: 319, compareAtPrice: 409, stockQuantity: 70 },
-                { name: '1 Kg Family Pack', price: 579, compareAtPrice: 749, stockQuantity: 35 },
-              ],
-              stockQuantity: 70,
-              isAvailable: true,
-            },
-
-            // 7. Heritage Mixed & Winter Veg
-            {
-              _id: 'prod_mv1',
-              name: 'Pachranga Heritage Winter Veggie Pickle',
-              slug: 'pachranga-heritage-winter-veggie',
-              categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
-              category: 'Heritage Mixed & Winter Veg',
-              description: 'Crisp winter cauliflower florets, crunchy red carrots, baby turnips, green peas, and lotus stem in aged mustard oil.',
-              price: 299,
-              compareAtPrice: 389,
-              images: ['https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 179, compareAtPrice: 239, stockQuantity: 65 },
-                { name: '500g Glass Jar', price: 299, compareAtPrice: 389, stockQuantity: 90 },
-                { name: '1 Kg Family Pack', price: 539, compareAtPrice: 699, stockQuantity: 50 },
-              ],
-              stockQuantity: 90,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_mv2',
-              name: 'Punjabi Gobhi Gajar Shalgam Crunchy Pickle',
-              slug: 'punjabi-gobhi-gajar-shalgam',
-              categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
-              category: 'Heritage Mixed & Winter Veg',
-              description: 'Grandma recipe sweet and sour winter special prepared with jaggery, malt vinegar, fresh ginger slivers, and mustard.',
-              price: 319,
-              compareAtPrice: 419,
-              images: ['https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 189, compareAtPrice: 259, stockQuantity: 55 },
-                { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
-                { name: '1 Kg Family Pack', price: 579, compareAtPrice: 769, stockQuantity: 40 },
-              ],
-              stockQuantity: 80,
-              isAvailable: true,
-            },
-
-            // 8. Amla & Health Herbal
-            {
-              _id: 'prod_ah1',
-              name: 'Wild Forest Amla & Turmeric Immunity Pickle',
-              slug: 'wild-forest-amla-turmeric',
-              categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
-              category: 'Amla & Health Herbal',
-              description: 'Hand-picked wild Indian gooseberries (amla) steam-cured with freshly scraped raw Salem turmeric roots and crushed black pepper.',
-              price: 329,
-              compareAtPrice: 429,
-              images: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 50 },
-                { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
-                { name: '1 Kg Family Pack', price: 599, compareAtPrice: 789, stockQuantity: 35 },
-              ],
-              stockQuantity: 70,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_ah2',
-              name: 'Organic Fresh Kacchi Haldi & Ginger Pickle',
-              slug: 'organic-fresh-kacchi-haldi-ginger',
-              categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
-              category: 'Amla & Health Herbal',
-              description: 'Zesty matchstick slices of organic raw yellow turmeric and tender young ginger marinated in freshly squeezed lemon juice.',
-              price: 349,
-              compareAtPrice: 449,
-              images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 209, compareAtPrice: 279, stockQuantity: 45 },
-                { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
-                { name: '1 Kg Family Pack', price: 629, compareAtPrice: 829, stockQuantity: 30 },
-              ],
-              stockQuantity: 65,
-              isAvailable: true,
-            },
-
-            // 9. Royal & Dry Fruit Delicacies
-            {
-              _id: 'prod_rf1',
-              name: 'Royal Rajasthani Ker Sangri Desert Pickle',
-              slug: 'royal-rajasthani-ker-sangri',
-              categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
-              category: 'Royal & Dry Fruit Delicacies',
-              description: 'Wild desert capers (Ker) and dried beans (Sangri) from the Thar desert, cooked in pure mustard oil with raisins and whole red chillies.',
-              price: 499,
-              compareAtPrice: 649,
-              images: ['https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 289, compareAtPrice: 389, stockQuantity: 40 },
-                { name: '500g Glass Jar', price: 499, compareAtPrice: 649, stockQuantity: 50 },
-                { name: '1 Kg Family Pack', price: 929, compareAtPrice: 1199, stockQuantity: 25 },
-              ],
-              stockQuantity: 50,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_rf2',
-              name: 'Shahi Spiced Cashew & Raisin Achar',
-              slug: 'shahi-spiced-cashew-raisin',
-              categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
-              category: 'Royal & Dry Fruit Delicacies',
-              description: 'Whole roasted Goan cashews and jumbo Afghan raisins tossed in a sweet-tart royal mango masala gravy.',
-              price: 549,
-              compareAtPrice: 699,
-              images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '250g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 35 },
-                { name: '500g Glass Jar', price: 549, compareAtPrice: 699, stockQuantity: 45 },
-                { name: '1 Kg Family Pack', price: 999, compareAtPrice: 1299, stockQuantity: 20 },
-              ],
-              stockQuantity: 45,
-              isAvailable: true,
-            },
-
-            // 10. Festive & Luxury Gift Boxes
-            {
-              _id: 'prod_gb1',
-              name: 'Grand 3-in-1 Handcrafted Wooden Heritage Crate',
-              slug: 'grand-3-in-1-wooden-heritage-crate',
-              categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
-              category: 'Festive & Luxury Gift Boxes',
-              description: 'Artisanal pine wood gift box featuring three 350g signature jars: Ramkela Mango, Banarasi Stuffed Red Chilli, and Kagzi Nimbu.',
-              price: 899,
-              compareAtPrice: 1199,
-              images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '3 x 350g Wooden Box Gift Set', price: 899, compareAtPrice: 1199, stockQuantity: 35 },
-              ],
-              stockQuantity: 35,
-              isAvailable: true,
-            },
-            {
-              _id: 'prod_gb2',
-              name: 'Royal 4-in-1 Festive Pickle Gift Hamper',
-              slug: 'royal-4-in-1-festive-gift-hamper',
-              categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
-              category: 'Festive & Luxury Gift Boxes',
-              description: 'The ultimate royal gift hamper with 4 handcrafted jars: Desi Garlic, Sweet Mango Chunda, Ker Sangri, and Banarasi Lal Mirch.',
-              price: 1199,
-              compareAtPrice: 1499,
-              images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
-              variants: [
-                { name: '4 x 350g Deluxe Hamper Box', price: 1199, compareAtPrice: 1499, stockQuantity: 25 },
-              ],
-              stockQuantity: 25,
-              isAvailable: true,
-            },
-          ],
-          packages: [],
-          coupons: DEFAULT_COUPONS.filter((c) => c.isActive),
-        }
+      return res.status(503).json({
+        success: false,
+        message: 'Storefront is temporarily unavailable. Please try again shortly.',
       });
     }
 
     const tenant = await Tenant.findOne({ slug, status: 'ACTIVE' }).select(
-      'businessName slug businessType templateCode enabledModules branding contact settings'
+      'businessName slug businessType templateCode enabledModules branding contact settings.currency settings.currencySymbol settings.enableCOD settings.enableOnlinePay settings.minOrderValue settings.shippingFee settings.freeShippingThreshold settings.metaPixelId'
     );
 
     if (!tenant) {
@@ -528,7 +62,7 @@ const getPublicStore = async (req, res) => {
       Product.find({ businessId: tenant._id, isAvailable: true })
         .sort({ createdAt: -1 })
         .populate('categoryId', 'name slug image')
-        .select('name slug description price compareAtPrice images variants stockQuantity trackQuantity isAvailable tags categoryId'),
+        .select('name slug description price compareAtPrice images stockQuantity trackQuantity isAvailable tags categoryId variants._id variants.name variants.sku variants.price variants.compareAtPrice variants.stockQuantity variants.attributes'),
       ServicePackage.find({ businessId: tenant._id, isAvailable: true })
         .sort({ price: 1 })
         .select('name slug category description duration price advanceTokenPercent deliverables images maxCapacityPerDay isAvailable'),
@@ -546,7 +80,7 @@ const getPublicStore = async (req, res) => {
         categories,
         products,
         packages,
-        coupons: coupons.length > 0 ? coupons : DEFAULT_COUPONS.filter((c) => c.isActive),
+        coupons: coupons,
       },
     });
   } catch (error) {
@@ -562,22 +96,9 @@ const getPublicProduct = async (req, res) => {
     const { slug, productSlug } = req.params;
 
     if (mongoose.connection.readyState !== 1) {
-      return res.json({
-        success: true,
-        data: {
-          name: (productSlug || '').replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-          slug: productSlug,
-          price: 299,
-          compareAtPrice: 399,
-          description: 'Handcrafted premium authentic Indian pickle made with cold-pressed mustard oil and sun-dried spices.',
-          images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
-          variants: [
-            { name: '250g Glass Jar', price: 189 },
-            { name: '500g Traditional Jar', price: 299 },
-            { name: '1 Kg Family Pack', price: 549 },
-          ],
-          isAvailable: true,
-        },
+      return res.status(503).json({
+        success: false,
+        message: 'Storefront is temporarily unavailable. Please try again shortly.',
       });
     }
 
@@ -590,7 +111,9 @@ const getPublicProduct = async (req, res) => {
       businessId: tenant._id,
       slug: productSlug,
       isAvailable: true,
-    }).populate('categoryId', 'name slug');
+    })
+      .populate('categoryId', 'name slug')
+      .select('name slug description price compareAtPrice images stockQuantity trackQuantity isAvailable tags categoryId variants._id variants.name variants.sku variants.price variants.compareAtPrice variants.stockQuantity variants.attributes');
 
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
@@ -614,9 +137,8 @@ const createPublicOrder = async (req, res) => {
       customerEmail,
       shippingAddress,
       items,
-      paymentMethod = 'COD',
+      paymentMethod,
       couponCode = '',
-      discount = 0,
       attribution = {},
       notes,
     } = req.body;
@@ -664,68 +186,72 @@ const createPublicOrder = async (req, res) => {
     const dateCode = Date.now().toString().slice(-6);
     const randCode = Math.floor(100 + Math.random() * 900);
     const orderNumber = `ORD-${dateCode}-${randCode}`;
-    const appliedDiscount = Math.max(0, Number(discount) || 0);
+    // Discount is always derived server-side from a validated coupon.
+    let appliedDiscount = 0;
+    let validatedCoupon = null;
     const cleanCouponCode = (couponCode || '').toString().trim().toUpperCase();
 
     if (mongoose.connection.readyState !== 1) {
-      // Cloud preview / serverless offline order creation
-      let calcSubtotal = 0;
-      const orderItems = items.map((cartItem) => {
-        const qty = Math.max(1, parseInt(cartItem.quantity, 10) || 1);
-        const rawPrice = cartItem.price;
-        const unitPrice = typeof rawPrice === 'number' ? rawPrice : (parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299);
-        const itemSubtotal = unitPrice * qty;
-        calcSubtotal += itemSubtotal;
-        return {
-          productId: cartItem.productId || `prod_${Date.now()}`,
-          name: cartItem.name || 'Artisanal Pickle',
-          variantName: cartItem.variantName || '500g Jar',
-          price: unitPrice,
-          quantity: qty,
-          subtotal: itemSubtotal,
-          image: cartItem.image || (Array.isArray(cartItem.images) && cartItem.images[0]) || '',
-        };
-      });
-
-      const shippingFee = calcSubtotal >= 499 ? 0 : 50;
-      const totalAmount = Math.max(0, calcSubtotal - appliedDiscount + shippingFee);
-      const trackingUrl = `https://omniva-saas.vercel.app/orders/track?orderNumber=${orderNumber}&phone=${cleanCustomerPhone}`;
-
-      const createdOrderData = {
-        _id: `ord_${Date.now()}`,
-        orderId: `ord_${Date.now()}`,
-        orderNumber,
-        businessId: '6acf096038d323550330be64',
-        customerName,
-        customerPhone: cleanCustomerPhone,
-        customerEmail: customerEmail || '',
-        shippingAddress,
-        items: orderItems,
-        subtotal: calcSubtotal,
-        shippingFee,
-        discount: appliedDiscount,
-        couponCode: cleanCouponCode,
-        totalAmount,
-        paymentMethod,
-        paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',
-        orderStatus: 'NEW',
-        trackingUrl,
-        itemsCount: orderItems.length,
-        createdAt: new Date(),
-      };
-
-      addStoredOrder(createdOrderData);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Order placed successfully',
-        data: createdOrderData,
+      return res.status(503).json({
+        success: false,
+        message: 'Store is temporarily unable to accept orders. Please try again shortly.',
       });
     }
 
     const tenant = await Tenant.findOne({ slug, status: 'ACTIVE' });
     if (!tenant) {
       return res.status(404).json({ success: false, message: 'Storefront not found or inactive' });
+    }
+
+    const idempotencyKey = String(req.headers['x-idempotency-key'] || req.body.idempotencyKey || '')
+      .trim()
+      .slice(0, 128);
+    if (idempotencyKey) {
+      const existingOrder = await Order.findOne({
+        businessId: tenant._id,
+        idempotencyKey,
+      });
+      if (existingOrder) {
+        return res.status(200).json({
+          success: true,
+          message: 'Order already placed',
+          data: {
+            _id: existingOrder._id,
+            orderId: existingOrder._id,
+            orderNumber: existingOrder.orderNumber,
+            customerName: existingOrder.customerName,
+            customerPhone: existingOrder.customerPhone,
+            totalAmount: existingOrder.totalAmount,
+            paymentMethod: existingOrder.paymentMethod,
+            orderStatus: existingOrder.orderStatus,
+            shippingFee: existingOrder.shippingFee,
+            itemsCount: existingOrder.items.length,
+          },
+        });
+      }
+    }
+
+    // Validate the coupon against this tenant's records before trusting it.
+    if (cleanCouponCode) {
+      validatedCoupon = await Coupon.findOne({
+        businessId: tenant._id,
+        code: cleanCouponCode,
+        isActive: true,
+        $or: [{ expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+      });
+
+      if (!validatedCoupon) {
+        return res.status(400).json({
+          success: false,
+          message: `Coupon "${cleanCouponCode}" is invalid or expired`,
+        });
+      }
+      if (validatedCoupon.usageLimit > 0 && validatedCoupon.usageCount >= validatedCoupon.usageLimit) {
+        return res.status(400).json({
+          success: false,
+          message: `Coupon "${cleanCouponCode}" has reached its usage limit`,
+        });
+      }
     }
 
     // Verify each item against database pricing and inventory
@@ -744,25 +270,21 @@ const createPublicOrder = async (req, res) => {
         });
       }
 
-      // Fallback lookup by name or slug
+      // Fallback lookup by name or slug (still scoped to this tenant).
+      // Only add defined values so an empty payload cannot match an arbitrary product.
       if (!product) {
-        product = await Product.findOne({
-          businessId: tenant._id,
-          isAvailable: true,
-          $or: [
-            { name: cartItem.name },
-            { slug: cartItem.productId },
-            { slug: cartItem.slug },
-          ],
-        });
-      }
+        const fallbackMatchers = [];
+        if (cartItem.name) fallbackMatchers.push({ name: cartItem.name });
+        if (cartItem.productId) fallbackMatchers.push({ slug: cartItem.productId });
+        if (cartItem.slug) fallbackMatchers.push({ slug: cartItem.slug });
 
-      // Fallback: use any active product for tenant
-      if (!product) {
-        product = await Product.findOne({
-          businessId: tenant._id,
-          isAvailable: true,
-        });
+        if (fallbackMatchers.length > 0) {
+          product = await Product.findOne({
+            businessId: tenant._id,
+            isAvailable: true,
+            $or: fallbackMatchers,
+          });
+        }
       }
 
       if (!product) {
@@ -796,6 +318,12 @@ const createPublicOrder = async (req, res) => {
           );
         }
 
+        // No variant requested: choose the first server-side variant.
+        // This keeps checkout usable without ever trusting a client price.
+        if (!variant && !cartItem.variantId && !cartItem.variantName) {
+          variant = product.variants[0];
+        }
+
         if (variant) {
           targetVariantId = variant._id.toString();
           unitPrice = variant.price;
@@ -808,13 +336,15 @@ const createPublicOrder = async (req, res) => {
               message: `Insufficient stock for ${product.name} (${variant.name})`,
             });
           }
-        } else if (cartItem.price && Number(cartItem.price) > 0) {
-          unitPrice = Number(cartItem.price);
+        } else {
+          // Never trust a client-supplied price when the product has variants.
+          return res.status(400).json({
+            success: false,
+            message: `Please select a valid variant for ${product.name}`,
+          });
         }
       } else {
-        if (cartItem.price && Number(cartItem.price) > 0) {
-          unitPrice = Number(cartItem.price);
-        }
+        // Server price always wins for products without variants.
         // Inventory check on main product
         if (product.trackQuantity && product.stockQuantity < qty) {
           return res.status(400).json({
@@ -840,11 +370,64 @@ const createPublicOrder = async (req, res) => {
       });
     }
 
-    // Shipping rules: Free shipping over ₹499, otherwise ₹50
-    const shippingFee = verifiedSubtotal >= 499 ? 0 : 50;
+    // Validate minimum order value and compute the discount server-side.
+    if (validatedCoupon) {
+      if (validatedCoupon.minOrderValue > 0 && verifiedSubtotal < validatedCoupon.minOrderValue) {
+        return res.status(400).json({
+          success: false,
+          message: `Minimum order of ₹${validatedCoupon.minOrderValue} is required for coupon "${cleanCouponCode}"`,
+        });
+      }
+
+      if (validatedCoupon.discountType === 'PERCENTAGE') {
+        appliedDiscount = Math.round(
+          (verifiedSubtotal * Number(validatedCoupon.discountValue)) / 100
+        );
+        if (validatedCoupon.maxDiscount > 0 && appliedDiscount > validatedCoupon.maxDiscount) {
+          appliedDiscount = validatedCoupon.maxDiscount;
+        }
+      } else {
+        appliedDiscount = Math.min(
+          Number(validatedCoupon.discountValue) || 0,
+          verifiedSubtotal
+        );
+      }
+
+      // A coupon can never discount more than the verified cart value.
+      appliedDiscount = Math.min(appliedDiscount, verifiedSubtotal);
+    }
+
+    // Shipping thresholds are merchant-configured. Defaults preserve the
+    // historical free-shipping-over-₹499 / ₹50 rule for existing tenants.
+    const freeShippingThreshold = Number(tenant.settings?.freeShippingThreshold ?? 499);
+    const configuredShippingFee = Number(tenant.settings?.shippingFee ?? 50);
+    const minimumOrderValue = Number(tenant.settings?.minOrderValue ?? 0);
+    if (minimumOrderValue > 0 && verifiedSubtotal < minimumOrderValue) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum order value of ₹${minimumOrderValue} is required`,
+      });
+    }
+    const shippingFee =
+      freeShippingThreshold > 0 && verifiedSubtotal >= freeShippingThreshold
+        ? 0
+        : Math.max(0, configuredShippingFee);
     const totalAmount = Math.max(0, verifiedSubtotal - appliedDiscount + shippingFee);
 
-    // Atomically decrement stock with $gte check to eliminate TOCTOU race conditions
+    const normalizedPaymentMethod = String(paymentMethod || '').toUpperCase();
+    if (!['COD', 'ONLINE'].includes(normalizedPaymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Unsupported payment method' });
+    }
+    if (normalizedPaymentMethod === 'COD' && tenant.settings?.enableCOD === false) {
+      return res.status(400).json({ success: false, message: 'Cash on Delivery is not enabled for this store' });
+    }
+    if (normalizedPaymentMethod === 'ONLINE' && tenant.settings?.enableOnlinePay === false) {
+      return res.status(400).json({ success: false, message: 'Online payment is not enabled for this store' });
+    }
+
+    // Atomically decrement stock with $gte check to eliminate TOCTOU race conditions.
+    // Track every successful decrement so a later failure can roll the cart back.
+    const decrementedStock = [];
     for (const item of verifiedItems) {
       if (item.variantId) {
         if (item.trackQuantity) {
@@ -853,16 +436,29 @@ const createPublicOrder = async (req, res) => {
             { $inc: { 'variants.$.stockQuantity': -item.quantity } }
           );
           if (decResult.modifiedCount === 0) {
+            await restoreDecrementedStock(decrementedStock);
             return res.status(400).json({
               success: false,
               message: `Insufficient stock for ${item.name} (${item.variantName || 'selected variant'}). Another customer just completed their purchase!`,
             });
           }
+          decrementedStock.push({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+          });
         } else {
-          await Product.updateOne(
+          const decResult = await Product.updateOne(
             { _id: item.productId, 'variants._id': item.variantId },
             { $inc: { 'variants.$.stockQuantity': -item.quantity } }
           );
+          if (decResult.matchedCount > 0) {
+            decrementedStock.push({
+              productId: item.productId,
+              variantId: item.variantId,
+              quantity: item.quantity,
+            });
+          }
         }
       } else {
         if (item.trackQuantity) {
@@ -871,16 +467,27 @@ const createPublicOrder = async (req, res) => {
             { $inc: { stockQuantity: -item.quantity } }
           );
           if (decResult.modifiedCount === 0) {
+            await restoreDecrementedStock(decrementedStock);
             return res.status(400).json({
               success: false,
               message: `Insufficient stock for ${item.name}. Another customer just completed their purchase!`,
             });
           }
+          decrementedStock.push({
+            productId: item.productId,
+            quantity: item.quantity,
+          });
         } else {
-          await Product.updateOne(
+          const decResult = await Product.updateOne(
             { _id: item.productId },
             { $inc: { stockQuantity: -item.quantity } }
           );
+          if (decResult.matchedCount > 0) {
+            decrementedStock.push({
+              productId: item.productId,
+              quantity: item.quantity,
+            });
+          }
         }
       }
     }
@@ -913,39 +520,127 @@ const createPublicOrder = async (req, res) => {
       console.warn('[Duplicate Check Warning]:', dupErr.message);
     }
 
-    // Create Order
-    const order = await Order.create({
-      businessId: tenant._id,
-      orderNumber,
-      customerName,
-      customerPhone,
-      customerEmail: customerEmail || '',
-      shippingAddress,
-      items: verifiedItems,
-      subtotal: verifiedSubtotal,
-      shippingFee,
-      discount: appliedDiscount,
-      couponCode: cleanCouponCode,
-      totalAmount,
-      paymentMethod,
-      paymentStatus: paymentMethod === 'ONLINE' ? 'PENDING' : 'PENDING',
-      orderStatus: 'NEW',
-      attribution: enrichedAttribution,
-      notes: notes || '',
-      timeline: [
-        {
-          status: 'NEW',
-          note: isDuplicateOrder
-            ? `Order placed online via storefront (${paymentMethod}) - [Fraud Flag: Duplicate phone in 24h]`
-            : `Order placed online via storefront (${paymentMethod})`,
-          updatedBy: 'Customer',
-          timestamp: new Date(),
-        },
-      ],
-    });
+    // Reserve one coupon use atomically before creating the order. A plain
+    // "validate, then increment later" flow lets concurrent checkouts exceed
+    // the configured usage limit.
+    let couponReserved = false;
+    if (validatedCoupon) {
+      let reservedCoupon = null;
+      try {
+        reservedCoupon = await Coupon.findOneAndUpdate(
+          {
+            _id: validatedCoupon._id,
+            isActive: true,
+            $or: [{ expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+            $expr: {
+              $or: [
+                { $eq: ['$usageLimit', 0] },
+                { $lt: ['$usageCount', '$usageLimit'] },
+              ],
+            },
+          },
+          { $inc: { usageCount: 1 } }
+        );
+      } catch (couponErr) {
+        await restoreDecrementedStock(decrementedStock);
+        throw couponErr;
+      }
+      if (!reservedCoupon) {
+        await restoreDecrementedStock(decrementedStock);
+        return res.status(400).json({
+          success: false,
+          message: `Coupon "${cleanCouponCode}" has reached its usage limit`,
+        });
+      }
+      couponReserved = true;
+    }
+
+    // Create Order. If this fails, put back every unit we just decremented.
+    let order;
+    try {
+      order = await Order.create({
+        businessId: tenant._id,
+        orderNumber,
+        idempotencyKey: idempotencyKey || undefined,
+        customerName,
+        customerPhone,
+        customerEmail: customerEmail || '',
+        shippingAddress,
+        items: verifiedItems,
+        subtotal: verifiedSubtotal,
+        shippingFee,
+        discount: appliedDiscount,
+        couponCode: cleanCouponCode,
+        totalAmount,
+        paymentMethod: normalizedPaymentMethod,
+        paymentStatus: 'PENDING',
+        orderStatus: 'NEW',
+        stockDecremented: decrementedStock.length > 0,
+        attribution: enrichedAttribution,
+        notes: notes || '',
+        timeline: [
+          {
+            status: 'NEW',
+            note: isDuplicateOrder
+              ? `Order placed online via storefront (${normalizedPaymentMethod}) - [Fraud Flag: Duplicate phone in 24h]`
+              : `Order placed online via storefront (${normalizedPaymentMethod})`,
+            updatedBy: 'Customer',
+            timestamp: new Date(),
+          },
+        ],
+      });
+    } catch (orderErr) {
+      await restoreDecrementedStock(decrementedStock);
+      if (couponReserved) {
+        try {
+          await Coupon.updateOne(
+            { _id: validatedCoupon._id, usageCount: { $gt: 0 } },
+            { $inc: { usageCount: -1 } }
+          );
+        } catch (couponRollbackErr) {
+          console.warn('[Coupon rollback warning]:', couponRollbackErr.message);
+        }
+      }
+
+      // A concurrent retry with the same idempotency key won the unique index.
+      // Return that order instead of surfacing a 500 or creating a duplicate.
+      if (orderErr.code === 11000 && idempotencyKey) {
+        const existingOrder = await Order.findOne({
+          businessId: tenant._id,
+          idempotencyKey,
+        });
+        if (existingOrder) {
+          return res.status(200).json({
+            success: true,
+            message: 'Order already placed',
+            data: {
+              _id: existingOrder._id,
+              orderId: existingOrder._id,
+              orderNumber: existingOrder.orderNumber,
+              customerName: existingOrder.customerName,
+              customerPhone: existingOrder.customerPhone,
+              totalAmount: existingOrder.totalAmount,
+              paymentMethod: existingOrder.paymentMethod,
+              orderStatus: existingOrder.orderStatus,
+              shippingFee: existingOrder.shippingFee,
+              itemsCount: existingOrder.items.length,
+            },
+          });
+        }
+      }
+
+      throw orderErr;
+    }
 
     // Fire Automation Engine Event (Trigger -> Condition -> Action)
-    const trackingUrl = `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/orders/track?orderNumber=${order.orderNumber}&phone=${order.customerPhone}`;
+    const trackingUrl = buildAppUrl(
+      req,
+      `/orders/track?${new URLSearchParams({
+        orderNumber: order.orderNumber || '',
+        phone: order.customerPhone || '',
+        slug: slug || '',
+      }).toString()}`
+    );
     await triggerAutomation({
       businessId: tenant._id,
       trigger: 'ORDER_CREATED',
@@ -959,8 +654,8 @@ const createPublicOrder = async (req, res) => {
         paymentMethod: order.paymentMethod,
         shippingCity: order.shippingAddress?.city || '',
         isDuplicate: isDuplicateOrder ? 'true' : 'false',
-        itemsCount: order.items?.length || 1,
-        productName: order.items?.[0]?.name || 'Artisanal Product',
+        itemsCount: order.items?.length || 0,
+        productName: order.items?.[0]?.name || 'Unnamed item',
         trackingUrl,
       },
     }).catch((err) => console.error('[Automation Trigger Error]:', err.message));
@@ -986,7 +681,7 @@ const createPublicOrder = async (req, res) => {
           phone: cleanPhone,
           email: customerEmail || '',
           source: 'WEBSITE',
-          campaignName: enrichedAttribution.utmCampaign || 'Organic Storefront',
+          campaignName: enrichedAttribution.utmCampaign || '',
           utmSource: enrichedAttribution.utmSource || '',
           utmCampaign: enrichedAttribution.utmCampaign || '',
           status: 'WON',
@@ -1024,8 +719,6 @@ const createPublicOrder = async (req, res) => {
       }).catch((capiErr) => console.error('[CAPI Purchase Event Error]:', capiErr.message));
     }
 
-    addStoredOrder(order.toObject ? order.toObject() : order);
-
     res.status(201).json({
       success: true,
       message: 'Order placed successfully',
@@ -1043,49 +736,10 @@ const createPublicOrder = async (req, res) => {
       },
     });
   } catch (error) {
-    console.warn('[Order Processing Fallback]:', error.message);
-    const dateCode = Date.now().toString().slice(-6);
-    const randCode = Math.floor(100 + Math.random() * 900);
-    const fallbackOrderNumber = `ORD-${dateCode}-${randCode}`;
-    const cleanPhone = (req.body?.customerPhone || '').toString().replace(/\D/g, '').slice(-10);
-    const items = req.body?.items || [];
-    let subtotal = 0;
-    const formattedItems = items.map((i) => {
-      const q = Math.max(1, parseInt(i.quantity, 10) || 1);
-      const p = Number(i.price) || 299;
-      subtotal += p * q;
-      return {
-        productId: i.productId || `prod_${Date.now()}`,
-        name: i.name || 'Artisanal Pickle',
-        variantName: i.variantName || '500g Jar',
-        price: p,
-        quantity: q,
-        subtotal: p * q,
-      };
-    });
-    const fee = subtotal >= 499 ? 0 : 50;
-
-    const catchOrderData = {
-      _id: `ord_${Date.now()}`,
-      orderId: `ord_${Date.now()}`,
-      orderNumber: fallbackOrderNumber,
-      customerName: req.body?.customerName || 'Customer',
-      customerPhone: cleanPhone,
-      totalAmount: subtotal + fee,
-      paymentMethod: req.body?.paymentMethod || 'COD',
-      orderStatus: 'NEW',
-      shippingFee: fee,
-      itemsCount: formattedItems.length,
-      items: formattedItems,
-      createdAt: new Date(),
-    };
-
-    addStoredOrder(catchOrderData);
-
-    return res.status(201).json({
-      success: true,
-      message: 'Order placed successfully',
-      data: catchOrderData,
+    console.error('[Order Processing Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to place order right now. Please try again.',
     });
   }
 };
@@ -1095,45 +749,59 @@ const createPublicOrder = async (req, res) => {
 // @access  Public
 const trackPublicOrder = async (req, res) => {
   try {
-    const { orderNumber, phone } = req.query;
+    const { orderNumber, phone, slug } = req.query;
     if (!orderNumber || !phone) {
       return res.status(400).json({ success: false, message: 'Order number and customer phone are required' });
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = String(phone).replace(/\D/g, '');
 
-    if (mongoose.connection.readyState !== 1) {
-      return res.json({
-        success: true,
-        data: {
-          orderNumber: (orderNumber || '').trim(),
-          customerName: 'Valued Customer',
-          orderStatus: 'CONFIRMED',
-          paymentStatus: 'PAID',
-          paymentMethod: 'COD',
-          courierPartner: 'BlueDart Express',
-          trackingNumber: 'BLUEDART-88992211',
-          totalAmount: 598,
-          createdAt: new Date(Date.now() - 3600000),
-          timeline: [
-            { status: 'NEW', note: 'Order placed online via storefront', timestamp: new Date(Date.now() - 3600000) },
-            { status: 'CONFIRMED', note: 'Order confirmed and packing initiated', timestamp: new Date(Date.now() - 1800000) },
-            { status: 'SHIPPED', note: 'Dispatched with BlueDart Air (Tracking: BLUEDART-88992211)', timestamp: new Date(Date.now() - 600000) },
-          ],
-        },
+    // Reject empty/short input. An empty $regex would match every order
+    // sharing the supplied order number.
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide the 10-digit mobile number used at checkout',
       });
     }
 
-    const order = await Order.findOne({
-      orderNumber: orderNumber.trim(),
-      customerPhone: { $regex: cleanPhone.slice(-10) },
-    }).select('orderNumber customerName orderStatus paymentStatus paymentMethod courierPartner trackingNumber items totalAmount createdAt timeline');
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'No matching order found for this number and phone' });
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Order tracking is temporarily unavailable. Please try again.',
+      });
     }
 
-    res.json({ success: true, data: order });
+    const orderQuery = {
+      orderNumber: String(orderNumber).trim(),
+      customerPhone: { $regex: `${cleanPhone.slice(-10)}$` },
+    };
+
+    // Order numbers are unique per tenant, not across the whole platform.
+    // Scope by store slug when supplied, and refuse ambiguous matches otherwise.
+    if (slug) {
+      const tenant = await Tenant.findOne({ slug: String(slug).toLowerCase(), status: 'ACTIVE' }).select('_id');
+      if (!tenant) {
+        return res.status(404).json({ success: false, message: 'Storefront not found or inactive' });
+      }
+      orderQuery.businessId = tenant._id;
+    }
+
+    const matches = await Order.find(orderQuery)
+      .limit(2)
+      .select('orderNumber customerName orderStatus paymentStatus paymentMethod courierPartner trackingNumber items totalAmount createdAt timeline');
+
+    if (matches.length === 0) {
+      return res.status(404).json({ success: false, message: 'No matching order found for this number and phone' });
+    }
+    if (matches.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Multiple stores match this order number. Open the tracking link from your order confirmation.',
+      });
+    }
+
+    res.json({ success: true, data: matches[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1163,24 +831,23 @@ const createPublicInquiry = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Phone number is required for inquiry' });
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = String(phone).replace(/\D/g, '');
     if (cleanPhone.length < 10) {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit mobile number' });
     }
 
-    let tenant = null;
-    if (mongoose.connection.readyState === 1) {
-      tenant = await Tenant.findOne({ slug: slug.toLowerCase() });
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Inquiry service is temporarily unavailable. Please try again shortly.',
+      });
     }
 
+    const tenant = await Tenant.findOne({ slug: slug.toLowerCase(), status: 'ACTIVE' });
     if (!tenant) {
-      return res.status(200).json({
-        success: true,
-        message: 'Inquiry received successfully (demo)',
-        data: {
-          leadId: 'demo_lead_' + Date.now(),
-          whatsappUrl: `https://wa.me/919876543210?text=${encodeURIComponent(`Hi! I am interested in ${productName || 'your products'}`)}`,
-        },
+      return res.status(404).json({
+        success: false,
+        message: 'Storefront not found or inactive',
       });
     }
 
@@ -1190,7 +857,7 @@ const createPublicInquiry = async (req, res) => {
       phone: { $regex: cleanPhone.slice(-10) },
     });
 
-    const inquiryNote = `Storefront Inquiry: ${name || 'Customer'} inquired about ${productName || 'Product'}${productPrice ? ' (₹' + productPrice + ')' : ''} via ${source}.${message ? ' Message: ' + message : ''}`;
+    const inquiryNote = `Storefront inquiry from ${String(phone).trim()}${productName ? ` about ${productName}` : ''}${productPrice ? ` (₹${productPrice})` : ''} via ${source}.${message ? ` Message: ${message}` : ''}`;
 
     if (lead) {
       lead.notes.push({
@@ -1201,17 +868,17 @@ const createPublicInquiry = async (req, res) => {
       if (productPrice && (!lead.budget || lead.budget < productPrice)) {
         lead.budget = productPrice;
       }
-      if (name && (!lead.name || lead.name === 'Storefront Customer')) {
+      if (name && (!lead.name || ['Storefront customer', 'Unnamed storefront inquiry'].includes(lead.name))) {
         lead.name = name;
       }
       await lead.save();
     } else {
       lead = await Lead.create({
         businessId: tenant._id,
-        name: name || 'Storefront Customer',
+        name: name || 'Unnamed storefront inquiry',
         phone: cleanPhone,
-        source: source === 'EXIT_POPUP' ? 'WEBSITE' : 'WHATSAPP',
-        campaignName: utmCampaign || 'Storefront Organic',
+        source: source === 'EXIT_POPUP' ? 'WEBSITE' : ['WHATSAPP', 'WEBSITE', 'MANUAL', 'REFERRAL', 'OTHER'].includes(source) ? source : 'OTHER',
+        campaignName: utmCampaign || '',
         utmSource: utmSource || '',
         utmMedium: utmMedium || '',
         utmCampaign: utmCampaign || '',
@@ -1243,21 +910,23 @@ const createPublicInquiry = async (req, res) => {
           customerName: lead.name,
           customerPhone: lead.phone,
           source: lead.source,
-          productName: productName || 'Storefront Item',
+          productName: productName || '',
           budget: lead.budget || productPrice || 0,
-          menuUrl: `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/store/${slug}`,
+          menuUrl: buildAppUrl(req, `/store/${slug}`),
         },
       }).catch((e) => console.error('[Inquiry Automation Warning]:', e.message));
     } catch (autoErr) {
       console.error('[Inquiry Automation Error]:', autoErr.message);
     }
 
-    // Build WhatsApp URL
-    const tenantPhone = tenant.contact?.phone || '9876543210';
-    const cleanTenantDigits = tenantPhone.replace(/\D/g, '');
-    const cleanTenantPhone = cleanTenantDigits.startsWith('91') ? cleanTenantDigits : `91${cleanTenantDigits.slice(-10)}`;
-    const prefilledText = `Hi ${tenant.businessName}! I am inquiring about "${productName || 'your store'}"${productPrice ? ' (₹' + productPrice + ')' : ''}. Please share more details & COD options.`;
-    const whatsappUrl = `https://wa.me/${cleanTenantPhone}?text=${encodeURIComponent(prefilledText)}`;
+    // Build a WhatsApp URL only when the merchant has configured a contact number.
+    const tenantPhone = String(tenant.contact?.phone || '').replace(/\D/g, '');
+    let whatsappUrl = '';
+    if (tenantPhone) {
+      const cleanTenantPhone = tenantPhone.startsWith('91') ? tenantPhone : `91${tenantPhone.slice(-10)}`;
+      const prefilledText = `Hi ${tenant.businessName}! I am inquiring about "${productName || 'your store'}"${productPrice ? ' (₹' + productPrice + ')' : ''}. Please share more details & COD options.`;
+      whatsappUrl = `https://wa.me/${cleanTenantPhone}?text=${encodeURIComponent(prefilledText)}`;
+    }
 
     res.status(200).json({
       success: true,

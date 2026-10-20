@@ -1,61 +1,56 @@
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Tenant = require('../models/Tenant');
 
+// Fail fast if JWT_SECRET is missing in production
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('[authMiddleware] JWT_SECRET is required in production');
+}
+
 // Protect routes - JWT verification
 const protect = async (req, res, next) => {
-  let token;
+  const authHeader = req.headers.authorization;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET || 'omniva_default_secret_key_change_in_prod'
-      );
-
-      let user = null;
-      if (mongoose.connection.readyState === 1) {
-        user = await User.findById(decoded.id).select('-password');
-      }
-
-      if (!user) {
-        // Fallback for cloud demo mode when DB is disconnected
-        user = {
-          _id: decoded.id || '6acf096038d323550330be65',
-          id: decoded.id || '6acf096038d323550330be65',
-          name: decoded.role === 'SUPER_ADMIN' ? 'Mahesh (Super Admin)' : 'Rahul Sharma',
-          email: decoded.role === 'SUPER_ADMIN' ? 'superadmin@omniva.io' : 'rahul@desirasoi.com',
-          role: decoded.role || 'MERCHANT_OWNER',
-          businessId: decoded.businessId || '6acf096038d323550330be64',
-          isActive: true
-        };
-      }
-
-      req.user = user;
-
-      // If user belongs to a business, attach tenant info
-      if (user.businessId) {
-        req.businessId = user.businessId;
-      }
-
-      return next();
-    } catch (error) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired authorization token',
-      });
-    }
-  }
-
-  if (!token) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
       message: 'Not authorized, no token provided',
+    });
+  }
+
+  try {
+    const token = authHeader.slice(7);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+    const decoded = jwt.verify(token, jwtSecret);
+
+    // Always resolve the user from the database. Never fabricate a fallback user.
+    const user = await User.findById(decoded.id).select('-password');
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Account no longer exists. Please sign in again.',
+      });
+    }
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account has been deactivated. Contact support.',
+      });
+    }
+
+    req.user = user;
+    if (user.businessId) {
+      req.businessId = user.businessId;
+    }
+
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired authorization token',
     });
   }
 };
@@ -74,10 +69,16 @@ const authorize = (...roles) => {
 };
 
 // Strict Multi-Tenant Isolation Middleware
-// Ensures non-SuperAdmin cannot query or alter any other tenant's data
 const tenantScope = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized, authentication required',
+    });
+  }
+
+  // Super Admin has cross-tenant operational clearance
   if (req.user.role === 'SUPER_ADMIN') {
-    // Super Admin has cross-tenant operational clearance
     return next();
   }
 
@@ -88,36 +89,19 @@ const tenantScope = async (req, res, next) => {
     });
   }
 
-  // Verify the tenant itself is active
+  // A real tenant is required. Never fabricate one.
   let tenant = null;
-  if (mongoose.connection.readyState === 1) {
-    try {
-      tenant = await Tenant.findById(req.user.businessId);
-    } catch (e) {
-      tenant = null;
-    }
+  try {
+    tenant = await Tenant.findById(req.user.businessId);
+  } catch (error) {
+    tenant = null;
   }
 
   if (!tenant) {
-    // Cloud demo mode fallback when DB is disconnected
-    tenant = {
-      _id: req.user.businessId || '6acf096038d323550330be64',
-      businessName: 'Desi Rasoi Achar',
-      slug: 'desi-rasoi-achar-1',
-      businessType: 'PRODUCT',
-      status: 'ACTIVE',
-      planTier: 'GROWTH',
-      enabledModules: {
-        automations: true,
-        crmLeads: true,
-        marketingAds: true,
-        products: true,
-        serviceBookings: false,
-        travelBookings: false,
-        inventory: true,
-        orders: true,
-      },
-    };
+    return res.status(403).json({
+      success: false,
+      message: 'Associated business tenant not found',
+    });
   }
 
   if (tenant.status === 'SUSPENDED') {
@@ -130,9 +114,8 @@ const tenantScope = async (req, res, next) => {
   req.tenant = tenant;
   req.businessId = tenant._id;
 
-  // Prevent URL parameter tenant spoofing:
-  // e.g. if request is /api/orders/:businessId, it MUST match req.businessId
-  if (req.params.businessId && req.params.businessId !== req.businessId.toString()) {
+  // Prevent URL parameter tenant spoofing
+  if (req.params.businessId && String(req.params.businessId) !== String(req.businessId)) {
     return res.status(403).json({
       success: false,
       message: 'Security Violation: Cross-tenant data access is strictly forbidden.',

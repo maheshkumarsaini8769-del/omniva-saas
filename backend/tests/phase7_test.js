@@ -261,7 +261,7 @@ const runTests = async () => {
     });
 
     // 9. Financial Analytics Endpoint
-    await test('9. Financial Analytics (GET /api/subscriptions/analytics) calculates gross, net, COD split & net profit', async () => {
+    await test('9. Financial Analytics (GET /api/subscriptions/analytics) calculates gross, net, COD split & AOV', async () => {
       const res = await fetch(`${BASE_URL}/subscriptions/analytics`, {
         headers: { Authorization: `Bearer ${merchantAToken}` },
       });
@@ -272,7 +272,8 @@ const runTests = async () => {
       if (metrics.grossSales === undefined || metrics.grossSales <= 0) throw new Error('grossSales calculation error');
       if (metrics.netSales === undefined) throw new Error('netSales missing');
       if (metrics.codSales === undefined) throw new Error('codSales missing');
-      if (metrics.estimatedNetProfit === undefined) throw new Error('estimatedNetProfit missing');
+      if (metrics.aov === undefined) throw new Error('aov missing');
+      if (metrics.cancellationRate === undefined) throw new Error('cancellationRate missing');
       if (metrics.totalOrdersCount <= 0) throw new Error('totalOrdersCount error');
     });
 

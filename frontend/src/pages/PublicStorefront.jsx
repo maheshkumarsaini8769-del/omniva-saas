@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { NO_IMAGE_PLACEHOLDER } from '../utils/imagePlaceholder';
 import {
   ShoppingBag,
   Plus,
@@ -7,7 +8,6 @@ import {
   CheckCircle,
   Truck,
   ShieldCheck,
-  Star,
   MapPin,
   Phone,
   ArrowRight,
@@ -36,10 +36,6 @@ import {
 
 // Intelligent Search Synonyms & Multi-lingual Token Dictionary (Hindi + English)
 const SEARCH_SYNONYMS = {
-  aam: ['mango', 'aam', 'keri', 'kacha'],
-  mango: ['mango', 'aam', 'keri', 'pickle', 'achar'],
-  achar: ['pickle', 'achar', 'aachar', 'achari', 'jar'],
-  pickle: ['pickle', 'achar', 'aachar', 'achari'],
   mirch: ['chilli', 'chili', 'mirch', 'mirchi', 'pepper', 'lal mirch', 'hari mirch', 'banarasi'],
   chilli: ['chilli', 'chili', 'mirch', 'mirchi', 'pepper'],
   lal: ['red', 'lal', 'laal', 'mirch', 'banarasi'],
@@ -86,6 +82,22 @@ const matchesSearchQuery = (searchableText, query) => {
   });
 };
 
+const parseMoney = (value) => {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveVariantName = (product, selectedVariant = null) =>
+  selectedVariant?.name ||
+  product.jars?.find((j) => j.enabled !== false)?.name ||
+  product.variants?.[0]?.name ||
+  product.variant ||
+  '';
+
+
 export const PublicStorefront = () => {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
@@ -101,6 +113,17 @@ export const PublicStorefront = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('CART'); // 'CART' | 'CHECKOUT' | 'SUCCESS'
   const [placedOrder, setPlacedOrder] = useState(null);
+  const checkoutIdempotencyKey = useRef(null);
+
+  const getCheckoutIdempotencyKey = () => {
+    if (!checkoutIdempotencyKey.current) {
+      checkoutIdempotencyKey.current =
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${slug}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    }
+    return checkoutIdempotencyKey.current;
+  };
 
   // Coupon state
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -114,7 +137,7 @@ export const PublicStorefront = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
-  const [state, setState] = useState('Uttar Pradesh');
+  const [state, setState] = useState('');
   const [pincode, setPincode] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [notes, setNotes] = useState('');
@@ -131,7 +154,7 @@ export const PublicStorefront = () => {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState(null);
   const [bookingDate, setBookingDate] = useState('');
-  const [bookingTimeSlot, setBookingTimeSlot] = useState('Full Day');
+  const [bookingTimeSlot, setBookingTimeSlot] = useState('');
   const [bookingLocation, setBookingLocation] = useState('');
   const [bookingName, setBookingName] = useState('');
   const [bookingPhone, setBookingPhone] = useState('');
@@ -185,542 +208,50 @@ export const PublicStorefront = () => {
     fbclid: searchParams.get('fbclid') || '',
   };
 
-  const STOREFRONT_DEFAULT_COUPONS = [
-    {
-      _id: 'coup_desi15',
-      code: 'DESI15',
-      title: '15% Off Traditional Jars',
-      description: 'Get 15% discount on all orders above ₹399',
-      discountType: 'PERCENTAGE',
-      discountValue: 15,
-      minOrderValue: 399,
-      maxDiscount: 150,
-      isActive: true,
-    },
-    {
-      _id: 'coup_save100',
-      code: 'SAVE100',
-      title: 'Flat ₹100 Off Festive Offer',
-      description: 'Instant ₹100 discount on orders above ₹599',
-      discountType: 'FLAT',
-      discountValue: 100,
-      minOrderValue: 599,
-      maxDiscount: 100,
-      isActive: true,
-    },
-    {
-      _id: 'coup_welcome10',
-      code: 'WELCOME10',
-      title: '10% First Order Welcome',
-      description: 'Special 10% welcome discount for new customers',
-      discountType: 'PERCENTAGE',
-      discountValue: 10,
-      minOrderValue: 199,
-      maxDiscount: 100,
-      isActive: true,
-    },
-  ];
+  // Reset per-tenant UI state when navigating between storefronts.
+  useEffect(() => {
+    setCart([]);
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponError('');
+    setCouponSuccess('');
+    setSearchQuery('');
+    setSelectedCategory('ALL');
+    setIsCartOpen(false);
+    setCheckoutStep('CART');
+    setPlacedOrder(null);
+  }, [slug]);
 
-  const DEFAULT_FALLBACK_STORE = {
-    store: {
-      businessName: slug?.includes('royal') ? 'Royal Films Studio' : 'Desi Rasoi Achar',
-      slug: slug || 'desi-rasoi-achar-1',
-      businessType: slug?.includes('royal') ? 'SERVICE' : 'PRODUCT',
-      phone: '+91 98765 43210',
-      branding: {
-        logo: '',
-        primaryColor: '#4f46e5',
-        secondaryColor: '#06b6d4',
-      },
-      settings: {
-        currency: 'INR',
-        currencySymbol: '₹',
-        enableCOD: true,
-        enableOnlinePay: true,
-      },
-    },
-    categories: [
-      {
-        _id: 'cat_mango',
-        name: 'Mango Delights (Aam)',
-        slug: 'mango-delights',
-        description: 'Traditional sun-dried raw mango pickles infused with cold-pressed mustard oil and aromatic spices',
-        image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 1,
-      },
-      {
-        _id: 'cat_red_chilli',
-        name: 'Stuffed Red Chilli (Lal Mirch)',
-        slug: 'stuffed-red-chilli',
-        description: 'Authentic Banarasi thick winter red chillies hand-stuffed with roasted heirloom masala',
-        image: 'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 2,
-      },
-      {
-        _id: 'cat_green_chilli',
-        name: 'Green Chilli & Hari Mirch',
-        slug: 'green-chilli',
-        description: 'Spicy Rajasthani slit green chillies, tipore, and lemon-soaked tangy bites',
-        image: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 3,
-      },
-      {
-        _id: 'cat_garlic',
-        name: 'Garlic & Spicy Blends',
-        slug: 'garlic-spicy',
-        description: 'Golden whole garlic cloves and spicy thecha tempered in pure mustard oil',
-        image: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 4,
-      },
-      {
-        _id: 'cat_citrus',
-        name: 'Citrus & Lemon (Nimbu)',
-        slug: 'citrus-lemon',
-        description: 'Zero-oil sun-matured Kagzi lemon pickles with Himalayan rock salt and digestive carom',
-        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 5,
-      },
-      {
-        _id: 'cat_sweet',
-        name: 'Sweet & Khatta Meetha',
-        slug: 'sweet-chunda',
-        description: 'Gujarati sweet mango chunda, royal fruit murabbas, and sweet-sour lime preserves',
-        image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 6,
-      },
-      {
-        _id: 'cat_mixed',
-        name: 'Heritage Mixed & Winter Veg',
-        slug: 'heritage-mixed',
-        description: 'Pachranga mixed winter veggies, cauliflower, carrots, and Punjabi village specials',
-        image: 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 7,
-      },
-      {
-        _id: 'cat_amla',
-        name: 'Amla & Health Herbal',
-        slug: 'amla-health',
-        description: 'Wild forest amla, organic fresh haldi, and ginger pickles rich in natural antioxidants',
-        image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 8,
-      },
-      {
-        _id: 'cat_royal',
-        name: 'Royal & Dry Fruit Delicacies',
-        slug: 'royal-dryfruit',
-        description: 'Rajasthani Ker Sangri, spiced cashew nuts, and royal desert delicacies',
-        image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 9,
-      },
-      {
-        _id: 'cat_gift',
-        name: 'Festive & Luxury Gift Boxes',
-        slug: 'festive-combos',
-        description: 'Curated 3-in-1 and 4-in-1 handcrafted wooden tasting hampers and celebration gift sets',
-        image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80',
-        orderIndex: 10,
-      },
-    ],
-    products: [
-      // 1. Mango Delights
-      {
-        _id: 'prod_m1',
-        name: 'Desi Kacchi Kairi Mango Achar',
-        slug: 'desi-kacchi-kairi-mango-achar',
-        categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
-        category: 'Mango Delights (Aam)',
-        description: 'Handcrafted with unblemished Ramkela raw mangoes, roasted fenugreek, nigella seeds, and pure cold-pressed mustard oil. Sun-cured for 21 days for maximum crunch.',
-        price: 299,
-        compareAtPrice: 399,
-        images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 60 },
-          { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 85 },
-          { name: '1 Kg Family Pack', price: 549, compareAtPrice: 749, stockQuantity: 50 },
-        ],
-        stockQuantity: 85,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_m2',
-        name: 'Hing & Methi Sun-Dried Raw Mango',
-        slug: 'hing-methi-sun-dried-mango',
-        categoryId: { _id: 'cat_mango', name: 'Mango Delights (Aam)', slug: 'mango-delights' },
-        category: 'Mango Delights (Aam)',
-        description: 'Infused with aromatic compounding Hathras asafoetida (hing) and hand-pounded yellow mustard. Tangy, zesty, and zero artificial preservatives.',
-        price: 329,
-        compareAtPrice: 429,
-        images: ['https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 40 },
-          { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
-          { name: '1 Kg Family Pack', price: 599, compareAtPrice: 799, stockQuantity: 45 },
-        ],
-        stockQuantity: 70,
-        isAvailable: true,
-      },
-
-      // 2. Stuffed Red Chilli
-      {
-        _id: 'prod_rc1',
-        name: 'Banarasi Hand-Stuffed Red Chilli Pickle',
-        slug: 'banarasi-hand-stuffed-red-chilli',
-        categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
-        category: 'Stuffed Red Chilli (Lal Mirch)',
-        description: 'World-renowned Banarasi thick winter red chillies cored by hand and tightly filled with roasted amchur, fennel, and spiced mustard blend.',
-        price: 349,
-        compareAtPrice: 449,
-        images: ['https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 219, compareAtPrice: 289, stockQuantity: 50 },
-          { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
-          { name: '1 Kg Family Pack', price: 629, compareAtPrice: 849, stockQuantity: 40 },
-        ],
-        stockQuantity: 65,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_rc2',
-        name: 'Smoked Mustard Stuffed Lal Mirch',
-        slug: 'smoked-mustard-stuffed-lal-mirch',
-        categoryId: { _id: 'cat_red_chilli', name: 'Stuffed Red Chilli (Lal Mirch)', slug: 'stuffed-red-chilli' },
-        category: 'Stuffed Red Chilli (Lal Mirch)',
-        description: 'A fiery, smoky variant of stuffed red peppers cured in wood-pressed mustard oil with a punch of crushed black cumin and ajwain.',
-        price: 369,
-        compareAtPrice: 469,
-        images: ['https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 229, compareAtPrice: 299, stockQuantity: 40 },
-          { name: '500g Glass Jar', price: 369, compareAtPrice: 469, stockQuantity: 55 },
-          { name: '1 Kg Family Pack', price: 659, compareAtPrice: 899, stockQuantity: 30 },
-        ],
-        stockQuantity: 55,
-        isAvailable: true,
-      },
-
-      // 3. Green Chilli & Hari Mirch
-      {
-        _id: 'prod_gc1',
-        name: 'Rajasthani Hari Mirch Tipore & Slit Chilli',
-        slug: 'rajasthani-hari-mirch-tipore',
-        categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
-        category: 'Green Chilli & Hari Mirch',
-        description: 'Fresh Rajasthani green chillies tossed with cracked coriander, turmeric, fennel, and lemon juice. The ultimate lunch companion.',
-        price: 249,
-        compareAtPrice: 329,
-        images: ['https://images.unsplash.com/photo-1589135233689-d56b00b0d367?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 159, compareAtPrice: 219, stockQuantity: 70 },
-          { name: '500g Glass Jar', price: 249, compareAtPrice: 329, stockQuantity: 90 },
-          { name: '1 Kg Family Pack', price: 449, compareAtPrice: 599, stockQuantity: 45 },
-        ],
-        stockQuantity: 90,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_gc2',
-        name: 'Lemon & Green Chilli Tangy Zing',
-        slug: 'lemon-green-chilli-tangy-zing',
-        categoryId: { _id: 'cat_green_chilli', name: 'Green Chilli & Hari Mirch', slug: 'green-chilli' },
-        category: 'Green Chilli & Hari Mirch',
-        description: 'Bite-sized whole green peppers aged alongside sour yellow Kagzi lemon wedges in mineral-rich pink Himalayan rock salt.',
-        price: 269,
-        compareAtPrice: 349,
-        images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 50 },
-          { name: '500g Glass Jar', price: 269, compareAtPrice: 349, stockQuantity: 75 },
-          { name: '1 Kg Family Pack', price: 489, compareAtPrice: 649, stockQuantity: 35 },
-        ],
-        stockQuantity: 75,
-        isAvailable: true,
-      },
-
-      // 4. Garlic & Spicy Blends
-      {
-        _id: 'prod_g1',
-        name: 'Desi Spicy Garlic Pickle (Lahsun Ka Achar)',
-        slug: 'desi-spicy-garlic-pickle',
-        categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
-        category: 'Garlic & Spicy Blends',
-        description: 'Whole peeled golden garlic cloves simmered slowly in fiery Kashmiri red chilli paste, mustard, and roasted cumin. Great for digestion.',
-        price: 319,
-        compareAtPrice: 419,
-        images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 60 },
-          { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
-          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 779, stockQuantity: 40 },
-        ],
-        stockQuantity: 80,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_g2',
-        name: 'Kolhapuri Garlic Thecha & Mustard Relish',
-        slug: 'kolhapuri-garlic-thecha-relish',
-        categoryId: { _id: 'cat_garlic', name: 'Garlic & Spicy Blends', slug: 'garlic-spicy' },
-        category: 'Garlic & Spicy Blends',
-        description: 'Coarsely pounded raw garlic and roasted green chillies tempered with hot peanut oil and freshly toasted sesame seeds.',
-        price: 289,
-        compareAtPrice: 379,
-        images: ['https://images.unsplash.com/photo-1621996346565-e3d5d6281699?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 50 },
-          { name: '500g Glass Jar', price: 289, compareAtPrice: 379, stockQuantity: 65 },
-          { name: '1 Kg Family Pack', price: 529, compareAtPrice: 699, stockQuantity: 30 },
-        ],
-        stockQuantity: 65,
-        isAvailable: true,
-      },
-
-      // 5. Citrus & Lemon (Nimbu)
-      {
-        _id: 'prod_c1',
-        name: 'Kagzi Nimbu Tangy Pickle (Zero Oil)',
-        slug: 'kagzi-nimbu-tangy-pickle',
-        categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
-        category: 'Citrus & Lemon (Nimbu)',
-        description: 'Paper-thin skin Kagzi lemons cured under the midday sun for 30 days with Himalayan rock salt, ajwain, and black pepper. Completely oil-free.',
-        price: 279,
-        compareAtPrice: 359,
-        images: ['https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 169, compareAtPrice: 229, stockQuantity: 70 },
-          { name: '500g Glass Jar', price: 279, compareAtPrice: 359, stockQuantity: 95 },
-          { name: '1 Kg Family Pack', price: 499, compareAtPrice: 649, stockQuantity: 45 },
-        ],
-        stockQuantity: 95,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_c2',
-        name: 'Sweet & Sour Khatta Meetha Lemon Pickle',
-        slug: 'khatta-meetha-lemon-pickle',
-        categoryId: { _id: 'cat_citrus', name: 'Citrus & Lemon (Nimbu)', slug: 'citrus-lemon' },
-        category: 'Citrus & Lemon (Nimbu)',
-        description: 'Juicy lemons sweetened with organic jaggery syrup and cinnamon quills. Cured until dark, syrupy, and deeply flavorful.',
-        price: 299,
-        compareAtPrice: 399,
-        images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 179, compareAtPrice: 249, stockQuantity: 60 },
-          { name: '500g Glass Jar', price: 299, compareAtPrice: 399, stockQuantity: 75 },
-          { name: '1 Kg Family Pack', price: 549, compareAtPrice: 729, stockQuantity: 40 },
-        ],
-        stockQuantity: 75,
-        isAvailable: true,
-      },
-
-      // 6. Sweet & Khatta Meetha
-      {
-        _id: 'prod_sw1',
-        name: 'Traditional Gujarati Sweet Mango Chunda',
-        slug: 'traditional-gujarati-sweet-mango-chunda',
-        categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
-        category: 'Sweet & Khatta Meetha',
-        description: 'Grated green mangoes sun-cooked in raw unrefined sugar crystals, Kashmiri saffron strands, cardamom pods, and cinnamon.',
-        price: 339,
-        compareAtPrice: 439,
-        images: ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 65 },
-          { name: '500g Glass Jar', price: 339, compareAtPrice: 439, stockQuantity: 85 },
-          { name: '1 Kg Family Pack', price: 619, compareAtPrice: 799, stockQuantity: 40 },
-        ],
-        stockQuantity: 85,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_sw2',
-        name: 'Organic Gur Keri Raw Mango Launji',
-        slug: 'organic-gur-keri-mango-launji',
-        categoryId: { _id: 'cat_sweet', name: 'Sweet & Khatta Meetha', slug: 'sweet-chunda' },
-        category: 'Sweet & Khatta Meetha',
-        description: 'Slow-simmered raw mango pieces in pure organic sugarcane jaggery (gur), plump golden raisins, and roasted kalonji.',
-        price: 319,
-        compareAtPrice: 409,
-        images: ['https://images.unsplash.com/photo-1553279768-865429fa0078?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 189, compareAtPrice: 249, stockQuantity: 50 },
-          { name: '500g Glass Jar', price: 319, compareAtPrice: 409, stockQuantity: 70 },
-          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 749, stockQuantity: 35 },
-        ],
-        stockQuantity: 70,
-        isAvailable: true,
-      },
-
-      // 7. Heritage Mixed & Winter Veg
-      {
-        _id: 'prod_mv1',
-        name: 'Pachranga Heritage Winter Veggie Pickle',
-        slug: 'pachranga-heritage-winter-veggie',
-        categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
-        category: 'Heritage Mixed & Winter Veg',
-        description: 'Crisp winter cauliflower florets, crunchy red carrots, baby turnips, green peas, and lotus stem in aged mustard oil.',
-        price: 299,
-        compareAtPrice: 389,
-        images: ['https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 179, compareAtPrice: 239, stockQuantity: 65 },
-          { name: '500g Glass Jar', price: 299, compareAtPrice: 389, stockQuantity: 90 },
-          { name: '1 Kg Family Pack', price: 539, compareAtPrice: 699, stockQuantity: 50 },
-        ],
-        stockQuantity: 90,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_mv2',
-        name: 'Punjabi Gobhi Gajar Shalgam Crunchy Pickle',
-        slug: 'punjabi-gobhi-gajar-shalgam',
-        categoryId: { _id: 'cat_mixed', name: 'Heritage Mixed & Winter Veg', slug: 'heritage-mixed' },
-        category: 'Heritage Mixed & Winter Veg',
-        description: 'Grandma recipe sweet and sour winter special prepared with jaggery, malt vinegar, fresh ginger slivers, and mustard.',
-        price: 319,
-        compareAtPrice: 419,
-        images: ['https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 189, compareAtPrice: 259, stockQuantity: 55 },
-          { name: '500g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 80 },
-          { name: '1 Kg Family Pack', price: 579, compareAtPrice: 769, stockQuantity: 40 },
-        ],
-        stockQuantity: 80,
-        isAvailable: true,
-      },
-
-      // 8. Amla & Health Herbal
-      {
-        _id: 'prod_ah1',
-        name: 'Wild Forest Amla & Turmeric Immunity Pickle',
-        slug: 'wild-forest-amla-turmeric',
-        categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
-        category: 'Amla & Health Herbal',
-        description: 'Hand-picked wild Indian gooseberries (amla) steam-cured with freshly scraped raw Salem turmeric roots and crushed black pepper.',
-        price: 329,
-        compareAtPrice: 429,
-        images: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 199, compareAtPrice: 269, stockQuantity: 50 },
-          { name: '500g Glass Jar', price: 329, compareAtPrice: 429, stockQuantity: 70 },
-          { name: '1 Kg Family Pack', price: 599, compareAtPrice: 789, stockQuantity: 35 },
-        ],
-        stockQuantity: 70,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_ah2',
-        name: 'Organic Fresh Kacchi Haldi & Ginger Pickle',
-        slug: 'organic-fresh-kacchi-haldi-ginger',
-        categoryId: { _id: 'cat_amla', name: 'Amla & Health Herbal', slug: 'amla-health' },
-        category: 'Amla & Health Herbal',
-        description: 'Zesty matchstick slices of organic raw yellow turmeric and tender young ginger marinated in freshly squeezed lemon juice.',
-        price: 349,
-        compareAtPrice: 449,
-        images: ['https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 209, compareAtPrice: 279, stockQuantity: 45 },
-          { name: '500g Glass Jar', price: 349, compareAtPrice: 449, stockQuantity: 65 },
-          { name: '1 Kg Family Pack', price: 629, compareAtPrice: 829, stockQuantity: 30 },
-        ],
-        stockQuantity: 65,
-        isAvailable: true,
-      },
-
-      // 9. Royal & Dry Fruit Delicacies
-      {
-        _id: 'prod_rf1',
-        name: 'Royal Rajasthani Ker Sangri Desert Pickle',
-        slug: 'royal-rajasthani-ker-sangri',
-        categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
-        category: 'Royal & Dry Fruit Delicacies',
-        description: 'Wild desert capers (Ker) and dried beans (Sangri) from the Thar desert, cooked in pure mustard oil with raisins and whole red chillies.',
-        price: 499,
-        compareAtPrice: 649,
-        images: ['https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 289, compareAtPrice: 389, stockQuantity: 40 },
-          { name: '500g Glass Jar', price: 499, compareAtPrice: 649, stockQuantity: 50 },
-          { name: '1 Kg Family Pack', price: 929, compareAtPrice: 1199, stockQuantity: 25 },
-        ],
-        stockQuantity: 50,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_rf2',
-        name: 'Shahi Spiced Cashew & Raisin Achar',
-        slug: 'shahi-spiced-cashew-raisin',
-        categoryId: { _id: 'cat_royal', name: 'Royal & Dry Fruit Delicacies', slug: 'royal-dryfruit' },
-        category: 'Royal & Dry Fruit Delicacies',
-        description: 'Whole roasted Goan cashews and jumbo Afghan raisins tossed in a sweet-tart royal mango masala gravy.',
-        price: 549,
-        compareAtPrice: 699,
-        images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '250g Glass Jar', price: 319, compareAtPrice: 419, stockQuantity: 35 },
-          { name: '500g Glass Jar', price: 549, compareAtPrice: 699, stockQuantity: 45 },
-          { name: '1 Kg Family Pack', price: 999, compareAtPrice: 1299, stockQuantity: 20 },
-        ],
-        stockQuantity: 45,
-        isAvailable: true,
-      },
-
-      // 10. Festive & Luxury Gift Boxes
-      {
-        _id: 'prod_gb1',
-        name: 'Grand 3-in-1 Handcrafted Wooden Heritage Crate',
-        slug: 'grand-3-in-1-wooden-heritage-crate',
-        categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
-        category: 'Festive & Luxury Gift Boxes',
-        description: 'Artisanal pine wood gift box featuring three 350g signature jars: Ramkela Mango, Banarasi Stuffed Red Chilli, and Kagzi Nimbu.',
-        price: 899,
-        compareAtPrice: 1199,
-        images: ['https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '3 x 350g Wooden Box Gift Set', price: 899, compareAtPrice: 1199, stockQuantity: 35 },
-        ],
-        stockQuantity: 35,
-        isAvailable: true,
-      },
-      {
-        _id: 'prod_gb2',
-        name: 'Royal 4-in-1 Festive Pickle Gift Hamper',
-        slug: 'royal-4-in-1-festive-gift-hamper',
-        categoryId: { _id: 'cat_gift', name: 'Festive & Luxury Gift Boxes', slug: 'festive-combos' },
-        category: 'Festive & Luxury Gift Boxes',
-        description: 'The ultimate royal gift hamper with 4 handcrafted jars: Desi Garlic, Sweet Mango Chunda, Ker Sangri, and Banarasi Lal Mirch.',
-        price: 1199,
-        compareAtPrice: 1499,
-        images: ['https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop&q=80'],
-        variants: [
-          { name: '4 x 350g Deluxe Hamper Box', price: 1199, compareAtPrice: 1499, stockQuantity: 25 },
-        ],
-        stockQuantity: 25,
-        isAvailable: true,
-      },
-    ],
-    coupons: STOREFRONT_DEFAULT_COUPONS,
-  };
+;
 
   useEffect(() => {
     const fetchStore = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/public/store/${slug}`);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        if (data.success && data.data) {
-          setStoreData(data.data);
-          setError(null);
-        } else {
-          setStoreData(DEFAULT_FALLBACK_STORE);
-          setError(null);
-        }
-      } catch (err) {
-        console.warn('Live store API fallback:', err.message);
-        setStoreData(DEFAULT_FALLBACK_STORE);
+        setStoreData(null);
         setError(null);
+        const res = await fetch(`/api/public/store/${slug}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success || !data.data) {
+          throw new Error(
+            data.message ||
+              (res.status === 404
+                ? 'This storefront does not exist or is not active.'
+                : 'Unable to load this storefront right now.')
+          );
+        }
+        setStoreData(data.data);
+        const storeSettings = data.data?.store?.settings || {};
+        setPaymentMethod(
+          storeSettings.enableCOD !== false
+            ? 'COD'
+            : storeSettings.enableOnlinePay !== false
+            ? 'ONLINE'
+            : 'COD'
+        );
+      } catch (err) {
+        setStoreData(null);
+        setError(err.message || 'Unable to load this storefront right now.');
       } finally {
         setLoading(false);
       }
@@ -729,24 +260,27 @@ export const PublicStorefront = () => {
   }, [slug]);
 
   const addToCart = (product, selectedVariant = null, openDrawer = false, qty = 1) => {
-    setCart((prev) => {
-      const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
-      const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
-      const prodId = product._id || product.id || product.name;
+    const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+    const price = parseMoney(rawPrice);
+    if (!price) {
+      alert('This item does not have a valid price configured. Please contact the store.');
+      return;
+    }
+    const variantName = resolveVariantName(product, selectedVariant);
+    const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
+    const prodId = product._id || product.id || product.name;
 
+    setCart((prev) => {
       const existingIndex = prev.findIndex(
         (item) => item.productId === prodId && item.variantName === variantName
       );
-
-      const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-      const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
 
       // Robust image resolution checking img, image, images array, or authentic default
       const productImage =
         product.img ||
         product.image ||
         (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
-        'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80';
+        NO_IMAGE_PLACEHOLDER;
 
       if (existingIndex > -1) {
         const updated = [...prev];
@@ -778,7 +312,13 @@ export const PublicStorefront = () => {
   };
 
   const updateProductQuantity = (product, selectedVariant = null, delta = 1) => {
-    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
+    const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+    const price = parseMoney(rawPrice);
+    if (delta > 0 && !price) {
+      alert('This item does not have a valid price configured. Please contact the store.');
+      return;
+    }
+    const variantName = resolveVariantName(product, selectedVariant);
     const prodId = product._id || product.id || product.name;
 
     setCart((prev) => {
@@ -796,13 +336,11 @@ export const PublicStorefront = () => {
         return updated;
       } else if (delta > 0) {
         const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
-        const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-        const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
         const productImage =
           product.img ||
           product.image ||
           (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
-          'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80';
+          NO_IMAGE_PLACEHOLDER;
 
         return [
           ...prev,
@@ -855,10 +393,17 @@ export const PublicStorefront = () => {
   }
 
   const discountedSubtotal = Math.max(0, cartSubtotal - discountAmount);
-  const freeShippingThreshold = 499;
-  const isFreeShipping = discountedSubtotal >= freeShippingThreshold;
-  const shippingFee = cart.length === 0 ? 0 : isFreeShipping ? 0 : 50;
+  // Delivery rules come from the tenant's storefront record. Fallbacks mirror the
+  // server-side Tenant defaults so the client total matches checkout validation.
+  const freeShippingThreshold = Number(storeData?.store?.settings?.freeShippingThreshold ?? 499);
+  const configuredShippingFee = Number(storeData?.store?.settings?.shippingFee ?? 50);
+  const isFreeShipping =
+    freeShippingThreshold > 0 && discountedSubtotal >= freeShippingThreshold;
+  const shippingFee = cart.length === 0 ? 0 : isFreeShipping ? 0 : configuredShippingFee;
   const totalAmount = cart.length === 0 ? 0 : discountedSubtotal + shippingFee;
+  const codEnabled = storeData?.store?.settings?.enableCOD !== false;
+  const onlinePaymentEnabled = storeData?.store?.settings?.enableOnlinePay !== false;
+  const hasPaymentMethod = codEnabled || onlinePaymentEnabled;
 
   const handleApplyCoupon = (codeToApply) => {
     setCouponError('');
@@ -869,7 +414,7 @@ export const PublicStorefront = () => {
       return;
     }
 
-    const availableCoupons = storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS;
+    const availableCoupons = storeData?.coupons || [];
     const found = availableCoupons.find(
       (c) => c.code?.toUpperCase() === code && c.isActive !== false
     );
@@ -899,20 +444,39 @@ export const PublicStorefront = () => {
     setCouponSuccess('');
   };
 
+  // Only offer a real, active coupon supplied by the storefront API.
+  const exitCoupon = (storeData?.coupons || [])[0] || null;
+  const exitCouponLabel = exitCoupon
+    ? exitCoupon.discountType === 'PERCENTAGE'
+      ? `${exitCoupon.discountValue}% OFF`
+      : `₹${exitCoupon.discountValue} OFF`
+    : '';
+
   // Exit-Intent Listener
   useEffect(() => {
     const handleMouseLeave = (e) => {
-      if (e.clientY <= 10 && !hasTriggeredExit && !couponClaimed) {
+      if (
+        e.clientY <= 10 &&
+        !hasTriggeredExit &&
+        !couponClaimed &&
+        exitCoupon
+      ) {
         setIsExitPopupOpen(true);
         setHasTriggeredExit(true);
       }
     };
     document.addEventListener('mouseleave', handleMouseLeave);
     return () => document.removeEventListener('mouseleave', handleMouseLeave);
-  }, [hasTriggeredExit, couponClaimed]);
+  }, [hasTriggeredExit, couponClaimed, exitCoupon]);
 
   const handleDirectBuy = (product, selectedVariant = null, qty = 1) => {
-    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
+    const rawPrice = selectedVariant ? selectedVariant.price : product.price;
+    const price = parseMoney(rawPrice);
+    if (!price) {
+      alert('This item does not have a valid price configured. Please contact the store.');
+      return;
+    }
+    const variantName = resolveVariantName(product, selectedVariant);
     const prodId = product._id || product.id || product.name;
 
     setCart((prev) => {
@@ -928,13 +492,11 @@ export const PublicStorefront = () => {
         return updated;
       } else {
         const variantId = (selectedVariant?._id && typeof selectedVariant._id === 'string' && selectedVariant._id.length === 24) ? selectedVariant._id : null;
-        const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-        const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
         const productImage =
           product.img ||
           product.image ||
           (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
-          'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=400&auto=format&fit=crop&q=80';
+          NO_IMAGE_PLACEHOLDER;
 
         return [
           ...prev,
@@ -957,50 +519,44 @@ export const PublicStorefront = () => {
 
   const handleDirectWhatsApp = (product, selectedVariant = null, qty = 1) => {
     const rawPrice = selectedVariant ? selectedVariant.price : product.price;
-    const unitPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.]/g, '')) || 299;
+    const unitPrice = parseMoney(rawPrice);
+    if (!unitPrice) {
+      alert('This item does not have a valid price configured. Please contact the store.');
+      return;
+    }
     const totalPrice = unitPrice * qty;
-    const variantName = selectedVariant ? selectedVariant.name : (product.jars?.find(j => j.enabled !== false)?.name || product.variants?.[0]?.name || product.variant || '500g Jar');
-    const rawPhone = storeData?.store?.phone || storeData?.store?.contact?.phone || '9876543210';
-    const tenantPhone = rawPhone.replace(/\D/g, '').slice(-10) || '9876543210';
-    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || 'Desi Rasoi Achar';
+    const variantName = resolveVariantName(product, selectedVariant);
+    const rawPhone = storeData?.store?.contact?.phone || storeData?.store?.phone || '';
+    const tenantPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+    if (!tenantPhone) {
+      alert('This store has not configured a WhatsApp number yet. Please use checkout or the contact options on this page.');
+      return;
+    }
+    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || 'this store';
 
     const qtyText = qty > 1 ? `${qty}x ` : '';
     const text = encodeURIComponent(
-      `Hello! I would like to order *${qtyText}${product.name}* (${variantName}) for *₹${totalPrice}* from ${storeTitle}. Please share delivery & COD details!`
+      `Hello! I would like to order *${qtyText}${product.name}*${variantName ? ` (${variantName})` : ''} for *₹${totalPrice}* from ${storeTitle}. Please share delivery & COD details!`
     );
     const waUrl = `https://wa.me/91${tenantPhone}?text=${text}`;
 
-    // Asynchronously log lead capture without blocking user
-    try {
-      fetch(`/api/public/store/${slug}/inquire`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'WhatsApp Store Visitor',
-          phone: tenantPhone,
-          productName: `${qtyText}${product.name} (${variantName})`,
-          productPrice: totalPrice,
-          productId: product._id || product.id,
-          source: 'WHATSAPP_DIRECT_CLICK',
-          utmSource: searchParams.get('utm_source') || '',
-          utmCampaign: searchParams.get('utm_campaign') || '',
-        }),
-      }).catch(() => {});
-    } catch (e) {
-      // ignore background error
-    }
-
+    // Opening WhatsApp is an outbound click, not a captured CRM lead. Only
+    // record a lead when the visitor actually submits their own phone number.
     window.open(waUrl, '_blank');
   };
 
   const handleTopWhatsAppOrder = () => {
-    const rawPhone = storeData?.store?.phone || storeData?.store?.contact?.phone || store.phone || '9876543210';
-    const tenantPhone = rawPhone.replace(/\D/g, '').slice(-10) || '9876543210';
-    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || store.businessName || 'Online Store';
+    const rawPhone = storeData?.store?.contact?.phone || storeData?.store?.phone || store.phone || '';
+    const tenantPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+    if (!tenantPhone) {
+      alert('This store has not configured a WhatsApp number yet. Please use checkout or the contact options on this page.');
+      return;
+    }
+    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || store.businessName || 'this store';
 
     let text = '';
     if (cart.length > 0) {
-      const itemsList = cart.map((item, idx) => `${idx + 1}. ${item.quantity}x ${item.name} (${item.variantName || 'Standard'}) - ₹${item.price * item.quantity}`).join('\n');
+      const itemsList = cart.map((item, idx) => `${idx + 1}. ${item.quantity}x ${item.name} (${item.variantName || 'No variant'}) - ₹${item.price * item.quantity}`).join('\n');
       const couponLine = appliedCoupon ? `\n🎟️ Coupon Applied: *${appliedCoupon.code}* (-₹${discountAmount})` : '';
       text = encodeURIComponent(
         `Hello ${storeTitle}! I would like to order the following items via WhatsApp:\n\n${itemsList}${couponLine}\n\n*Total Amount: ₹${totalAmount}*\n\nPlease confirm availability & Cash on Delivery (COD) dispatch!`
@@ -1013,27 +569,18 @@ export const PublicStorefront = () => {
 
     const waUrl = `https://wa.me/91${tenantPhone}?text=${text}`;
 
-    try {
-      fetch(`/api/public/store/${slug}/inquire`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'WhatsApp Store Visitor',
-          phone: tenantPhone,
-          productName: cart.length > 0 ? cart.map(i => `${i.quantity}x ${i.name}`).join(', ') : 'Direct Store Inquiry',
-          productPrice: totalAmount || 0,
-          source: 'WHATSAPP_TOP_BUTTON',
-          utmSource: searchParams.get('utm_source') || '',
-          utmCampaign: searchParams.get('utm_campaign') || '',
-        }),
-      }).catch(() => {});
-    } catch (e) {}
-
+    // Outbound WhatsApp click; do not create a fake CRM lead using the store's
+    // own phone number as if it belonged to a customer.
     window.open(waUrl, '_blank');
   };
 
   const handleClaimCoupon = async (e) => {
     e.preventDefault();
+    if (!exitCoupon) {
+      alert('No active offer is available for this store.');
+      setIsExitPopupOpen(false);
+      return;
+    }
     const cleanPhone = (exitPhone || '').replace(/\D/g, '');
     if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.');
@@ -1041,19 +588,23 @@ export const PublicStorefront = () => {
     }
 
     try {
-      await fetch(`/api/public/store/${slug}/inquire`, {
+      const res = await fetch(`/api/public/store/${slug}/inquire`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: exitName || 'Exit Discount Visitor',
+          name: exitName || 'Storefront Visitor',
           phone: cleanPhone,
-          productName: 'Claimed ₹100 / 10% Discount Coupon',
+          productName: `Offer enquiry: ${exitCoupon.code}`,
           source: 'EXIT_POPUP',
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Could not record your enquiry. Please try again.');
+      }
       setCouponClaimed(true);
     } catch (err) {
-      setCouponClaimed(true);
+      alert(err.message || 'Could not record your enquiry. Please try again.');
     }
   };
 
@@ -1085,7 +636,10 @@ export const PublicStorefront = () => {
       setIsSubmitting(true);
       const res = await fetch(`/api/public/store/${slug}/orders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': getCheckoutIdempotencyKey(),
+        },
         body: JSON.stringify({
           customerName: customerName.trim(),
           customerPhone: cleanPhone,
@@ -1107,14 +661,10 @@ export const PublicStorefront = () => {
 
       const data = await res.json();
       if (data.success) {
+        checkoutIdempotencyKey.current = null;
         setPlacedOrder(data.data);
         setCheckoutStep('SUCCESS');
         setCart([]);
-        try {
-          const existing = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
-          const updated = [data.data, ...existing.filter((o) => o.orderNumber !== data.data.orderNumber)];
-          localStorage.setItem('omniva_live_orders', JSON.stringify(updated.slice(0, 50)));
-        } catch (e) {}
       } else {
         alert(data.message || 'Failed to place order');
       }
@@ -1140,8 +690,8 @@ export const PublicStorefront = () => {
     return (
       <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col items-center justify-center p-6 text-center">
         <AlertCircle className="w-12 h-12 text-rose-500 mb-3" />
-        <h2 className="text-xl font-bold text-white">Storefront Unavailable</h2>
-        <p className="text-slate-400 text-sm mt-1 max-w-md">{error || 'Store not found'}</p>
+        <h2 className="text-xl font-bold text-slate-900">Storefront Unavailable</h2>
+        <p className="text-slate-500 text-sm mt-1 max-w-md">{error || 'Store not found'}</p>
         <Link to="/" className="mt-4 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-semibold">
           Return to Omniva Home
         </Link>
@@ -1150,6 +700,9 @@ export const PublicStorefront = () => {
   }
 
   const { store, categories, products } = storeData;
+  const storeWhatsAppPhone = String(store?.contact?.phone || store?.phone || '')
+    .replace(/\D/g, '')
+    .slice(-10);
   const isSearching = Boolean(searchQuery && searchQuery.trim());
 
   const filteredProducts = products.filter((p) => {
@@ -1203,6 +756,17 @@ export const PublicStorefront = () => {
   });
 
   const totalMatches = products.length > 0 ? filteredProducts.length : filteredPackages.length;
+  const popularSearchTags = Array.from(
+    new Set(
+      (products.length > 0
+        ? products.flatMap((product) => [
+            ...(Array.isArray(product.tags) ? product.tags : []),
+            product.categoryId?.name || product.category,
+          ])
+        : (storeData?.packages || []).flatMap((pkg) => [pkg.category, pkg.name])
+      ).filter(Boolean)
+    )
+  ).slice(0, 6);
 
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white pb-24">
@@ -1220,26 +784,33 @@ export const PublicStorefront = () => {
               {isServiceStore ? (
                 <>
                   <Camera className="w-3.5 h-3.5 text-purple-200 shrink-0" />
-                  <span className="truncate">Cinematic Studio &amp; Shoot Dates Available</span>
+                  <span className="truncate">{store.branding?.tagline || 'Service bookings available'}</span>
                 </>
               ) : isTravelStore ? (
                 <>
                   <MapPin className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
-                  <span className="truncate">Guided Expeditions &amp; Safari Departures</span>
+                  <span className="truncate">{store.branding?.tagline || 'Travel bookings available'}</span>
                 </>
               ) : (
                 <>
                   <Truck className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
-                  <span className="truncate">Free Express Delivery &gt; ₹499</span>
+                  <span className="truncate">
+                    {freeShippingThreshold > 0
+                      ? `Free Delivery over ₹${freeShippingThreshold.toLocaleString('en-IN')}`
+                      : configuredShippingFee > 0
+                      ? `Delivery fee ₹${configuredShippingFee.toLocaleString('en-IN')}`
+                      : 'Free Delivery'}
+                  </span>
                 </>
               )}
             </span>
             <span className="hidden md:flex items-center gap-1.5 text-slate-200">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-              {isServiceStore ? '100% Verified Crew & Advance Escrow' : isTravelStore ? '100% Verified Guides & Fixed Departures' : '100% Secure Checkout & COD'}
-            </span>
-            <span className="hidden lg:flex items-center gap-1.5 text-amber-300 font-semibold">
-              <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" /> 4.9/5 Rated (2,400+ Reviews)
+              {isServiceStore || isTravelStore
+                ? 'Booking requests confirmed by the business'
+                : store.settings?.enableCOD
+                ? 'Cash on Delivery available'
+                : 'Online payment available'}
             </span>
           </div>
 
@@ -1252,7 +823,7 @@ export const PublicStorefront = () => {
             <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
             <MessageCircle className="w-3 h-3 text-white fill-white/20" />
             <span className="hidden sm:inline">WhatsApp:</span>
-            <span>+91 {store.phone ? store.phone.replace(/[^0-9]/g, '').slice(-10) : 'Available'} ↗</span>
+            <span>{store.phone ? `+91 ${store.phone.replace(/[^0-9]/g, '').slice(-10)}` : 'Not configured'} ↗</span>
           </button>
         </div>
       </div>
@@ -1272,13 +843,15 @@ export const PublicStorefront = () => {
           <div className="min-w-0">
             <h1 className="font-extrabold text-slate-900 text-sm sm:text-base md:text-lg tracking-tight flex items-center gap-1.5 truncate">
               <span className="truncate">{store.businessName}</span>
-              <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 shrink-0">
-                Verified
-              </span>
             </h1>
             <p className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
               <span className="hidden xs:inline">
-                {isServiceStore ? 'Photography & Cinematography Studio' : isTravelStore ? 'Guided Tours & Desert Expeditions' : 'Authentic Homemade Store'}
+                {store.branding?.tagline ||
+                  (isServiceStore
+                    ? 'Service Business'
+                    : isTravelStore
+                    ? 'Travel & Experiences'
+                    : 'Online Store')}
               </span>
               <span className="hidden xs:inline w-1 h-1 rounded-full bg-slate-300"></span>
               <Link to="/orders/track" className="text-indigo-600 hover:text-indigo-700 hover:underline font-semibold flex items-center gap-1 shrink-0">
@@ -1337,10 +910,10 @@ export const PublicStorefront = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isServiceStore
-                ? "Search shoot packages, films, themes... (e.g. Baby Shoot, Pre-Wedding, Cinematic)"
+                ? 'Search services and packages...'
                 : isTravelStore
-                ? "Search tours, safaris, departures... (e.g. Desert Safari, Camel Ride, Camping)"
-                : "Search fresh pickles, jars, spices... (e.g. Aam, Lal Mirch, Garlic, 500g)"
+                ? 'Search tours and packages...'
+                : 'Search products, categories and variants...'
             }
             className="w-full py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 bg-transparent focus:outline-none"
           />
@@ -1361,17 +934,13 @@ export const PublicStorefront = () => {
           )}
         </div>
 
-        {/* Quick Search Chips / Popular Suggestions */}
+        {/* Quick Search Chips from real catalog categories/tags */}
+        {popularSearchTags.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mt-2.5 scrollbar-none text-xs">
           <span className="text-[11px] font-bold text-slate-400 shrink-0 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-500" /> Popular:
+            <Sparkles className="w-3 h-3 text-amber-500" /> From this catalog:
           </span>
-          {(isServiceStore
-            ? ['Pre-Wedding', 'Baby Shoot', 'Cinematic', 'Drone', '4K Video']
-            : isTravelStore
-            ? ['Desert Safari', 'Camel Ride', 'Camping', 'Sunset Dune', 'Jeep Tour']
-            : ['Aam Achar', 'Lal Mirch', 'Spicy Mango', 'Garlic', '500g Jar', 'Traditional']
-          ).map((tag) => (
+          {popularSearchTags.map((tag) => (
             <button
               key={tag}
               type="button"
@@ -1395,6 +964,7 @@ export const PublicStorefront = () => {
             </button>
           )}
         </div>
+        )}
 
         {/* Live Search Active Feedback Tag */}
         {searchQuery && (
@@ -1423,13 +993,13 @@ export const PublicStorefront = () => {
           <div className="bg-gradient-to-br from-indigo-50 via-purple-50/40 to-slate-50 border border-indigo-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
             <div className="relative z-10 max-w-xl space-y-3">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 border border-purple-300 text-purple-800 text-xs font-semibold">
-                <Camera className="w-3.5 h-3.5" /> Creative Cinematography &amp; Photo Studio
+                <Camera className="w-3.5 h-3.5" /> Service Bookings
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-                Capture Timeless Moments &amp; Cinematic Stories
+                {store.branding?.tagline || `Book a service with ${store.businessName}`}
               </h2>
               <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
-                Pre-wedding films, high-fashion portraits, baby milestones, and commercial brand visuals crafted with prime optics, professional lighting, and master color grading.
+                Browse the services published by this business. See each package for its real pricing and availability.
               </p>
             </div>
           </div>
@@ -1437,13 +1007,13 @@ export const PublicStorefront = () => {
           <div className="bg-gradient-to-br from-cyan-50 via-blue-50/40 to-cyan-50 border border-cyan-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
             <div className="relative z-10 max-w-xl space-y-3">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-100 border border-cyan-300 text-cyan-800 text-xs font-semibold">
-                <MapPin className="w-3.5 h-3.5" /> Guided Adventures &amp; Safari Expeditions
+                <MapPin className="w-3.5 h-3.5" /> Travel &amp; Experiences
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-                Explore Uncharted Trails &amp; Desert Safaris
+                {store.branding?.tagline || `Travel with ${store.businessName}`}
               </h2>
               <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
-                Curated multi-day journeys, camel desert camping, wildlife tracking, and premium tour packages with verified expedition guides.
+                Browse the tours and packages published by this business. See each package for its real itinerary, pricing and availability.
               </p>
             </div>
           </div>
@@ -1451,13 +1021,13 @@ export const PublicStorefront = () => {
           <div className="bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50 border border-amber-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
             <div className="relative z-10 max-w-xl space-y-3">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold">
-                <Sparkles className="w-3.5 h-3.5" /> Traditional Sun-Dried Recipe
+                <Sparkles className="w-3.5 h-3.5" /> Products
               </div>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-                Handcrafted Pickles &amp; Pure Flavors
+                {store.branding?.tagline || `Shop from ${store.businessName}`}
               </h2>
               <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
-                Made with cold-pressed mustard oil, whole aromatic spices, and sun-matured perfection. Delivered fresh to your doorstep across India.
+                Browse the products published by this business. Prices, variants and stock are shown from the live catalog.
               </p>
             </div>
           </div>
@@ -1488,7 +1058,7 @@ export const PublicStorefront = () => {
                 ALL
               </div>
               <div className="text-left">
-                <div className="text-xs font-bold text-slate-900">All Delights</div>
+                <div className="text-xs font-bold text-slate-900">All Items</div>
                 <div className="text-[10px] text-slate-400">{products.length} Products</div>
               </div>
             </button>
@@ -1506,7 +1076,7 @@ export const PublicStorefront = () => {
               }).length;
               const catImage =
                 c.image ||
-                'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
+                NO_IMAGE_PLACEHOLDER;
               const isSelected = selectedCategory === c._id || selectedCategory === c.slug || selectedCategory === c.name;
               return (
                 <button
@@ -1524,7 +1094,7 @@ export const PublicStorefront = () => {
                     onError={(e) => {
                       e.currentTarget.onerror = null;
                       e.currentTarget.src =
-                        'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
+                        NO_IMAGE_PLACEHOLDER;
                     }}
                     className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-xs"
                   />
@@ -1548,11 +1118,11 @@ export const PublicStorefront = () => {
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 {isTravelStore ? (
                   <>
-                    <MapPin className="w-5 h-5 text-cyan-600" /> Tour &amp; Safari Departures
+                    <MapPin className="w-5 h-5 text-cyan-600" /> Tours &amp; Packages
                   </>
                 ) : (
                   <>
-                    <Camera className="w-5 h-5 text-indigo-600" /> Service &amp; Shoot Packages
+                    <Camera className="w-5 h-5 text-indigo-600" /> Service Packages
                   </>
                 )}
               </h3>
@@ -1568,7 +1138,7 @@ export const PublicStorefront = () => {
                 {filteredPackages.map((pkg) => {
                   const pkgCover =
                     pkg.images?.[0] ||
-                    'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
+                    NO_IMAGE_PLACEHOLDER;
                   return (
                     <div
                       key={pkg._id}
@@ -1581,7 +1151,7 @@ export const PublicStorefront = () => {
                           onError={(e) => {
                             e.currentTarget.onerror = null;
                             e.currentTarget.src =
-                              'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
+                              NO_IMAGE_PLACEHOLDER;
                           }}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                         />
@@ -1677,7 +1247,7 @@ export const PublicStorefront = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
-                <span>Handcrafted Pickle Collection</span>
+                <span>Product Catalog</span>
               </h3>
               <span className="text-xs text-slate-500 font-medium">{filteredProducts.length} items found</span>
             </div>
@@ -1709,7 +1279,7 @@ export const PublicStorefront = () => {
               <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed mt-1">
                 {searchQuery
                   ? "We couldn't find an exact match across our catalog. Try one of our popular categories below or reset search."
-                  : 'No products in this category. Try selecting "All Delights".'}
+                  : 'No products in this category. Try selecting All.'}
               </p>
             </div>
 
@@ -1729,7 +1299,7 @@ export const PublicStorefront = () => {
                   onClick={() => setSelectedCategory('ALL')}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer active:scale-95"
                 >
-                  Show All Delights
+                  Show All Items
                 </button>
               )}
             </div>
@@ -1739,12 +1309,7 @@ export const PublicStorefront = () => {
               <div className="pt-3 border-t border-slate-100">
                 <span className="text-[11px] text-slate-400 block mb-2 font-medium">Or try searching for:</span>
                 <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  {(isServiceStore
-                    ? ['Pre-Wedding', 'Baby Shoot', 'Cinematic']
-                    : isTravelStore
-                    ? ['Desert Safari', 'Camel Ride', 'Camping']
-                    : ['Aam Achar', 'Lal Mirch', 'Garlic']
-                  ).map((sugg) => (
+                  {popularSearchTags.slice(0, 5).map((sugg) => (
                     <button
                       key={sugg}
                       type="button"
@@ -1882,24 +1447,26 @@ export const PublicStorefront = () => {
               {checkoutStep === 'CART' && (
                 <div className="space-y-4">
                   {/* Free shipping banner */}
+                  {freeShippingThreshold > 0 && (
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs shadow-2xs">
                     {isFreeShipping ? (
                       <div className="text-emerald-700 font-bold flex items-center gap-1.5">
                         <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Congratulations! You unlocked FREE Delivery.</span>
+                        <span>You qualify for FREE Delivery.</span>
                       </div>
                     ) : (
                       <div className="text-slate-600 text-xs">
-                        Add <strong className="text-amber-600 font-bold">₹{freeShippingThreshold - cartSubtotal}</strong> more to get <span className="text-emerald-700 font-bold">FREE Delivery</span>!
+                        Add <strong className="text-amber-600 font-bold">₹{Math.max(0, freeShippingThreshold - discountedSubtotal)}</strong> more to get <span className="text-emerald-700 font-bold">FREE Delivery</span>.
                       </div>
                     )}
                     <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
                       <div
                         className="bg-emerald-500 h-full transition-all duration-300 rounded-full"
-                        style={{ width: `${Math.min(100, (cartSubtotal / freeShippingThreshold) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (discountedSubtotal / freeShippingThreshold) * 100)}%` }}
                       />
                     </div>
                   </div>
+                  )}
 
                   {/* Cart Items List */}
                   {cart.length === 0 ? (
@@ -1909,7 +1476,7 @@ export const PublicStorefront = () => {
                       </div>
                       <h4 className="font-bold text-slate-800 text-sm">Your cart is currently empty</h4>
                       <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                        Add pure handcrafted pickles to your cart to enjoy traditional homemade taste!
+                        Add products to your cart to continue checkout.
                       </p>
                     </div>
                   ) : (
@@ -1918,11 +1485,11 @@ export const PublicStorefront = () => {
                         <div key={idx} className="p-3 bg-slate-50/90 rounded-2xl border border-slate-200 flex items-center justify-between gap-2.5 hover:border-slate-300 transition shadow-2xs">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <img
-                              src={item.image || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=200&auto=format&fit=crop&q=80'}
+                              src={item.image || NO_IMAGE_PLACEHOLDER}
                               alt={item.name}
                               onError={(e) => {
                                 e.currentTarget.onerror = null;
-                                e.currentTarget.src = 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=200&auto=format&fit=crop&q=80';
+                                e.currentTarget.src = NO_IMAGE_PLACEHOLDER;
                               }}
                               className="w-14 h-14 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0 bg-white"
                             />
@@ -1932,7 +1499,7 @@ export const PublicStorefront = () => {
                               </div>
                               {item.variantName && (
                                 <div className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                  <span>🏺</span>
+                                  <Tag className="w-3 h-3" />
                                   <span className="truncate">{item.variantName}</span>
                                 </div>
                               )}
@@ -2061,14 +1628,14 @@ export const PublicStorefront = () => {
                           )}
 
                           {/* Live Available Store Deals Chips */}
-                          {((storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS)).length > 0 && (
+                          {((storeData?.coupons || [])).length > 0 && (
                             <div className="pt-1.5 border-t border-slate-200/70">
                               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                                 <Sparkles className="w-3 h-3 text-amber-500" />
                                 <span>Tap to Apply Discount:</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
-                                {(storeData?.coupons?.length > 0 ? storeData.coupons : STOREFRONT_DEFAULT_COUPONS).filter(c => c.isActive !== false).map((c) => (
+                                {(storeData?.coupons || []).filter(c => c.isActive !== false).map((c) => (
                                   <button
                                     key={c.code}
                                     type="button"
@@ -2259,32 +1826,42 @@ export const PublicStorefront = () => {
                       <label className="text-slate-700 block mb-1.5 font-semibold">
                         Payment Mode
                       </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('COD')}
-                          className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                            paymentMethod === 'COD'
-                              ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 font-bold shadow-xs'
-                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="text-xs font-bold text-slate-900">Cash on Delivery</div>
-                          <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Pay upon delivery</div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod('ONLINE')}
-                          className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                            paymentMethod === 'ONLINE'
-                              ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 text-slate-900 font-bold shadow-xs'
-                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="text-xs font-bold text-slate-900">UPI / Online Pay</div>
-                          <div className="text-[10px] text-indigo-600 mt-0.5 font-medium">GooglePay, PhonePe</div>
-                        </button>
-                      </div>
+                      {hasPaymentMethod ? (
+                        <div className={`grid ${codEnabled && onlinePaymentEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                          {codEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMethod('COD')}
+                              className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                                paymentMethod === 'COD'
+                                  ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 font-bold shadow-xs'
+                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="text-xs font-bold text-slate-900">Cash on Delivery</div>
+                              <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Pay upon delivery</div>
+                            </button>
+                          )}
+                          {onlinePaymentEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMethod('ONLINE')}
+                              className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                                paymentMethod === 'ONLINE'
+                                  ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 text-slate-900 font-bold shadow-xs'
+                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="text-xs font-bold text-slate-900">UPI / Online Pay</div>
+                              <div className="text-[10px] text-indigo-600 mt-0.5 font-medium">GooglePay, PhonePe</div>
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                          This store has not enabled Cash on Delivery or online payment. Checkout is unavailable.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </form>
@@ -2378,7 +1955,7 @@ export const PublicStorefront = () => {
                       onClick={() => setIsCartOpen(false)}
                       className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer active:scale-95"
                     >
-                      Explore Delicious Pickles
+                      Continue Shopping
                     </button>
                   )}
                 </>
@@ -2393,7 +1970,7 @@ export const PublicStorefront = () => {
                   <button
                     type="submit"
                     form="storefront-checkout-form"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !hasPaymentMethod}
                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     {isSubmitting ? (
@@ -2413,16 +1990,18 @@ export const PublicStorefront = () => {
 
               {checkoutStep === 'SUCCESS' && (
                 <div className="space-y-2">
-                  <a
-                    href={`https://wa.me/91${(storeData?.store?.phone || store.phone || '9876543210').replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(
-                      `Hi! I have placed order ${placedOrder?.orderNumber} for ₹${placedOrder?.totalAmount} on ${store.businessName}. Please share dispatch tracking!`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-xs"
-                  >
-                    <MessageCircle className="w-4 h-4" /> Chat on WhatsApp for Updates
-                  </a>
+                  {storeWhatsAppPhone && (
+                    <a
+                      href={`https://wa.me/91${storeWhatsAppPhone}?text=${encodeURIComponent(
+                        `Hi! I have placed order ${placedOrder?.orderNumber} for ₹${placedOrder?.totalAmount} on ${store.businessName}. Please share dispatch tracking!`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-xs"
+                    >
+                      <MessageCircle className="w-4 h-4" /> Chat on WhatsApp for Updates
+                    </a>
+                  )}
                   <Link
                     to="/orders/track"
                     onClick={() => {
@@ -2459,7 +2038,7 @@ export const PublicStorefront = () => {
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div>
                     <h3 className="font-bold text-slate-900 text-base">
-                      {isTravelStore ? 'Book Expedition & Tour Dates' : 'Book Shoot / Dates'}
+                      {isTravelStore ? 'Book Tour Dates' : 'Book Service Dates'}
                     </h3>
                     <p className="text-[11px] text-indigo-500 font-semibold mt-0.5">{selectedPkg.name}</p>
                   </div>
@@ -2529,7 +2108,7 @@ export const PublicStorefront = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-slate-700 block mb-1 font-semibold">
-                        {isTravelStore ? 'Departure Date *' : 'Event / Shoot Date *'}
+                        {isTravelStore ? 'Departure Date *' : 'Event / Service Date *'}
                       </label>
                       <input
                         type="date"
@@ -2544,8 +2123,10 @@ export const PublicStorefront = () => {
                       <select
                         value={bookingTimeSlot}
                         onChange={(e) => setBookingTimeSlot(e.target.value)}
+                        required
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
                       >
+                        <option value="" disabled>Select a time slot</option>
                         <option value="Morning (08:00 AM - 12:00 PM)">Morning (08 AM - 12 PM)</option>
                         <option value="Afternoon (12:00 PM - 04:00 PM)">Afternoon (12 PM - 04 PM)</option>
                         <option value="Sunset / Evening (04:00 PM - 08:00 PM)">Sunset (04 PM - 08 PM)</option>
@@ -2556,11 +2137,11 @@ export const PublicStorefront = () => {
 
                   <div>
                     <label className="text-slate-700 block mb-1 font-semibold">
-                      {isTravelStore ? 'Pickup City / Starting Point' : 'Shoot Venue / Location'}
+                      {isTravelStore ? 'Pickup City / Starting Point' : 'Service Location'}
                     </label>
                     <input
                       type="text"
-                      placeholder={isTravelStore ? "e.g. Jaisalmer Railway Station or Desert Camp" : "e.g. Heritage Fort, Jaipur or Studio"}
+                      placeholder={isTravelStore ? 'e.g. Pickup point or meeting location' : 'e.g. Venue or service location'}
                       value={bookingLocation}
                       onChange={(e) => setBookingLocation(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
@@ -2617,33 +2198,45 @@ export const PublicStorefront = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Scheduled Date:</span>
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-slate-900">
                       {new Date(placedBooking.eventDate).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Total Fee / Advance:</span>
-                    <span className="font-bold text-emerald-400">
-                      ₹{placedBooking.totalAmount} (Token: ₹{placedBooking.advancePaid})
+                    <span className="text-slate-500">Total Fee:</span>
+                    <span className="font-bold text-slate-900">₹{placedBooking.totalAmount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Token Due:</span>
+                    <span className="font-bold text-emerald-700">
+                      ₹{placedBooking.expectedAdvance ?? Math.round((placedBooking.totalAmount * (placedBooking.advanceTokenPercent || 20)) / 100)}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="text-amber-400 font-semibold">{placedBooking.bookingStatus}</span>
+                    <span className="text-slate-500">Payment:</span>
+                    <span className="font-semibold text-amber-700">
+                      Not collected — pay the token after the studio confirms availability
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Status:</span>
+                    <span className="text-amber-700 font-semibold">{placedBooking.bookingStatus}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2 pt-2">
-                  <a
-                    href={`https://wa.me/91${bookingPhone}?text=${encodeURIComponent(
-                      `Hi! I have requested booking ${placedBooking.bookingNumber} for ${placedBooking.packageName} on ${store.businessName}.`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
-                  >
-                    <Phone className="w-4 h-4" /> Connect with Studio on WhatsApp
-                  </a>
+                  {storeWhatsAppPhone && (
+                    <a
+                      href={`https://wa.me/91${storeWhatsAppPhone}?text=${encodeURIComponent(
+                        `Hi! I have requested booking ${placedBooking.bookingNumber} for ${placedBooking.packageName} on ${store.businessName}.`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2"
+                    >
+                      <Phone className="w-4 h-4" /> Connect with Studio on WhatsApp
+                    </a>
+                  )}
                   <button
                     onClick={() => {
                       setIsBookingOpen(false);
@@ -2663,7 +2256,7 @@ export const PublicStorefront = () => {
 
 
       {/* Exit-Intent Discount Coupon Modal */}
-      {isExitPopupOpen && (
+      {isExitPopupOpen && exitCoupon && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl relative text-center">
             <button
@@ -2679,11 +2272,14 @@ export const PublicStorefront = () => {
 
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 bg-amber-100 px-2.5 py-0.5 rounded-full">
-                Special One-Time Offer
+                Store Offer
               </span>
-              <h3 className="text-lg font-black text-slate-900 mt-2">Wait! Get ₹100 Extra OFF</h3>
+              <h3 className="text-lg font-black text-slate-900 mt-2">
+                {exitCouponLabel} with {exitCoupon.code}
+              </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Enter your WhatsApp number to unlock your secret discount coupon code before you leave!
+                {exitCoupon.title || 'This offer is available on eligible orders.'} Enter your
+                WhatsApp number to save this offer and continue.
               </p>
             </div>
 
@@ -2709,26 +2305,26 @@ export const PublicStorefront = () => {
                   type="submit"
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-500/30 flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-95"
                 >
-                  <Sparkles className="w-4 h-4" /> 🎁 Unlock ₹100 Off Coupon
+                  <Sparkles className="w-4 h-4" /> Show My Offer
                 </button>
               </form>
             ) : (
               <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-emerald-800">🎉 Coupon Unlocked!</div>
+                <div className="text-xs font-bold text-emerald-800">Offer ready</div>
                 <div className="bg-white border border-dashed border-emerald-400 py-2 px-4 rounded-xl text-emerald-600 font-black text-base tracking-wider">
-                  SAVE100
+                  {exitCoupon.code}
                 </div>
-                <p className="text-[11px] text-emerald-700">Use this coupon code at checkout or mention it in WhatsApp chat!</p>
+                <p className="text-[11px] text-emerald-700">Use this coupon code at checkout or mention it in the WhatsApp chat.</p>
                 <button
                   type="button"
                   onClick={() => {
-                    handleApplyCoupon('SAVE100');
+                    handleApplyCoupon(exitCoupon.code);
                     setIsExitPopupOpen(false);
                     setIsCartOpen(true);
                   }}
                   className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 transition"
                 >
-                  Apply SAVE100 &amp; View Cart
+                  Apply {exitCoupon.code} &amp; View Cart
                 </button>
               </div>
             )}
@@ -2739,35 +2335,45 @@ export const PublicStorefront = () => {
   );
 };
 
-// Reusable Product Card with High-Res Image, Badges, Ratings, Variant Selector & Instant-Cart Stepper
+// Reusable Product Card with Image, Badges, Variant Selector & Instant-Cart Stepper
 const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart }) => {
-  const rawBasePrice = typeof product.price === 'number' ? product.price : parseFloat(String(product.price).replace(/[^0-9.]/g, '')) || 299;
+  const rawBasePrice = parseMoney(product.price);
+  const configuredVariants = (product.jars && product.jars.length > 0)
+    ? product.jars
+    : (product.variants || []);
+  const hasConfiguredVariants = configuredVariants.length > 0;
+  const availableVariants = configuredVariants.filter(
+    (variant) => variant.enabled !== false && variant.isAvailable !== false
+  );
 
-  const availableVariants = (product.jars && product.jars.length > 0)
-    ? product.jars.filter(j => j.enabled !== false && j.isAvailable !== false)
-    : (product.variants && product.variants.length > 0)
-      ? product.variants
-      : [
-          { name: '250g Glass Jar', price: Math.round(rawBasePrice * 0.65) },
-          { name: '500g Traditional Jar', price: rawBasePrice },
-          { name: '1kg Family Pack', price: Math.round(rawBasePrice * 1.7) }
-        ];
+  const [selectedVariant, setSelectedVariant] = useState(availableVariants[0] || null);
+  const currentVariant = selectedVariant || availableVariants[0] || null;
 
-  const [selectedVariant, setSelectedVariant] = useState(availableVariants[0]);
-  const currentVariant = selectedVariant || availableVariants[0];
+  const variantPrice = parseMoney(currentVariant?.price);
+  const price = variantPrice ?? rawBasePrice;
 
-  const price = currentVariant
-    ? (typeof currentVariant.price === 'number' ? currentVariant.price : parseFloat(String(currentVariant.price).replace(/[^0-9.]/g, '')) || rawBasePrice)
-    : rawBasePrice;
-
-  const compareAt = currentVariant?.compareAtPrice || product.compareAtPrice;
+  const parsedCompareAt = parseMoney(currentVariant?.compareAtPrice || product.compareAtPrice);
+  const compareAt = parsedCompareAt && price && parsedCompareAt > price ? parsedCompareAt : null;
   const discountPercent =
-    compareAt > price ? Math.round(((compareAt - price) / compareAt) * 100) : null;
+    compareAt && price ? Math.round(((compareAt - price) / compareAt) * 100) : null;
 
-  const variantName = currentVariant?.name || '500g Jar';
+  const variantName = currentVariant?.name || product.variant || '';
   const prodId = product._id || product.id || product.name;
 
-  // Real-time synchronization with customer cart
+  const trackedStock = Number(product.stockQuantity);
+  const variantStock = availableVariants.reduce(
+    (sum, variant) => sum + (Number(variant.stockQuantity) || 0),
+    0
+  );
+  const inStock =
+    product.isAvailable !== false &&
+    (!hasConfiguredVariants || availableVariants.length > 0) &&
+    (!product.trackQuantity ||
+      (hasConfiguredVariants
+        ? variantStock > 0
+        : Number.isFinite(trackedStock) && trackedStock > 0));
+
+  // Keep the cart view synchronized with stored cart state
   const cartItem = cart.find(
     (item) => item.productId === prodId && item.variantName === variantName
   );
@@ -2777,7 +2383,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
     product.img ||
     product.image ||
     (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
-    'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+    NO_IMAGE_PLACEHOLDER;
 
   return (
     <div className="bg-white border border-slate-200/90 hover:border-indigo-400 rounded-3xl overflow-hidden flex flex-col justify-between transition-all duration-300 shadow-xs hover:shadow-xl group">
@@ -2789,7 +2395,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src =
-              'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+              NO_IMAGE_PLACEHOLDER;
           }}
           className="w-full h-full object-cover group-hover:scale-110 transition duration-700 ease-out"
         />
@@ -2797,9 +2403,11 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
 
         {/* Top Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-          <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider bg-black/60 backdrop-blur-md border border-amber-500/30 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
-            <Sparkles className="w-3 h-3 text-amber-400" /> 100% Sun-Dried
-          </span>
+          {Array.isArray(product.tags) && product.tags.length > 0 && (
+            <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider bg-black/60 backdrop-blur-md border border-amber-500/30 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+              <Sparkles className="w-3 h-3 text-amber-400" /> {product.tags[0]}
+            </span>
+          )}
           {discountPercent && (
             <span className="text-[10px] font-black text-white bg-emerald-600/90 backdrop-blur-md px-2.5 py-1 rounded-full shadow-sm">
               {discountPercent}% OFF
@@ -2809,16 +2417,20 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
 
         {/* Stock Badge */}
         <div className="absolute top-3 right-3">
-          <span className="text-[10px] font-semibold text-emerald-700 bg-white/90 backdrop-blur-md border border-emerald-300 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> In Stock
+          <span
+            className={`text-[10px] font-semibold backdrop-blur-md border px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs ${
+              inStock
+                ? 'text-emerald-700 bg-white/90 border-emerald-300'
+                : 'text-rose-700 bg-white/90 border-rose-300'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                inStock ? 'bg-emerald-400' : 'bg-rose-400'
+              }`}
+            ></span>{' '}
+            {inStock ? 'In Stock' : 'Out of Stock'}
           </span>
-        </div>
-
-        {/* Rating & Social Proof */}
-        <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[11px] font-bold text-amber-400 border border-white/10 shadow">
-          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-          <span>4.9</span>
-          <span className="text-slate-400 font-normal text-[10px]">(180+ Reviews)</span>
         </div>
       </div>
 
@@ -2834,13 +2446,13 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
             </p>
           )}
 
-          {/* Available Jar Variants Selector */}
+          {/* Available Variant Selector */}
           {availableVariants?.length > 0 && (
             <div className="pt-2">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
-                  <span>🏺</span>
-                  <span>Available Jar Sizes:</span>
+                  <Tag className="w-3 h-3" />
+                  <span>Available Options:</span>
                 </label>
                 {currentVariant && (
                   <span className="text-[10px] text-indigo-600 font-bold truncate max-w-[130px]">
@@ -2851,10 +2463,10 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {availableVariants.map((v, i) => {
                   const isSelected = currentVariant?.name === v.name;
-                  const vPrice = typeof v.price === 'number' ? v.price : parseFloat(String(v.price).replace(/[^0-9.]/g, '')) || rawBasePrice;
+                  const vPrice = parseMoney(v.price) ?? rawBasePrice;
                   return (
                     <button
-                      key={i}
+                      key={v._id || `${v.name}-${i}`}
                       onClick={() => setSelectedVariant(v)}
                       type="button"
                       className={`py-1.5 px-2 rounded-xl text-left border transition cursor-pointer ${
@@ -2865,7 +2477,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
                     >
                       <div className="text-[11px] font-bold truncate leading-tight">{v.name}</div>
                       <div className={`text-[10px] font-extrabold ${isSelected ? 'text-indigo-100' : 'text-emerald-600'}`}>
-                        ₹{vPrice}
+                        {vPrice ? `₹${vPrice}` : 'Price unavailable'}
                       </div>
                     </button>
                   );
@@ -2881,8 +2493,10 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black text-slate-900">₹{price}</span>
-                {compareAt > price && (
+                <span className="text-xl font-black text-slate-900">
+                  {price ? `₹${price}` : 'Price unavailable'}
+                </span>
+                {compareAt && price && (
                   <span className="text-xs text-slate-400 line-through">₹{compareAt}</span>
                 )}
               </div>
@@ -2949,13 +2563,18 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
                 onClick={() => {
                   if (cartQty > 0) {
                     onUpdateQty(product, currentVariant, 1);
-                  } else {
+                  } else if (inStock && price) {
                     // Instantly adds to cart on quantity increase
                     onAddToCart(product, currentVariant, false, 1);
                   }
                 }}
-                className="w-8 h-8 flex items-center justify-center text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs cursor-pointer transition active:scale-90"
-                title="Increase Quantity"
+                disabled={!inStock || !price}
+                className={`w-8 h-8 flex items-center justify-center text-white rounded-lg shadow-xs transition active:scale-90 ${
+                  inStock && price
+                    ? 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                    : 'bg-slate-300 cursor-not-allowed'
+                }`}
+                title={inStock ? 'Increase Quantity' : 'Out of Stock'}
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
@@ -2975,12 +2594,19 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
             ) : (
               <button
                 type="button"
-                onClick={() => onAddToCart(product, currentVariant, false, 1)}
-                className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-indigo-600/25 flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
-                title="Add Item to Cart"
+                onClick={() => {
+                  if (inStock && price) onAddToCart(product, currentVariant, false, 1);
+                }}
+                disabled={!inStock || !price}
+                className={`flex-1 py-2.5 px-3 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 ${
+                  inStock && price
+                    ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/25 cursor-pointer'
+                    : 'bg-slate-300 shadow-transparent cursor-not-allowed'
+                }`}
+                title={inStock ? 'Add Item to Cart' : 'Out of Stock'}
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span className="truncate">Add to Cart</span>
+                <span className="truncate">{inStock ? 'Add to Cart' : 'Out of Stock'}</span>
               </button>
             )}
           </div>

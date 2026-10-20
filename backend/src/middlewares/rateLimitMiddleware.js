@@ -22,11 +22,13 @@ class RateLimiter {
 
   middleware() {
     return (req, res, next) => {
-      // Allow bypass if test bypass header present or DISABLE_RATE_LIMIT is enabled
-      if (req.headers['x-bypass-rate-limit'] === 'true' || process.env.DISABLE_RATE_LIMIT === 'true') {
+      // Bypass only in an explicit test environment. Never via a request header.
+      if (process.env.NODE_ENV === 'test' && process.env.DISABLE_RATE_LIMIT === 'true') {
         return next();
       }
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+      // Use Express' resolved client IP. Do not read X-Forwarded-For directly:
+      // it is client-controlled unless trust proxy is configured correctly.
+      const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
       const now = Date.now();
 
       let record = this.hits.get(ip);

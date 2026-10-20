@@ -5,6 +5,7 @@ const { execSync } = require('child_process');
 
 const DURATION_HOURS = 2;
 const DURATION_MS = DURATION_HOURS * 60 * 60 * 1000;
+const TEST_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 const START_TIME = Date.now();
 const END_TIME = START_TIME + DURATION_MS;
 const LOG_FILE = path.join(__dirname, '../continuous_test_run.log');
@@ -56,9 +57,9 @@ async function runIteration(cycle) {
 
   // 1. Health check
   try {
-    const health = await request({ hostname: '127.0.0.1', port: 5000, path: '/health', method: 'GET' });
+    const health = await request({ hostname: '127.0.0.1', port: TEST_PORT, path: '/health', method: 'GET' });
     if (health.status === 200 || health.status === 404) { // /health or /api/health
-      const deep = await request({ hostname: '127.0.0.1', port: 5000, path: '/api/health/deep', method: 'GET' });
+      const deep = await request({ hostname: '127.0.0.1', port: TEST_PORT, path: '/api/health/deep', method: 'GET' });
       if (deep.status === 200 && deep.data.status === 'ready') {
         cyclePassed++;
       } else {
@@ -75,12 +76,12 @@ async function runIteration(cycle) {
   let tokenA, tokenB, tenantAId, tenantBId;
   try {
     const loginA = await request({
-      hostname: '127.0.0.1', port: 5000, path: '/api/auth/login', method: 'POST',
+      hostname: '127.0.0.1', port: TEST_PORT, path: '/api/auth/login', method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     }, { email: 'rahul@desirasoi.com', password: 'password123' });
 
     const loginB = await request({
-      hostname: '127.0.0.1', port: 5000, path: '/api/auth/login', method: 'POST',
+      hostname: '127.0.0.1', port: TEST_PORT, path: '/api/auth/login', method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     }, { email: 'vikram@royalfilms.com', password: 'password123' });
 
@@ -103,7 +104,7 @@ async function runIteration(cycle) {
   if (tokenA && tokenB) {
     try {
       const bLeads = await request({
-        hostname: '127.0.0.1', port: 5000, path: '/api/crm/leads', method: 'GET',
+        hostname: '127.0.0.1', port: TEST_PORT, path: '/api/crm/leads', method: 'GET',
         headers: { 'Authorization': 'Bearer ' + tokenB }
       });
       // Ensure no Merchant A lead is returned in Merchant B list
@@ -124,7 +125,7 @@ async function runIteration(cycle) {
   if (tokenA) {
     try {
       const newLead = await request({
-        hostname: '127.0.0.1', port: 5000, path: '/api/crm/leads', method: 'POST',
+        hostname: '127.0.0.1', port: TEST_PORT, path: '/api/crm/leads', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokenA }
       }, {
         name: `Endurance Test Lead ${cycle}-${Date.now() % 10000}`,
@@ -139,7 +140,7 @@ async function runIteration(cycle) {
       } else if (newLead.status === 403 && newLead.data?.code === 'QUOTA_EXCEEDED') {
         // Expected when plan quota is hit; upgrade plan to keep testing
         await request({
-          hostname: '127.0.0.1', port: 5000, path: '/api/subscriptions/upgrade', method: 'POST',
+          hostname: '127.0.0.1', port: TEST_PORT, path: '/api/subscriptions/upgrade', method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokenA }
         }, { planTier: 'PRO' });
         cyclePassed++;
@@ -156,12 +157,12 @@ async function runIteration(cycle) {
   // 5. Public Storefront Checkout & Inventory Integrity
   try {
     const store = await request({
-      hostname: '127.0.0.1', port: 5000, path: '/api/public/store/desi-rasoi-achar-1', method: 'GET'
+      hostname: '127.0.0.1', port: TEST_PORT, path: '/api/public/store/desi-rasoi-achar-1', method: 'GET'
     });
     if (store.status === 200 && store.data.products && store.data.products.length > 0) {
       const prod = store.data.products[0];
       const order = await request({
-        hostname: '127.0.0.1', port: 5000, path: '/api/public/store/desi-rasoi-achar-1/orders', method: 'POST',
+        hostname: '127.0.0.1', port: TEST_PORT, path: '/api/public/store/desi-rasoi-achar-1/orders', method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       }, {
         customerName: `Customer #${cycle}`,
@@ -194,7 +195,7 @@ async function runIteration(cycle) {
   if (tokenB) {
     try {
       const bookingList = await request({
-        hostname: '127.0.0.1', port: 5000, path: '/api/bookings', method: 'GET',
+        hostname: '127.0.0.1', port: TEST_PORT, path: '/api/bookings', method: 'GET',
         headers: { 'Authorization': 'Bearer ' + tokenB }
       });
       if (bookingList.status === 200) {
@@ -213,7 +214,7 @@ async function runIteration(cycle) {
   if (tokenA) {
     try {
       const autoLogs = await request({
-        hostname: '127.0.0.1', port: 5000, path: '/api/automations/logs', method: 'GET',
+        hostname: '127.0.0.1', port: TEST_PORT, path: '/api/automations/logs', method: 'GET',
         headers: { 'Authorization': 'Bearer ' + tokenA }
       });
       if (autoLogs.status === 200) {

@@ -2,17 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 
-import { 
-  ShieldCheck, 
-  Lock, 
-  Mail, 
-  ArrowRight, 
-  AlertCircle, 
-  Store, 
-  Camera, 
-  Crown, 
-  Compass
-} from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
 
 export const Login = () => {
@@ -30,25 +20,6 @@ export const Login = () => {
 
     try {
       const data = await login(email, password);
-      if (data.user.role === 'SUPER_ADMIN') {
-        navigate('/admin');
-      } else {
-        navigate('/merchant');
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Login failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleQuickDemo = async (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setError('');
-    setIsSubmitting(true);
-    try {
-      const data = await login(demoEmail, demoPassword);
       if (data.user.role === 'SUPER_ADMIN') {
         navigate('/admin');
       } else {
@@ -134,50 +105,6 @@ export const Login = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick Demo 1-Click Login Helper */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">
-              Quick 1-Click Demo Logins
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('superadmin@omniva.io', 'password123')}
-                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left text-slate-700 cursor-pointer"
-              >
-                <Crown className="w-4 h-4 text-amber-500 shrink-0" />
-                <span className="truncate">Super Admin</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('rahul@desirasoi.com', 'password123')}
-                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left text-slate-700 cursor-pointer"
-              >
-                <Store className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="truncate">Achar Owner</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('vikram@royalfilms.com', 'password123')}
-                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left text-slate-700 cursor-pointer"
-              >
-                <Camera className="w-4 h-4 text-cyan-600 shrink-0" />
-                <span className="truncate">Photo Owner</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('karan@desertsafari.in', 'password123')}
-                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition text-left text-slate-700 cursor-pointer"
-              >
-                <Compass className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="truncate">Safari &amp; Travel Owner</span>
-              </button>
-            </div>
-          </div>
 
           <div className="text-center">
             <Link

@@ -6,6 +6,7 @@ const MetaIntegration = require('../models/MetaIntegration');
 const Tenant = require('../models/Tenant');
 const Lead = require('../models/Lead');
 const { verifyOAuthState, decryptToken, encryptToken } = require('../utils/cryptoUtils');
+const { getMetaRedirectUri } = require('../utils/appUrl');
 const {
   getOAuthDialogUrl,
   exchangeCodeForTokens,
@@ -44,7 +45,15 @@ const initiateOAuth = async (req, res) => {
 // @route   GET /api/meta/oauth/callback
 // @access  Public (Redirect target from Meta OAuth Dialog)
 const handleOAuthCallback = async (req, res) => {
-  const clientUrl = process.env.CLIENT_URL || 'https://omniva-saas.vercel.app';
+  const clientUrl = String(process.env.CLIENT_URL || process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  if (!clientUrl) {
+    return res.status(503).send('CLIENT_URL is not configured. Meta OAuth cannot redirect back to the dashboard.');
+  }
+  try {
+    getMetaRedirectUri();
+  } catch (configError) {
+    return res.status(503).send(configError.message);
+  }
   const { code, state, error, error_reason, error_description } = req.query;
 
   // Handle user denied or Meta authorization error
@@ -134,12 +143,24 @@ const getIntegrationStatus = async (req, res) => {
   try {
     const businessId = req.businessId;
 
-    const host = req.get('host') || 'localhost:5000';
+    const host = req.get('host');
+    if (!host) {
+      return res.status(503).json({
+        success: false,
+        message: 'Unable to determine the public webhook host for this request',
+      });
+    }
     const protocol = req.protocol || 'https';
     const tenant = await Tenant.findById(businessId);
-    const tenantSlug = tenant?.slug || 'default';
-    const webhookUrl = `${protocol}://${host}/api/webhooks/meta?tenantSlug=${tenantSlug}`;
-    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'omniva_meta_verify_token_2026';
+    if (!tenant || !tenant.slug) {
+      return res.status(409).json({
+        success: false,
+        message: 'This workspace has no storefront slug. Configure a slug before connecting Meta.',
+      });
+    }
+    const tenantSlug = tenant.slug;
+    const webhookUrl = `${protocol}://${host}/api/webhooks/meta?tenantSlug=${encodeURIComponent(tenantSlug)}`;
+    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || '';
 
     const integration = await MetaIntegration.findOne({ businessId });
 

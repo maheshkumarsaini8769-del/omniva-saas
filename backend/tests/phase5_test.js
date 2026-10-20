@@ -159,7 +159,7 @@ const runTests = async () => {
     });
 
     // 4. Public Booking Request Submission (Photography Shoot)
-    await test('4. Public Shoot Booking Submission with Advance Token Calculation', async () => {
+    await test('4. Public Shoot Booking Submission records no payment until verified', async () => {
       const bookingPayload = {
         packageId: package1Id,
         customerName: 'Rohan Malhotra',
@@ -193,11 +193,17 @@ const runTests = async () => {
       if (data.data.totalAmount !== 25000) {
         throw new Error(`Expected total ₹25000, got ${data.data.totalAmount}`);
       }
-      if (data.data.advancePaid !== 5000) {
-        throw new Error(`Expected ₹5000 (20%) advance token, got ${data.data.advancePaid}`);
+      if (data.data.advancePaid !== 0) {
+        throw new Error(`Expected ₹0 collected before payment, got ${data.data.advancePaid}`);
       }
-      if (data.data.balanceDue !== 20000) {
-        throw new Error(`Expected balance ₹20000, got ${data.data.balanceDue}`);
+      if (data.data.expectedAdvance !== 5000) {
+        throw new Error(`Expected ₹5000 (20%) token due, got ${data.data.expectedAdvance}`);
+      }
+      if (data.data.balanceDue !== 25000) {
+        throw new Error(`Expected full balance ₹25000 before payment, got ${data.data.balanceDue}`);
+      }
+      if (data.data.paymentStatus !== 'UNPAID') {
+        throw new Error(`Expected UNPAID status, got ${data.data.paymentStatus}`);
       }
       if (data.data.bookingStatus !== 'PENDING') {
         throw new Error(`Expected PENDING status, got ${data.data.bookingStatus}`);
@@ -211,6 +217,7 @@ const runTests = async () => {
         customerName: 'Pooja Verma',
         customerPhone: '9822334455',
         eventDate: '2026-12-05',
+        timeSlot: 'Morning (08:00 AM - 12:00 PM)',
         passengers: [
           { name: 'Pooja Verma', age: 28, gender: 'Female', seatNo: 'A1', pickupPoint: 'Delhi Gate' },
           { name: 'Anand Verma', age: 31, gender: 'Male', seatNo: 'A2', pickupPoint: 'Delhi Gate' },
@@ -238,7 +245,7 @@ const runTests = async () => {
     await test('6. Automatic CRM Lead Pipeline Sync for Booking Request', async () => {
       const lead = await Lead.findOne({ businessId: merchantBTenantId, phone: '9811223344' });
       if (!lead) throw new Error('Lead not synced to CRM for booking client');
-      if (lead.status !== 'QUALIFIED') throw new Error(`Expected lead status QUALIFIED, got ${lead.status}`);
+      if (lead.status !== 'NEW') throw new Error(`Expected a booking inquiry to stay in NEW until reviewed, got ${lead.status}`);
       if (lead.budget !== 25000) throw new Error(`Expected budget ₹25000, got ${lead.budget}`);
       if (lead.campaignName !== 'cinematic_prewedding_reel') {
         throw new Error(`Attribution lost: expected cinematic_prewedding_reel, got ${lead.campaignName}`);

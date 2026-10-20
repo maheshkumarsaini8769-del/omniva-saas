@@ -28,6 +28,7 @@ import {
   Clock,
   AlertTriangle,
   XCircle,
+  X,
   MoreVertical,
   ChevronRight,
   ChevronLeft,
@@ -87,6 +88,23 @@ import { MetaAdsIntegration } from '../components/marketing/MetaAdsIntegration';
 import { BillingSettings } from '../components/subscription/BillingSettings';
 import { AutomationManager } from '../components/automation/AutomationManager';
 import { IntegrationsManager } from '../components/integrations/IntegrationsManager';
+import { NO_IMAGE_PLACEHOLDER } from '../utils/imagePlaceholder';
+
+
+const formatDateInput = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInput = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return new Date(NaN);
+  return new Date(year, month - 1, day);
+};
 
 export const MerchantDashboard = () => {
   const { user, tenant, logout } = useAuth();
@@ -137,7 +155,7 @@ export const MerchantDashboard = () => {
       'customer-view': 'Customer View (Storefront)',
       leads: 'Leads & CRM Pipeline',
       customers: 'Customers Directory',
-      'ai-insights': 'AI Business Analyzer',
+      'ai-insights': 'Business Insights',
       marketing: 'Marketing & Meta Ads',
       automations: 'Automations Engine',
       staff: 'Staff & Roles',
@@ -154,60 +172,9 @@ export const MerchantDashboard = () => {
   const mainContentRef = useRef(null);
   const [storePreviewDevice, setStorePreviewDevice] = useState('desktop');
 
-  // Real-time Business Notification State
+  // Business Notification State
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif-1',
-      title: 'New COD Order Received',
-      description: 'Order #ORD-8492 by Sunita Agarwal (₹1,240 · Cash on Delivery)',
-      detail: '2x Rajasthani Mango Pickle 500g, 1x Mixed Veg Pickle 400g',
-      type: 'order',
-      time: '2 mins ago',
-      unread: true,
-      actionTab: 'orders'
-    },
-    {
-      id: 'notif-2',
-      title: 'Meta CAPI Purchase Event Synced',
-      description: 'Server-side CAPI event dispatched to Pixel ID: 94821049281',
-      detail: 'Event ID: capi_ord_8491 · Match Quality Score: 9.6/10',
-      type: 'meta',
-      time: '14 mins ago',
-      unread: true,
-      actionTab: 'integrations'
-    },
-    {
-      id: 'notif-3',
-      title: 'WhatsApp Confirmation Sent',
-      description: 'Automated order dispatch & tracking link sent to +91 98290 12345',
-      detail: 'Template: order_dispatch_v2 · Status: Delivered',
-      type: 'whatsapp',
-      time: '35 mins ago',
-      unread: true,
-      actionTab: 'automations'
-    },
-    {
-      id: 'notif-4',
-      title: 'Shiprocket Courier AWB Assigned',
-      description: 'Delhivery Surface courier booked for Order #ORD-8488',
-      detail: 'AWB Number: DEL-83910248 · Pickup scheduled 2:00 PM',
-      type: 'courier',
-      time: '1 hour ago',
-      unread: false,
-      actionTab: 'orders'
-    },
-    {
-      id: 'notif-5',
-      title: 'Low Stock Alert',
-      description: 'Sweet Lemon Pickle 400g has only 4 units remaining',
-      detail: 'Reorder recommended to avoid lost Meta ad conversions',
-      type: 'stock',
-      time: '3 hours ago',
-      unread: false,
-      actionTab: 'products'
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const unreadNotifsCount = notifications.filter(n => n.unread).length;
 
   // Auto-scroll main content container to top whenever active tab changes
@@ -219,14 +186,18 @@ export const MerchantDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Merchant Details
-  const businessName = tenant?.businessName || 'Desi Achar House';
-  const businessSlug = tenant?.slug || 'desi-rasoi-achar-1';
-  const planName = 'Growth plan';
+  const businessName = tenant?.businessName || '';
+  const businessSlug = tenant?.slug || '';
+  const planName = tenant?.planTier
+    ? `${tenant.planTier.charAt(0)}${tenant.planTier.slice(1).toLowerCase()} plan`
+    : 'No plan loaded';
 
   // Dynamic Date Range Filter State (Pure Calendar Controlled)
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const todayStr = formatDateInput(today);
+  const monthStartStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
   const [datePreset, setDatePreset] = useState('ALL');
-  const [startDate, setStartDate] = useState('2026-10-01');
+  const [startDate, setStartDate] = useState(monthStartStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -234,7 +205,7 @@ export const MerchantDashboard = () => {
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [calPickerYear, setCalPickerYear] = useState(new Date().getFullYear());
   const [calPickerMonth, setCalPickerMonth] = useState(new Date().getMonth());
-  const [selectedRangeStart, setSelectedRangeStart] = useState('2026-10-01');
+  const [selectedRangeStart, setSelectedRangeStart] = useState(monthStartStr);
   const [selectedRangeEnd, setSelectedRangeEnd] = useState(todayStr);
 
   // Interactive Order Processing State
@@ -242,101 +213,21 @@ export const MerchantDashboard = () => {
   const [orderSourceFilter, setOrderSourceFilter] = useState('ALL'); // ALL, INSTAGRAM, FACEBOOK, WHATSAPP, WEBSITE
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
   const [dispatchModalOrder, setDispatchModalOrder] = useState(null);
-  const [courierName, setCourierName] = useState('Delhivery Express');
-  const [trackingNumber, setTrackingNumber] = useState('DEL-8492014');
+  const [courierName, setCourierName] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
   const [autoNotifyWhatsApp, setAutoNotifyWhatsApp] = useState(true);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [cancelReason, setCancelReason] = useState('Customer requested address change / cancellation');
   const [actionSuccessToast, setActionSuccessToast] = useState('');
+  const [actionErrorToast, setActionErrorToast] = useState('');
+
+  const showActionError = (message) => {
+    setActionErrorToast(message);
+    setTimeout(() => setActionErrorToast(''), 6000);
+  };
 
   // Staff Accounts & Granular Permissions State
-  const INITIAL_STAFF_LIST = [
-    {
-      id: 'staff_admin',
-      name: 'Mahesh Sharma',
-      email: 'owner@desiachar.example',
-      phone: '+91 98290 12345',
-      role: 'Merchant Admin (Owner)',
-      status: 'Active',
-      orderScope: 'ALL', // 'ALL' | 'PENDING_ONLY' | 'CONFIRMED_ONLY' | 'DISPATCH_ONLY' | 'CUSTOM'
-      allowedOrderStatuses: ['NEW', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
-      modules: ['overview', 'orders', 'products', 'categories', 'inventory', 'leads', 'customers', 'marketing', 'automations', 'staff', 'integrations', 'reports', 'settings', 'billing'],
-      canAcceptOrders: true,
-      canPackOrders: true,
-      canDispatchOrders: true,
-      canCancelOrders: true,
-      canViewRevenue: true,
-      lastActive: 'Active Now'
-    },
-    {
-      id: 'staff_packing',
-      name: 'Sunil Kumar',
-      email: 'sunil.ops@desiachar.example',
-      phone: '+91 98290 88771',
-      role: 'Packing & Kitchen Staff',
-      status: 'Active',
-      orderScope: 'CONFIRMED_ONLY', // Shows only Confirmed & Processing orders for packing staff
-      allowedOrderStatuses: ['CONFIRMED', 'PROCESSING'],
-      modules: ['orders', 'inventory'],
-      canAcceptOrders: false,
-      canPackOrders: true,
-      canDispatchOrders: true,
-      canCancelOrders: false,
-      canViewRevenue: false,
-      lastActive: '12 mins ago'
-    },
-    {
-      id: 'staff_calling',
-      name: 'Pooja Verma',
-      email: 'pooja.cs@desiachar.example',
-      phone: '+91 98290 77665',
-      role: 'Order Desk & Calling Staff',
-      status: 'Active',
-      orderScope: 'PENDING_ONLY', // Shows only New & Pending orders (for phone verification)
-      allowedOrderStatuses: ['NEW'],
-      modules: ['orders', 'leads', 'customers'],
-      canAcceptOrders: true,
-      canPackOrders: false,
-      canDispatchOrders: false,
-      canCancelOrders: true,
-      canViewRevenue: false,
-      lastActive: '25 mins ago'
-    },
-    {
-      id: 'staff_dispatch',
-      name: 'Karan Singh',
-      email: 'karan.logistics@desiachar.example',
-      phone: '+91 98290 44332',
-      role: 'Logistics & Dispatch Courier Partner',
-      status: 'Active',
-      orderScope: 'DISPATCH_ONLY', // Shows only Shipped & Dispatched orders
-      allowedOrderStatuses: ['SHIPPED', 'DELIVERED'],
-      modules: ['orders'],
-      canAcceptOrders: false,
-      canPackOrders: false,
-      canDispatchOrders: true,
-      canCancelOrders: false,
-      canViewRevenue: false,
-      lastActive: '1 hour ago'
-    },
-    {
-      id: 'staff_sales',
-      name: 'Rahul Mehra',
-      email: 'rahul.growth@desiachar.example',
-      phone: '+91 98290 99001',
-      role: 'Sales & Meta Ads Manager',
-      status: 'Active',
-      orderScope: 'ALL',
-      allowedOrderStatuses: ['NEW', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
-      modules: ['leads', 'customers', 'marketing', 'reports'],
-      canAcceptOrders: false,
-      canPackOrders: false,
-      canDispatchOrders: false,
-      canCancelOrders: false,
-      canViewRevenue: true,
-      lastActive: '3 hours ago'
-    }
-  ];
+  const INITIAL_STAFF_LIST = [];
 
   const [staffList, setStaffList] = useState(INITIAL_STAFF_LIST);
   const [teamMembers, setTeamMembers] = useState(INITIAL_STAFF_LIST);
@@ -425,22 +316,22 @@ export const MerchantDashboard = () => {
     festival: {
       title: '🎁 Festive Flash Sale Broadcast (Festive Offer)',
       audience: 'All WhatsApp Contacts & Storefront Customers',
-      text: `✨ Authentic artisanal flavors direct from the Royal Kitchens of Rajasthan! ✨\n\nDear Customer, Desi Achar House brings you an exclusive Festive Special Offer! 🏺\n\n🔥 Buy Any 2 Handcrafted Pickles & Get 15% OFF + Free Home Delivery!\n✅ 100% Cold-Pressed Mustard Oil\n✅ Sun-Dried Heirloom Spices\n✅ Zero Artificial Preservatives\n\n👉 Order Online Now: https://desiachar.example/store/desi-rasoi-achar-1\nUse Coupon: FESTIVE15 at checkout! 🌶️`
+      text: `✨ A festive offer from ${businessName || 'our store'} ✨\n\nHello, we have a special offer for you.\n\n👉 Order online: ${businessSlug ? `${window.location.origin}/store/${businessSlug}` : 'Use your storefront link'}\nAdd an active coupon code before sending this message.`
     },
     'cod-confirm': {
       title: '💬 COD Order Verification & Address Check (RTO Prevention)',
       audience: 'New Cash on Delivery Buyers',
-      text: `Hello {CustomerName}! 🙏\n\nWe received your Order #{OrderId} (₹{OrderTotal}) at Desi Achar House.\n\n📦 Items: Traditional Rajasthani Mango Pickle 500g\n📍 Delivery Address: {Address}\n\nPlease reply *YES* to verify your delivery address so we can immediately dispatch your parcel via Delhivery Express Courier. Thank you!`
+      text: `Hello {CustomerName}! 🙏\n\nWe received your order #{OrderId} (₹{OrderTotal}) at ${businessName || 'our store'}.\n\n📍 Delivery Address: {Address}\n\nPlease reply *YES* to verify your delivery address before dispatch. Thank you!`
     },
     review: {
       title: '⭐️ 5-Star Review & Repeat Order Code (Post-Delivery Feedback)',
       audience: 'Delivered Order Customers (3 Days Post-Delivery)',
-      text: `Hello {CustomerName}! 😋\n\nWe hope you enjoyed our handcrafted traditional Rajasthani pickles!\n\nYour feedback means the world to us. Please take a moment to leave a 5-star review: https://desiachar.example/review\n\nEnjoy ₹50 off your next order with coupon code: *VIPREPEAT50*\n\nWarm regards, Desi Achar House Family 🏺`
+      text: `Hello {CustomerName}!\n\nThank you for ordering from ${businessName || 'our store'}. If you enjoyed your purchase, please reply with your feedback.\n\nAdd an active repeat-purchase coupon before sending this message.`
     },
     'meta-reel': {
-      title: '📸 Viral Instagram Reel Caption & 15 Top Hashtags',
+      title: '📸 Instagram Reel Caption & Hashtag Starter',
       audience: 'Instagram Reel & Facebook Post Ad Creative',
-      text: `Remember the authentic taste of grandmother's heirloom pickles? 👵❤️\n\nSlowly sun-ripened mangoes infused with aromatic hing, cold-pressed mustard oil, and time-tested Rajasthani spices! 🌶️✨\n\n100% Handcrafted, Zero Chemicals, Pure Authentic Flavor.\n\n📦 Flat 10% Off on First Order | Cash on Delivery Available Nationwide 🇮🇳\n👉 Tap the link in bio to order directly on WhatsApp or Website!\n\n#ArtisanalPickles #MangoPickle #HandcraftedFood #TraditionalTaste #OrganicFood #IndianFlavors #GourmetFood #FoodReels #PureSpices #HeritageKitchen`
+      text: `Discover the latest products from ${businessName || 'our store'}. 🛍️\n\nBrowse current prices, variants and availability on our storefront:\n${businessSlug ? `${window.location.origin}/store/${businessSlug}` : 'Add your storefront link before posting.'}\n\nAdd the real product details and any active coupon before publishing. Avoid unverified claims about ingredients, certifications or discounts.\n\n#${(businessName || 'Shop').replace(/[^a-zA-Z0-9]/g, '')} #ShopSmall #NewArrivals`
     }
   };
 
@@ -449,7 +340,7 @@ export const MerchantDashboard = () => {
       id: 'msg_welcome',
       sender: 'ai',
       time: 'Just now',
-      text: 'Hello Mahesh! I am your **Omniva AI Business Copilot 2.0**. I have analyzed your store **Desi Achar House** across past 30 days revenue (₹54,200), Meta Ads (Instagram vs Facebook), inventory levels, and COD order trends.\n\nYou can ask me questions such as:\n• "Which pickle variety has the highest profit margin?"\n• "Which Meta ad platform delivers the highest ROAS?"\n• "How do I reduce COD order RTO return risk?"\n• "How much stock should we prepare for the festive season?"'
+      text: `Hello ${user?.name || 'there'}! I can answer questions using the orders, products and CRM data currently loaded in this dashboard for ${businessName || 'your store'}. I will say when information is not available instead of inventing campaign or profit numbers.\n\nTry asking:\n• "How many COD orders need an address check?"\n• "What is my current order revenue?"\n• "Which products are low on stock?"\n• "Is Meta connected?"`
     }
   ]);
 
@@ -470,18 +361,37 @@ export const MerchantDashboard = () => {
 
     setTimeout(() => {
       const qLower = q.toLowerCase();
+      const parseAmount = (value) => Number(String(value || '').replace(/[^0-9.]/g, '')) || 0;
+      const activeOrders = ordersList.filter(o => o.status !== 'CANCELLED');
+      const codOrders = activeOrders.filter(o => /cod|cash/i.test(String(o.pay || o.paymentMethod || '')));
+      const flaggedCod = codOrders.filter(o => {
+        const address = String(o.address || '').trim();
+        return parseAmount(o.total) >= 1000 || address.length < 12;
+      });
       let aiResponseText = '';
 
-      if (qLower.includes('margin') || qLower.includes('bika') || qLower.includes('profit') || qLower.includes('selling') || qLower.includes('top')) {
-        aiResponseText = `📊 **Sales & Margin Analysis (Profit Report):**\n\n1. 🥇 **Traditional Rajasthani Mango Pickle 500g:** Your #1 Bestseller accounting for **44% of total order volume**. Selling Price: ₹299, Estimated Gross Margin: **63.5% (₹190/jar)**.\n2. 🥈 **Spicy Green Chilli Pickle 250g:** High repeat purchase item (32% repeat rate). Selling Price: ₹189, Margin: **58%**.\n3. 💡 **AI Recommendation:** Create a ₹449 Combo Bundle of Mango Pickle + Green Chilli to increase Average Order Value (AOV) by +38%!`;
+      if (qLower.includes('margin') || qLower.includes('profit') || qLower.includes('bika') || qLower.includes('selling')) {
+        aiResponseText = `**Profit and margin**\n\nCost prices and line-item sales history are not exposed in this dashboard, so I cannot calculate a real gross margin. I will not estimate one.\n\nTo enable margin reporting, store a cost price on each product and variant and keep order line items populated. The live order list currently has **${activeOrders.length}** non-cancelled order(s).`;
       } else if (qLower.includes('meta') || qLower.includes('ad') || qLower.includes('insta') || qLower.includes('facebook') || qLower.includes('spend') || qLower.includes('roas')) {
-        aiResponseText = `📈 **Meta Ads Performance Diagnostic (Ad Campaign Analysis):**\n\n• **📸 Instagram Reels Video Ads:** Spend ₹6,180 | Revenue ₹23,450 | **ROAS 3.8x** | Conversion Rate: 4.2%.\n• **🔵 Facebook Feed Ads:** Spend ₹4,920 | Revenue ₹11,800 | **ROAS 2.4x** | Conversion Rate: 2.1%.\n\n🎯 **AI Recommendation:** Instagram Reels outperforms Facebook feeds by **+58%**. We recommend shifting 70% of ad spend to Instagram Video Reels to scale ROAS to 4.2x.`;
+        const metaEnabled = Boolean(tenant?.integrations?.meta?.enabled || tenant?.settings?.metaPixelId);
+        aiResponseText = metaEnabled
+          ? `**Meta integration**\n\nMeta is marked as configured for this store, but Omniva does not currently load campaign-level spend or ROAS into this dashboard. I cannot compare Instagram and Facebook without a synced campaign report.\n\nCurrent Meta status: **${tenant?.integrations?.meta?.status || 'CONFIGURED'}**.`
+          : `**Meta integration**\n\nMeta is not connected for this store. No Pixel, CAPI or campaign-spend data is available, so there is no real ROAS to report. Open Marketing → Integrations to connect it.`;
       } else if (qLower.includes('rto') || qLower.includes('cod') || qLower.includes('return') || qLower.includes('fraud') || qLower.includes('cancel')) {
-        aiResponseText = `🛡️ **COD & RTO Risk Shield (Return Prevention Report):**\n\n• Out of all active orders, **57% are Cash on Delivery (COD)** and **43% are Prepaid**.\n• Current RTO Rate: **3.8%** (significantly better than the 14% industry average).\n• **High-Risk Alert:** 2 COD orders have incomplete street addresses or unverified phone numbers.\n\n⚡ **AI Action:** Send a 1-click **WhatsApp Confirmation Link** before dispatching. Hand over to courier only after customer verification.`;
-      } else if (qLower.includes('stock') || qLower.includes('tyohar') || qLower.includes('diwali') || qLower.includes('holi') || qLower.includes('forecast') || qLower.includes('kitna')) {
-        aiResponseText = `📦 **Festive Demand Forecast & Stock Alerts (Inventory Planning):**\n\n• **Festive Gourmet Hamper 1.2kg:** Current stock is 24 units. Projected demand is expected to surge by **+280%** over the upcoming festive season. Risk of stockout in ~6 days!\n• **Mango Pickle 500g:** 120 units available in stock (sufficient for next 14 days).\n\n👩‍🍳 **Kitchen Batching Recommendation:** Schedule kitchen preparation for 150 Festive Hampers and 100 Spicy Chilli Pouches within 3 days.`;
+        const codPercent = activeOrders.length ? Math.round((codOrders.length / activeOrders.length) * 100) : 0;
+        aiResponseText = `**COD and address review**\n\n• Active non-cancelled orders: **${activeOrders.length}**\n• COD orders: **${codOrders.length}** (${codPercent}%)\n• COD orders needing an address check: **${flaggedCod.length}**\n\nThe address check flags COD orders over ₹1,000 or with fewer than 12 address characters. It is a rule-based review, not a fraud probability. Open the RTO Radar tab to contact the real customers.`;
+      } else if (qLower.includes('stock') || qLower.includes('inventory') || qLower.includes('forecast') || qLower.includes('tyohar') || qLower.includes('diwali')) {
+        const lowStock = productsList.filter(p => {
+          const stock = Number(p.stock ?? p.stockQuantity ?? 0);
+          return Number.isFinite(stock) && stock < 10;
+        });
+        aiResponseText = lowStock.length
+          ? `**Live inventory**\n\n${lowStock.length} product(s) are below 10 units:\n${lowStock.slice(0, 8).map(p => `• ${p.name}: ${p.stock ?? p.stockQuantity}`).join('\n')}\n\nDemand forecasting is not available because Omniva does not store enough historical line-item demand here. This is a current stock count, not a projection.`
+          : `**Live inventory**\n\nNo loaded product is below 10 units. I cannot project festive demand without historical line-item sales data, so no stockout forecast is claimed.`;
       } else {
-        aiResponseText = `🤖 **Store Intelligence Summary (Health Benchmark):**\n\n• **Total Store Revenue:** ₹${rangeRevenue.toLocaleString('en-IN')} (${rangeTotalOrders} Orders).\n• **Order Processing SLA:** Avg time to accept is 28 mins.\n• **Store Health Score:** **94 / 100 (Excellent 🟢)**\n\nVisit the "Forecast" tab to view 30-day stock projections, or use the "Copywriter" tab to generate high-converting promotional broadcasts!`;
+        const revenue = activeOrders.reduce((sum, o) => sum + parseAmount(o.total), 0);
+        const pending = activeOrders.filter(o => ['NEW', 'CONFIRMED', 'PROCESSING'].includes(String(o.status || '').toUpperCase())).length;
+        aiResponseText = `**Loaded store summary**\n\n• Non-cancelled orders: **${activeOrders.length}**\n• Order value: **₹${revenue.toLocaleString('en-IN')}**\n• Orders still open: **${pending}**\n• CRM leads loaded: **${crmLeads.length}**\n\nI only use data currently loaded from your tenant. I will not fabricate ad spend, margins, health scores or demand forecasts.`;
       }
 
       setAiChatMessages(prev => [
@@ -498,415 +408,10 @@ export const MerchantDashboard = () => {
   };
 
   // Rich Orders State with Full Lifecycle & Customer Details
-  const [ordersList, setOrdersList] = useState([
-    {
-      id: '#ORD-1088',
-      orderNumber: 'ORD-1088',
-      date: '2026-10-07',
-      displayDate: '07 Oct 2026, 11:22 AM',
-      customer: 'Vikram Rathore',
-      phone: '+91 98290 12345',
-      email: 'vikram.rathore@example.com',
-      address: 'Plot 42, Civil Lines, Jaipur, Rajasthan - 302006',
-      source: 'INSTAGRAM',
-      channelName: 'Instagram Reels Ad',
-      campaign: 'Reel Launch - Rajasthani Achar Promo',
-      adCreative: 'Aam Achar Tasting Video Reel #04',
-      items: [
-        { name: 'Traditional Rajasthani Mango Pickle 500g', variant: '500g Glass Jar', qty: 1, price: 299, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Spicy Green Chilli Pickle 250g', variant: '250g Pouch', qty: 1, price: 189, image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Mango 500g, Green Chilli 250g)',
-      total: 488,
-      displayTotal: '₹488',
-      pay: 'COD',
-      payMethod: 'COD',
-      payColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      status: 'NEW',
-      statusLabel: 'New / Awaiting Acceptance',
-      statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-      courier: '',
-      tracking: '',
-      timeline: [
-        { title: 'Order Placed by Customer (Duplicate 2 mins after #ORD-1087)', time: '07 Oct 2026, 11:22 AM', done: true },
-        { title: 'Merchant Acceptance', time: 'Awaiting Action', done: false },
-        { title: 'Packed & Boxed', time: 'Pending', done: false },
-        { title: 'Courier Dispatch', time: 'Pending', done: false },
-        { title: 'Delivered', time: 'Pending', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1087',
-      orderNumber: 'ORD-1087',
-      date: '2026-10-07',
-      displayDate: '07 Oct 2026, 11:20 AM',
-      customer: 'Vikram Rathore',
-      phone: '+91 98290 12345',
-      email: 'vikram.rathore@example.com',
-      address: 'Plot 42, Civil Lines, Jaipur, Rajasthan - 302006',
-      source: 'INSTAGRAM',
-      channelName: 'Instagram Reels Ad',
-      campaign: 'Reel Launch - Rajasthani Achar Promo',
-      adCreative: 'Aam Achar Tasting Video Reel #04',
-      items: [
-        { name: 'Traditional Rajasthani Mango Pickle 500g', variant: '500g Glass Jar', qty: 1, price: 299, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Spicy Green Chilli Pickle 250g', variant: '250g Pouch', qty: 1, price: 189, image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Mango 500g, Green Chilli 250g)',
-      total: 488,
-      displayTotal: '₹488',
-      pay: 'Paid',
-      payMethod: 'ONLINE',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'NEW',
-      statusLabel: 'New / Awaiting Acceptance',
-      statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-      courier: '',
-      tracking: '',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '07 Oct 2026, 11:20 AM', done: true },
-        { title: 'Merchant Acceptance', time: 'Awaiting Action', done: false },
-        { title: 'Packed & Boxed', time: 'Pending', done: false },
-        { title: 'Courier Dispatch', time: 'Pending', done: false },
-        { title: 'Delivered', time: 'Pending', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1086',
-      orderNumber: 'ORD-1086',
-      date: '2026-10-07',
-      displayDate: '07 Oct 2026, 09:45 AM',
-      customer: 'Meera Joshi',
-      phone: '+91 98450 67890',
-      email: 'meera.joshi@example.com',
-      address: '15/B Malviya Nagar, Jaipur, Rajasthan - 302017',
-      source: 'FACEBOOK',
-      channelName: 'Facebook Feed Ad',
-      campaign: 'Diwali Festive Combo Hamper FB Blast',
-      adCreative: 'Royal Festive Hamper Carousel Ad',
-      items: [
-        { name: 'Royal Heritage Festive Pickle Combo Box 1.2kg', variant: 'Gift Hamper', qty: 2, price: 799, image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Heritage Festive Gift Box x2)',
-      total: 1598,
-      displayTotal: '₹1,598',
-      pay: 'COD',
-      payMethod: 'COD',
-      payColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      status: 'NEW',
-      statusLabel: 'New / Awaiting Acceptance',
-      statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-      courier: '',
-      tracking: '',
-      timeline: [
-        { title: 'Order Placed by Customer (COD)', time: '07 Oct 2026, 09:45 AM', done: true },
-        { title: 'Merchant Acceptance', time: 'Awaiting Action', done: false },
-        { title: 'Packed & Boxed', time: 'Pending', done: false },
-        { title: 'Courier Dispatch', time: 'Pending', done: false },
-        { title: 'Delivered', time: 'Pending', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1085',
-      orderNumber: 'ORD-1085',
-      date: '2026-10-06',
-      displayDate: '06 Oct 2026, 04:15 PM',
-      customer: 'Rohit Kumar',
-      phone: '+91 97110 54321',
-      email: 'rohit.kumar@example.com',
-      address: 'Flat 402, Vaishali Heights, Vaishali Nagar, Jaipur - 302021',
-      source: 'INSTAGRAM',
-      channelName: 'Instagram Story Ad',
-      campaign: 'Spicy Green Chilli & Mix Promo',
-      adCreative: 'Green Chilli Masala Close-up Video',
-      items: [
-        { name: 'Organic Mixed Vegetable Pickle 500g', variant: '500g Jar', qty: 1, price: 249, image: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Spicy Green Chilli Pickle 250g', variant: '250g Jar', qty: 1, price: 189, image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Mixed Pickle, Chilli Pickle)',
-      total: 438,
-      displayTotal: '₹438',
-      pay: 'COD',
-      payMethod: 'COD',
-      payColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      status: 'CONFIRMED',
-      statusLabel: 'Accepted / Confirmed',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200',
-      courier: '',
-      tracking: '',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '06 Oct 2026, 04:15 PM', done: true },
-        { title: 'Merchant Accepted Order', time: '06 Oct 2026, 05:00 PM', done: true },
-        { title: 'Packed & Boxed', time: 'Pending Action', done: false },
-        { title: 'Courier Dispatch', time: 'Pending', done: false },
-        { title: 'Delivered', time: 'Pending', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1084',
-      orderNumber: 'ORD-1084',
-      date: '2026-10-05',
-      displayDate: '05 Oct 2026, 02:30 PM',
-      customer: 'Neha Singh',
-      phone: '+91 98112 33445',
-      email: 'neha.singh@example.com',
-      address: 'B-88, Tilak Nagar, Jaipur, Rajasthan - 302004',
-      source: 'WHATSAPP',
-      channelName: 'WhatsApp Direct Chat',
-      campaign: 'VIP Repeat Customers Broadcast',
-      adCreative: 'Direct Message Link',
-      items: [
-        { name: 'Sweet & Tangy Lemon Pickle 500g', variant: '500g Glass Jar', qty: 2, price: 229, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Traditional Rajasthani Mango Pickle 500g', variant: '500g Jar', qty: 1, price: 299, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '3 items (Lemon Pickle x2, Mango 500g)',
-      total: 757,
-      displayTotal: '₹757',
-      pay: 'Paid',
-      payMethod: 'ONLINE',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'PROCESSING',
-      statusLabel: 'Packed / Ready to Ship',
-      statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-      courier: 'Delhivery Express',
-      tracking: 'DEL-PENDING',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '05 Oct 2026, 02:30 PM', done: true },
-        { title: 'Merchant Accepted Order', time: '05 Oct 2026, 03:00 PM', done: true },
-        { title: 'Packed & Quality Checked', time: '05 Oct 2026, 05:30 PM', done: true },
-        { title: 'Courier Pickup & Dispatch', time: 'Pending Action', done: false },
-        { title: 'Delivered', time: 'Pending', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1083',
-      orderNumber: 'ORD-1083',
-      date: '2026-10-04',
-      displayDate: '04 Oct 2026, 10:10 AM',
-      customer: 'Amit Patel',
-      phone: '+91 99099 88776',
-      email: 'amit.patel@example.com',
-      address: 'Shop 12, Johari Bazaar, Jaipur, Rajasthan - 302003',
-      source: 'FACEBOOK',
-      channelName: 'Facebook Feed & Marketplace',
-      campaign: 'Garlic Lahsun Achar Special FB Offer',
-      adCreative: 'Authentic Village Recipe Banner Ad',
-      items: [
-        { name: 'Spicy Garlic Pickle (Lahsun Achar) 400g', variant: '400g Jar', qty: 2, price: 249, image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Garlic Pickle 400g x2)',
-      total: 498,
-      displayTotal: '₹498',
-      pay: 'COD',
-      payMethod: 'COD',
-      payColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      status: 'SHIPPED',
-      statusLabel: 'Shipped / Out for Delivery',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200',
-      courier: 'Delhivery Surface',
-      tracking: 'DEL-98402150',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '04 Oct 2026, 10:10 AM', done: true },
-        { title: 'Merchant Accepted Order', time: '04 Oct 2026, 10:45 AM', done: true },
-        { title: 'Packed & Quality Checked', time: '04 Oct 2026, 01:20 PM', done: true },
-        { title: 'Dispatched via Delhivery (DEL-98402150)', time: '04 Oct 2026, 04:00 PM', done: true },
-        { title: 'Delivered to Customer', time: 'Out for delivery today', done: false },
-      ]
-    },
-    {
-      id: '#ORD-1082',
-      orderNumber: 'ORD-1082',
-      date: '2026-10-03',
-      displayDate: '03 Oct 2026, 01:15 PM',
-      customer: 'Priya Verma',
-      phone: '+91 98119 87654',
-      email: 'priya.verma@example.com',
-      address: 'A-22, Mansarovar Sector 5, Jaipur, Rajasthan - 302020',
-      source: 'INSTAGRAM',
-      channelName: 'Instagram Reels Ad',
-      campaign: 'Reel Launch - Rajasthani Achar Promo',
-      adCreative: 'Grandmother Recipe Heritage Reel #01',
-      items: [
-        { name: 'Royal Heritage Festive Pickle Combo Box 1.2kg', variant: 'Gift Hamper', qty: 1, price: 799, image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Traditional Rajasthani Mango Pickle 500g', variant: '500g Jar', qty: 1, price: 299, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '2 items (Heritage Combo, Mango 500g)',
-      total: 1098,
-      displayTotal: '₹1,098',
-      pay: 'Paid',
-      payMethod: 'ONLINE',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'DELIVERED',
-      statusLabel: 'Delivered Successfully',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      courier: 'BlueDart Express',
-      tracking: 'BLU-30982145',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '03 Oct 2026, 01:15 PM', done: true },
-        { title: 'Merchant Accepted Order', time: '03 Oct 2026, 01:30 PM', done: true },
-        { title: 'Packed & Quality Checked', time: '03 Oct 2026, 03:00 PM', done: true },
-        { title: 'Dispatched via BlueDart', time: '03 Oct 2026, 06:00 PM', done: true },
-        { title: 'Delivered Successfully (OTP Verified)', time: '05 Oct 2026, 12:45 PM', done: true },
-      ]
-    },
-    {
-      id: '#ORD-1081',
-      orderNumber: 'ORD-1081',
-      date: '2026-10-02',
-      displayDate: '02 Oct 2026, 11:00 AM',
-      customer: 'Aarav Sharma',
-      phone: '+91 98291 00223',
-      email: 'aarav.sharma@example.com',
-      address: 'House 5, Bani Park, Jaipur, Rajasthan - 302016',
-      source: 'WEBSITE',
-      channelName: 'Direct Storefront Web',
-      campaign: 'Organic Search & Direct Link',
-      adCreative: 'Storefront Homepage Buy Button',
-      items: [
-        { name: 'Traditional Rajasthani Mango Pickle 500g', variant: '500g Jar', qty: 2, price: 299, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' },
-        { name: 'Spicy Garlic Pickle (Lahsun Achar) 400g', variant: '400g Jar', qty: 1, price: 249, image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=300&auto=format&fit=crop&q=80' }
-      ],
-      itemSummary: '3 items (Mango Pickle x2, Garlic Pickle)',
-      total: 847,
-      displayTotal: '₹847',
-      pay: 'Paid',
-      payMethod: 'COD_COLLECTED',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'DELIVERED',
-      statusLabel: 'Delivered Successfully',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      courier: 'Delhivery Surface',
-      tracking: 'DEL-8910245',
-      timeline: [
-        { title: 'Order Placed by Customer', time: '02 Oct 2026, 11:00 AM', done: true },
-        { title: 'Merchant Accepted Order', time: '02 Oct 2026, 11:30 AM', done: true },
-        { title: 'Packed & Quality Checked', time: '02 Oct 2026, 02:00 PM', done: true },
-        { title: 'Dispatched via Delhivery', time: '02 Oct 2026, 05:00 PM', done: true },
-        { title: 'Delivered & COD Cash Collected', time: '04 Oct 2026, 03:10 PM', done: true },
-      ]
-    },
-    {
-      id: '#ORD-1080',
-      orderNumber: 'ORD-1080',
-      date: '2026-09-30',
-      displayDate: '30 Sep 2026, 05:10 PM',
-      customer: 'Kavita Chawla',
-      phone: '+91 98765 11223',
-      email: 'kavita@example.com',
-      address: 'Ajmer Road, Jaipur',
-      source: 'FACEBOOK',
-      channelName: 'Facebook Feed Ad',
-      campaign: 'Diwali Festive Combo Hamper FB Blast',
-      adCreative: 'Festive Combo Savings Video',
-      items: [{ name: 'Mixed Achar 500g', variant: '500g', qty: 1, price: 249, image: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=300&auto=format&fit=crop&q=80' }],
-      itemSummary: '1 item (Mixed Achar)',
-      total: 249,
-      displayTotal: '₹249',
-      pay: 'Paid',
-      payMethod: 'ONLINE',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'DELIVERED',
-      statusLabel: 'Delivered',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      courier: 'Delhivery',
-      tracking: 'DEL-778912',
-      timeline: []
-    },
-    {
-      id: '#ORD-1079',
-      orderNumber: 'ORD-1079',
-      date: '2026-09-28',
-      displayDate: '28 Sep 2026, 03:00 PM',
-      customer: 'Deepak Sharma',
-      phone: '+91 98223 44556',
-      email: 'deepak@example.com',
-      address: 'Raja Park, Jaipur',
-      source: 'INSTAGRAM',
-      channelName: 'Instagram Reels Ad',
-      campaign: 'Reel Launch - Rajasthani Achar Promo',
-      adCreative: '1kg Bulk Jar Free Delivery Promo Reel',
-      items: [{ name: 'Rajasthani Mango Pickle 1kg', variant: '1kg', qty: 1, price: 499, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' }],
-      itemSummary: '1 item (Mango Pickle 1kg)',
-      total: 499,
-      displayTotal: '₹499',
-      pay: 'Paid',
-      payMethod: 'ONLINE',
-      payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'DELIVERED',
-      statusLabel: 'Delivered',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      courier: 'BlueDart',
-      tracking: 'BLU-112233',
-      timeline: []
-    }
-  ]);
+  const [ordersList, setOrdersList] = useState([]);
 
   // Categories Showcase State with Authentic Photos
-  const [categoriesList, setCategoriesList] = useState([
-    {
-      id: 'CAT-01',
-      name: 'Mango Pickles (Aam ka Achar)',
-      slug: 'mango-pickles',
-      description: 'Traditional slow-sun-cured raw mango slices in cold-pressed mustard oil with fenugreek, fennel, and whole spices.',
-      image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80',
-      productsCount: 3,
-      status: 'Active'
-    },
-    {
-      id: 'CAT-02',
-      name: 'Green Chilli (Hari Mirch Achar)',
-      slug: 'green-chilli',
-      description: 'Hand-slit spicy green chillies seasoned with yellow mustard seeds, amchur, and roasted cumin.',
-      image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=600&auto=format&fit=crop&q=80',
-      productsCount: 2,
-      status: 'Active'
-    },
-    {
-      id: 'CAT-03',
-      name: 'Garlic Pickle (Lahsun Achar)',
-      slug: 'garlic-pickle',
-      description: 'Peeled pungent garlic cloves steeped in spicy Rajasthani masala and mustard oil.',
-      image: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=600&auto=format&fit=crop&q=80',
-      productsCount: 2,
-      status: 'Active'
-    },
-    {
-      id: 'CAT-04',
-      name: 'Mixed & Lemon Pickles',
-      slug: 'mixed-pickles',
-      description: 'Handcrafted seasonal carrots, cauliflower, turnip, ginger and tangy sweet lemons.',
-      image: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&auto=format&fit=crop&q=80',
-      productsCount: 2,
-      status: 'Active'
-    },
-    {
-      id: 'CAT-05',
-      name: 'Stuffed Red Chilli (Banarasi Lal Mirch)',
-      slug: 'red-chilli',
-      description: 'Sun-dried Banarasi thick red chillies stuffed with authentic heirloom mustard and amchur masala.',
-      image: 'https://images.unsplash.com/photo-1596040033282-5d9b23b72c4d?w=600&auto=format&fit=crop&q=80',
-      productsCount: 2,
-      status: 'Active'
-    },
-    {
-      id: 'CAT-06',
-      name: 'Handcrafted Festive Gift Boxes',
-      slug: 'gift-combos',
-      description: 'Premium wooden and earthen jar assortments for festivals, weddings, and gifting.',
-      image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-      productsCount: 2,
-      status: 'Active'
-    }
-  ]);
-
-  const photoPresets = [
-    { label: 'Sun-dried Raw Mango', url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80' },
-    { label: 'Fiery Green Chilli', url: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=600&auto=format&fit=crop&q=80' },
-    { label: 'Roasted Garlic & Spices', url: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=600&auto=format&fit=crop&q=80' },
-    { label: 'Heritage Mixed Pickle', url: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&auto=format&fit=crop&q=80' },
-    { label: 'Festive Gourmet Hamper', url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80' },
-    { label: 'Kashmiri Red Chilli', url: 'https://images.unsplash.com/photo-1596040033282-5d9b23b72c4d?w=600&auto=format&fit=crop&q=80' }
-  ];
+  const [categoriesList, setCategoriesList] = useState([]);
 
   // Dynamic Date Filter & Range Calculations
   const dateFilteredOrders = ordersList.filter(o => {
@@ -997,7 +502,7 @@ export const MerchantDashboard = () => {
     });
   };
 
-  // Helper to generate live courier tracking link
+  // Helper to generate the courier tracking link
   const getCourierTrackingUrl = (courier, tracking, orderNumber, phone) => {
     const trk = (tracking || '').trim();
     const c = (courier || '').toLowerCase();
@@ -1026,7 +531,7 @@ export const MerchantDashboard = () => {
     const trackingUrl = getCourierTrackingUrl(courier, tracking, order.orderNumber || order.id, cleanPhone);
     const fullTrackingUrl = trackingUrl.startsWith('http') ? trackingUrl : `${window.location.origin}${trackingUrl}`;
 
-    return `Hello ${order.customer}! 🙏\n\nYour Desi Achar House Order ${order.id} has been dispatched!\n\n🚚 Courier Partner: ${courier}\n🔢 Tracking No (AWB): ${tracking}\n📍 Live Parcel Tracking: ${fullTrackingUrl}\n\nClick the link above to track your parcel in real-time. Thank you for shopping with us! 🏺`;
+    return `Hello ${order.customer || 'customer'}! 🙏\n\nYour order ${order.orderNumber || order.id} from ${businessName || 'our store'} has been marked shipped.\n\n🚚 Courier Partner: ${courier}\n🔢 Tracking No (AWB): ${tracking}\n🔗 Tracking link: ${fullTrackingUrl}\n\nThank you for shopping with us.`;
   };
 
   // Scope orders by simulated staff role permissions (e.g. Confirmed Only, Pending Only, All)
@@ -1053,7 +558,7 @@ export const MerchantDashboard = () => {
     } else if (orderPipelineTab !== 'ALL' && o.status !== orderPipelineTab) {
       return false;
     }
-    if (orderSourceFilter !== 'ALL' && (o.source || 'WEBSITE') !== orderSourceFilter) return false;
+    if (orderSourceFilter !== 'ALL' && (o.source || 'UNATTRIBUTED') !== orderSourceFilter) return false;
     return true;
   });
 
@@ -1067,6 +572,33 @@ export const MerchantDashboard = () => {
   const rangeShippedCount = staffScopedOrders.filter(o => o.status === 'SHIPPED').length;
   const rangeDeliveredCount = staffScopedOrders.filter(o => o.status === 'DELIVERED').length;
   const rangeCancelledCount = staffScopedOrders.filter(o => o.status === 'CANCELLED').length;
+  const rangeCodOrders = staffScopedOrders.filter(o => /cod|cash/i.test(String(o.pay || o.paymentMethod || '')));
+  const rangePrepaidOrders = staffScopedOrders.filter(o =>
+    /online|upi|prepaid|razorpay|card/i.test(String(o.pay || o.paymentMethod || ''))
+  );
+  const rangePaidOrdersCount = rangeCodOrders.length + rangePrepaidOrders.length;
+  const rangeCodPct = rangePaidOrdersCount
+    ? Math.round((rangeCodOrders.length / rangePaidOrdersCount) * 100)
+    : 0;
+  const rangePrepaidPct = rangePaidOrdersCount ? 100 - rangeCodPct : 0;
+  const rangeNonCancelledOrders = staffScopedOrders.filter(o => o.status !== 'CANCELLED');
+  const rangeAverageOrderValue = rangeNonCancelledOrders.length
+    ? Math.round(rangeRevenue / rangeNonCancelledOrders.length)
+    : 0;
+  const lowStockProducts = productsList.filter((product) => {
+    if (product.trackQuantity === false) return false;
+    const stock = Number(product.stock ?? product.stockQuantity);
+    return Number.isFinite(stock) && stock < 10;
+  });
+  const outOfStockProducts = productsList.filter((product) => {
+    if (product.trackQuantity === false) return false;
+    const stock = Number(product.stock ?? product.stockQuantity);
+    return Number.isFinite(stock) && stock <= 0;
+  });
+  const trackedProducts = productsList.filter((product) => product.trackQuantity !== false);
+  const stockTableProducts = [...trackedProducts]
+    .sort((a, b) => Number(a.stock ?? 0) - Number(b.stock ?? 0))
+    .slice(0, 8);
 
   // Auto-arrange daily chart data based on selected date window
   const dailyChartData = (() => {
@@ -1098,43 +630,28 @@ export const MerchantDashboard = () => {
   const maxDailyRevenue = Math.max(...dailyChartData.map(d => d.revenue), 1000);
 
   // Dynamic baseline for prior period of same duration
-  const startD = new Date(startDate);
-  const endD = new Date(endDate);
+  const startD = parseDateInput(startDate);
+  const endD = parseDateInput(endDate);
   const durationMs = endD.getTime() - startD.getTime();
   const priorStartD = new Date(startD.getTime() - durationMs - (24 * 60 * 60 * 1000));
   const priorEndD = new Date(startD.getTime() - (24 * 60 * 60 * 1000));
-  const priorStartStr = priorStartD.toISOString().slice(0, 10);
-  const priorEndStr = priorEndD.toISOString().slice(0, 10);
+  const priorStartStr = formatDateInput(priorStartD);
+  const priorEndStr = formatDateInput(priorEndD);
 
   const priorPeriodOrders = ordersList.filter(o => o.date >= priorStartStr && o.date <= priorEndStr && o.status !== 'CANCELLED');
   const priorPeriodRevenue = priorPeriodOrders.reduce((sum, o) => sum + o.total, 0);
 
   const growthRate = priorPeriodRevenue > 0
-    ? (((rangeRevenue - priorPeriodRevenue) / priorPeriodRevenue) * 100).toFixed(1)
-    : (rangeRevenue > 0 ? '100.0' : '0.0');
-
-  // Dynamic channel statistics for circular graphs and amounts
-  const channelStats = (() => {
-    const total = rangeRevenue > 0 ? rangeRevenue : 0;
-    const instaOrders = staffScopedOrders.filter(o => o.source === 'INSTAGRAM' && o.status !== 'CANCELLED');
-    const webOrders = staffScopedOrders.filter(o => (o.source === 'WEBSITE' || !o.source) && o.status !== 'CANCELLED');
-    const fbOrders = staffScopedOrders.filter(o => (o.source === 'FACEBOOK' || o.source === 'WHATSAPP') && o.status !== 'CANCELLED');
-
-    const instaRev = instaOrders.reduce((sum, o) => sum + o.total, 0);
-    const webRev = webOrders.reduce((sum, o) => sum + o.total, 0);
-    const fbRev = fbOrders.reduce((sum, o) => sum + o.total, 0);
-
-    const safeTotal = total || 1;
-    const instaPct = total > 0 ? Math.min(100, Math.round((instaRev / safeTotal) * 100)) : 0;
-    const webPct = total > 0 ? Math.min(100, Math.round((webRev / safeTotal) * 100)) : 0;
-    const fbPct = total > 0 ? Math.max(0, 100 - instaPct - webPct) : 0;
-
-    return {
-      insta: { rev: instaRev, pct: instaPct, count: instaOrders.length },
-      web: { rev: webRev, pct: webPct, count: webOrders.length },
-      fb: { rev: fbRev, pct: fbPct, count: fbOrders.length }
-    };
-  })();
+    ? Number((((rangeRevenue - priorPeriodRevenue) / priorPeriodRevenue) * 100).toFixed(1))
+    : null;
+  const growthRateLabel = growthRate === null
+    ? 'Not comparable'
+    : `${growthRate >= 0 ? '+' : ''}${growthRate}%`;
+  const growthTone = growthRate === null
+    ? 'text-slate-500'
+    : growthRate >= 0
+    ? 'text-emerald-600'
+    : 'text-rose-600';
 
   // Interactive Calendar Grid Generator
   const getCalendarDays = (year, month) => {
@@ -1183,21 +700,26 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
-  // Live LocalStorage Order Status Synchronization
-  const syncLiveOrderStatus = (targetIdentifier, newStatus) => {
-    try {
-      const localPlaced = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
-      if (Array.isArray(localPlaced) && localPlaced.length > 0) {
-        const idClean = String(targetIdentifier || '').replace(/^#/, '');
-        const updated = localPlaced.map(o => {
-          if (o.orderNumber === idClean || o._id === idClean || o.orderId === idClean || String(o.id || '').replace(/^#/, '') === idClean) {
-            return { ...o, orderStatus: newStatus };
-          }
-          return o;
-        });
-        localStorage.setItem('omniva_live_orders', JSON.stringify(updated));
-      }
-    } catch (e) {}
+  const requireServerOrder = (order) => {
+    const identifier = order?._id || order?.orderNumber;
+    if (!identifier) {
+      throw new Error('This order has no server identifier. Refresh the order list and try again.');
+    }
+    return identifier;
+  };
+
+  const patchOrderOnServer = async (order, payload) => {
+    const identifier = requireServerOrder(order);
+    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+    const res = await axios.patch(
+      `/api/orders/${identifier}/status`,
+      payload,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    if (!res.data?.success) {
+      throw new Error(res.data?.message || 'Order update was rejected by the server.');
+    }
+    return res.data.data || res.data;
   };
 
   // Order Lifecycle Handlers
@@ -1209,30 +731,29 @@ export const MerchantDashboard = () => {
       o.id === `#${orderId}` || 
       orderId === `#${o.orderNumber}`
     );
-    if (target?._id || target?.orderNumber) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, { orderStatus: 'CONFIRMED' }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update order status on backend:', err);
-      }
+    if (!target) {
+      showActionError('Order not found. Refresh the order list and try again.');
+      return;
     }
-    syncLiveOrderStatus(orderId, 'CONFIRMED');
-    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'CONFIRMED');
+    try {
+      await patchOrderOnServer(target, { orderStatus: 'CONFIRMED' });
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not accept the order.');
+      return;
+    }
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
+      if (o.id === orderId || o.orderNumber === orderId || o._id === target._id) {
         return {
           ...o,
           status: 'CONFIRMED',
           statusLabel: 'Accepted / Confirmed',
           statusColor: 'bg-blue-50 text-blue-700 border-blue-200',
-          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 1 ? { ...t, time: 'Accepted Just Now by Merchant', done: true } : t) : []
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 1 ? { ...t, time: 'Accepted just now by merchant', done: true } : t) : []
         };
       }
       return o;
     }));
-    setActionSuccessToast(`Order ${orderId} accepted successfully! Moved to Confirmed queue.`);
+    setActionSuccessToast(`Order ${orderId} accepted and confirmed.`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
@@ -1244,50 +765,73 @@ export const MerchantDashboard = () => {
       o.id === `#${orderId}` || 
       orderId === `#${o.orderNumber}`
     );
-    if (target?._id || target?.orderNumber) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, { orderStatus: 'PROCESSING' }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update order status on backend:', err);
-      }
+    if (!target) {
+      showActionError('Order not found. Refresh the order list and try again.');
+      return;
     }
-    syncLiveOrderStatus(orderId, 'PROCESSING');
-    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'PROCESSING');
+    try {
+      await patchOrderOnServer(target, { orderStatus: 'PROCESSING' });
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not mark the order as packed.');
+      return;
+    }
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
+      if (o.id === orderId || o.orderNumber === orderId || o._id === target._id) {
         return {
           ...o,
           status: 'PROCESSING',
           statusLabel: 'Packed / Ready to Ship',
           statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 2 ? { ...t, time: 'Packed & Boxed Just Now', done: true } : t) : []
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 2 ? { ...t, time: 'Packed and boxed just now', done: true } : t) : []
         };
       }
       return o;
     }));
-    setActionSuccessToast(`Order ${orderId} marked Packed & Boxed! Ready for courier dispatch.`);
+    setActionSuccessToast(`Order ${orderId} marked packed and ready to ship.`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   const handleConfirmBothOrders = async (orderId1, orderId2) => {
     const findOrder = (val) => {
       if (!val) return null;
-      return ordersList.find(o => 
-        o.id === val || 
-        o.orderNumber === val || 
-        o._id === val || 
-        o.id === `#${val}` || 
+      return ordersList.find(o =>
+        o.id === val ||
+        o.orderNumber === val ||
+        o._id === val ||
+        o.id === `#${val}` ||
         val === `#${o.orderNumber}`
       );
     };
 
     const o1 = findOrder(orderId1);
     const o2 = findOrder(orderId2);
+    if (!o1 || !o2) {
+      showActionError('One or both orders are no longer available. Refresh the order list and try again.');
+      return;
+    }
 
-    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const results = await Promise.allSettled([
+      patchOrderOnServer(o1, {
+        orderStatus: 'CONFIRMED',
+        duplicateResolved: true,
+        note: 'Customer confirmed both orders are valid'
+      }),
+      patchOrderOnServer(o2, {
+        orderStatus: 'CONFIRMED',
+        duplicateResolved: true,
+        note: 'Customer confirmed both orders are valid'
+      })
+    ]);
+    const failed = results.filter((result) => result.status === 'rejected');
+    if (failed.length > 0) {
+      await fetchOrders();
+      showActionError(
+        failed[0].reason?.response?.data?.message ||
+          failed[0].reason?.message ||
+          'The server did not confirm both orders. The list was refreshed.'
+      );
+      return;
+    }
 
     setOrdersList(prev => prev.map(o => {
       const match1 = o1 && (o.id === o1.id || o._id === o1._id);
@@ -1305,185 +849,159 @@ export const MerchantDashboard = () => {
       return o;
     }));
 
-    const updatePromises = [];
-    if (o1?._id) {
-      updatePromises.push(
-        axios.patch(`/api/orders/${o1._id}/status`, {
-          orderStatus: 'CONFIRMED',
-          duplicateResolved: true,
-          note: 'Customer confirmed both orders are valid'
-        }, { headers: authHeaders }).catch(err => console.warn('Failed to update order 1 duplicate status:', err))
-      );
-    }
-    if (o2?._id) {
-      updatePromises.push(
-        axios.patch(`/api/orders/${o2._id}/status`, {
-          orderStatus: 'CONFIRMED',
-          duplicateResolved: true,
-          note: 'Customer confirmed both orders are valid'
-        }, { headers: authHeaders }).catch(err => console.warn('Failed to update order 2 duplicate status:', err))
-      );
-    }
-
-    if (updatePromises.length > 0) {
-      await Promise.allSettled(updatePromises);
-    }
-
-    setActionSuccessToast(`Both orders (${orderId1} & ${orderId2}) marked as Confirmed and Verified!`);
+    setActionSuccessToast(`Both orders (${orderId1} & ${orderId2}) confirmed by the server.`);
     setTimeout(() => setActionSuccessToast(''), 4500);
     setSelectedOrderForDetail(null);
   };
 
   const handleCancelDuplicateOrder = async (duplicateOrderId, originalOrderId) => {
-    if (window.confirm(`Are you sure you want to cancel duplicate order "${duplicateOrderId}"? The original order "${originalOrderId}" will remain active.`)) {
-      const findOrder = (val) => {
-        if (!val) return null;
-        return ordersList.find(o => 
-          o.id === val || 
-          o.orderNumber === val || 
-          o._id === val || 
-          o.id === `#${val}` || 
-          val === `#${o.orderNumber}`
-        );
-      };
+    if (!window.confirm(`Are you sure you want to cancel duplicate order "${duplicateOrderId}"? The original order "${originalOrderId}" will remain active.`)) return;
 
-      const dup = findOrder(duplicateOrderId);
-      const orig = findOrder(originalOrderId);
+    const findOrder = (val) => {
+      if (!val) return null;
+      return ordersList.find(o =>
+        o.id === val ||
+        o.orderNumber === val ||
+        o._id === val ||
+        o.id === `#${val}` ||
+        val === `#${o.orderNumber}`
+      );
+    };
 
-      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const dup = findOrder(duplicateOrderId);
+    const orig = findOrder(originalOrderId);
+    if (!dup) {
+      showActionError('The duplicate order is no longer available. Refresh the order list and try again.');
+      return;
+    }
 
-      setOrdersList(prev => prev.map(o => {
-        if (dup && (o.id === dup.id || o._id === dup._id)) {
-          return {
-            ...o,
-            status: 'CANCELLED',
-            statusLabel: 'Cancelled (Duplicate)',
-            statusColor: 'bg-rose-50 text-rose-700 border-rose-200',
-            duplicateResolved: true,
-            cancelReason: `Duplicate of ${originalOrderId}. Customer confirmed only 1 order needed.`
-          };
-        }
-        if (orig && (o.id === orig.id || o._id === orig._id)) {
-          return {
-            ...o,
-            duplicateResolved: true
-          };
-        }
-        return o;
-      }));
-
-      const patchPromises = [];
-      if (dup?._id) {
-        patchPromises.push(
-          axios.patch(`/api/orders/${dup._id}/status`, {
-            orderStatus: 'CANCELLED',
-            duplicateResolved: true,
-            note: `Duplicate order cancelled. Customer confirmed only ${originalOrderId} is needed.`
-          }, { headers: authHeaders }).catch(err => console.warn('Failed to cancel duplicate order on backend:', err))
-        );
-      }
-      if (orig?._id) {
-        patchPromises.push(
-          axios.patch(`/api/orders/${orig._id}/status`, {
+    const results = await Promise.allSettled([
+      patchOrderOnServer(dup, {
+        orderStatus: 'CANCELLED',
+        duplicateResolved: true,
+        note: `Duplicate order cancelled. Customer confirmed only ${originalOrderId} is needed.`
+      }),
+      ...(orig
+        ? [patchOrderOnServer(orig, {
             duplicateResolved: true,
             note: 'Duplicate order resolved. Original order kept.'
-          }, { headers: authHeaders }).catch(err => console.warn('Failed to update original order duplicate status:', err))
-        );
-      }
-
-      if (patchPromises.length > 0) {
-        await Promise.allSettled(patchPromises);
-      }
-
-      setActionSuccessToast(`Duplicate order ${duplicateOrderId} cancelled. Original order ${originalOrderId} active!`);
-      setTimeout(() => setActionSuccessToast(''), 4500);
-      setSelectedOrderForDetail(null);
+          })]
+        : [])
+    ]);
+    const failed = results.filter((result) => result.status === 'rejected');
+    if (failed.length > 0) {
+      await fetchOrders();
+      showActionError(
+        failed[0].reason?.response?.data?.message ||
+          failed[0].reason?.message ||
+          'The server did not confirm the duplicate cancellation. The list was refreshed.'
+      );
+      return;
     }
+
+    setOrdersList(prev => prev.map(o => {
+      if (dup && (o.id === dup.id || o._id === dup._id)) {
+        return {
+          ...o,
+          status: 'CANCELLED',
+          statusLabel: 'Cancelled (Duplicate)',
+          statusColor: 'bg-rose-50 text-rose-700 border-rose-200',
+          duplicateResolved: true,
+          cancelReason: `Duplicate of ${originalOrderId}. Customer confirmed only 1 order needed.`
+        };
+      }
+      if (orig && (o.id === orig.id || o._id === orig._id)) {
+        return { ...o, duplicateResolved: true };
+      }
+      return o;
+    }));
+
+    setActionSuccessToast(`Duplicate order ${duplicateOrderId} cancelled. Original order ${originalOrderId} remains active.`);
+    setTimeout(() => setActionSuccessToast(''), 4500);
+    setSelectedOrderForDetail(null);
   };
 
   const handleMarkAsNotDuplicate = async (orderId1, orderId2) => {
     const findOrder = (val) => {
       if (!val) return null;
-      return ordersList.find(o => 
-        o.id === val || 
-        o.orderNumber === val || 
-        o._id === val || 
-        o.id === `#${val}` || 
+      return ordersList.find(o =>
+        o.id === val ||
+        o.orderNumber === val ||
+        o._id === val ||
+        o.id === `#${val}` ||
         val === `#${o.orderNumber}`
       );
     };
 
     const o1 = findOrder(orderId1);
     const o2 = findOrder(orderId2);
+    if (!o1 || !o2) {
+      showActionError('One or both orders are no longer available. Refresh the order list and try again.');
+      return;
+    }
 
-    const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const results = await Promise.allSettled([
+      patchOrderOnServer(o1, { duplicateResolved: true, note: 'Verified by merchant - separate valid order' }),
+      patchOrderOnServer(o2, { duplicateResolved: true, note: 'Verified by merchant - separate valid order' })
+    ]);
+    const failed = results.filter((result) => result.status === 'rejected');
+    if (failed.length > 0) {
+      await fetchOrders();
+      showActionError(
+        failed[0].reason?.response?.data?.message ||
+          failed[0].reason?.message ||
+          'The server did not confirm the duplicate review. The list was refreshed.'
+      );
+      return;
+    }
 
     setOrdersList(prev => prev.map(o => {
       const match1 = o1 && (o.id === o1.id || o._id === o1._id);
       const match2 = o2 && (o.id === o2.id || o._id === o2._id);
       if (match1 || match2) {
-        return {
-          ...o,
-          duplicateResolved: true
-        };
+        return { ...o, duplicateResolved: true };
       }
       return o;
     }));
 
-    const updatePromises = [];
-    if (o1?._id) {
-      updatePromises.push(
-        axios.patch(`/api/orders/${o1._id}/status`, {
-          duplicateResolved: true,
-          note: 'Verified by merchant - separate valid order'
-        }, { headers: authHeaders }).catch(err => console.warn('Failed to mark order 1 as not duplicate:', err))
-      );
-    }
-    if (o2?._id) {
-      updatePromises.push(
-        axios.patch(`/api/orders/${o2._id}/status`, {
-          duplicateResolved: true,
-          note: 'Verified by merchant - separate valid order'
-        }, { headers: authHeaders }).catch(err => console.warn('Failed to mark order 2 as not duplicate:', err))
-      );
-    }
-
-    if (updatePromises.length > 0) {
-      await Promise.allSettled(updatePromises);
-    }
-
-    setActionSuccessToast('Orders marked as verified! Duplicate alert dismissed.');
+    setActionSuccessToast('Orders marked as separate valid orders.');
     setTimeout(() => setActionSuccessToast(''), 4500);
     setSelectedOrderForDetail(null);
   };
 
   const handleConfirmDispatch = async () => {
     if (!dispatchModalOrder) return;
-    const orderId = dispatchModalOrder.id;
-    const finalTracking = (trackingNumber && trackingNumber.trim()) || ('DEL-' + Math.floor(100000 + Math.random() * 900000));
+    const orderId = dispatchModalOrder.id || dispatchModalOrder.orderNumber;
+    const finalTracking = String(trackingNumber || '').trim();
+    if (!courierName || !courierName.trim()) {
+      showActionError('Select the courier partner before dispatching this order.');
+      return;
+    }
+    if (!finalTracking) {
+      showActionError('Enter the real courier tracking number before dispatching this order.');
+      return;
+    }
     const cleanPhone = (dispatchModalOrder.phone || '').replace(/[^0-9]/g, '').slice(-10);
     const trackingUrl = getCourierTrackingUrl(courierName, finalTracking, dispatchModalOrder.orderNumber || dispatchModalOrder.id, cleanPhone);
     const trackingMsg = generateTrackingMessage(dispatchModalOrder, courierName, finalTracking);
 
-    if (dispatchModalOrder._id || dispatchModalOrder.orderNumber) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${dispatchModalOrder._id || dispatchModalOrder.orderNumber}/status`, {
-          orderStatus: 'SHIPPED',
-          courierPartner: courierName,
-          trackingNumber: finalTracking
-        }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update dispatch status on backend:', err);
-      }
+    try {
+      await patchOrderOnServer(dispatchModalOrder, {
+        orderStatus: 'SHIPPED',
+        courierPartner: courierName,
+        trackingNumber: finalTracking
+      });
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not mark this order as shipped.');
+      return;
     }
-    syncLiveOrderStatus(dispatchModalOrder?.orderNumber || dispatchModalOrder?.id, 'SHIPPED');
 
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId) {
+      if (
+        o.id === orderId ||
+        o._id === dispatchModalOrder._id ||
+        o.orderNumber === dispatchModalOrder.orderNumber
+      ) {
         return {
           ...o,
           status: 'SHIPPED',
@@ -1491,9 +1009,7 @@ export const MerchantDashboard = () => {
           statusColor: 'bg-blue-50 text-blue-700 border-blue-200',
           courier: courierName,
           tracking: finalTracking,
-          trackingUrl: trackingUrl,
-          trackingNotified: true,
-          trackingNotifiedAt: new Date().toISOString(),
+          trackingUrl,
           trackingMessage: trackingMsg,
           timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 3 ? { ...t, time: `Dispatched via ${courierName} (${finalTracking})`, done: true } : t) : []
         };
@@ -1501,109 +1017,90 @@ export const MerchantDashboard = () => {
       return o;
     }));
 
-    // Increment Rule 02 counter & add log in Automations Engine
-    setAutomationRules(prev => prev.map(r => r._id === 'rule_02' ? {
-      ...r,
-      executionCount: (r.executionCount || 0) + 1,
-      lastExecutedAt: new Date().toISOString()
-    } : r));
-
-    setAutomationLogs(prev => [
-      {
-        _id: `log_${Date.now()}`,
-        ruleName: 'Order Dispatched Courier Tracking Alert',
-        trigger: 'ORDER_SHIPPED',
-        entityType: 'ORDER',
-        entityId: orderId,
-        actionType: 'SEND_WHATSAPP',
-        status: 'SUCCESS',
-        payloadSummary: `Automated live tracking sent to ${dispatchModalOrder.customer} (${dispatchModalOrder.phone}) via ${courierName}. AWB: ${finalTracking}`,
-        createdAt: new Date().toISOString()
-      },
-      ...prev
-    ]);
-
-    // Auto-open WhatsApp with pre-composed tracking message if enabled
+    let whatsappOpened = false;
     if (autoNotifyWhatsApp && cleanPhone) {
-      window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(trackingMsg)}`, '_blank');
+      whatsappOpened = Boolean(window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(trackingMsg)}`, '_blank'));
     }
 
     setDispatchModalOrder(null);
-    setActionSuccessToast(`🚀 Order ${orderId} dispatched via ${courierName}! Tracking #${finalTracking} automatically sent to customer.`);
-    setTimeout(() => setActionSuccessToast(''), 4500);
+    setTrackingNumber('');
+    setActionSuccessToast(
+      `Order ${orderId} marked shipped with tracking ${finalTracking}.` +
+        (whatsappOpened ? ' WhatsApp message opened for the customer.' : '') +
+        (autoNotifyWhatsApp && cleanPhone && !whatsappOpened ? ' The browser blocked the WhatsApp window.' : '')
+    );
+    setTimeout(() => setActionSuccessToast(''), 5000);
   };
 
   const handleSendTrackingNotification = (ord) => {
     if (!ord) return;
-    const cleanPhone = (ord.phone || '').replace(/[^0-9]/g, '').slice(-10);
-    const trk = ord.tracking || 'DEL-8492014';
-    const cour = ord.courier || 'Delhivery Express';
-    const trackingMsg = ord.trackingMessage || generateTrackingMessage(ord, cour, trk);
-    
-    if (cleanPhone) {
-      window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(trackingMsg)}`, '_blank');
+    if (!ord.tracking) {
+      showActionError('This order has no tracking number yet. Dispatch it with a real tracking number first.');
+      return;
     }
-
-    setOrdersList(prev => prev.map(o => o.id === ord.id ? { ...o, trackingNotified: true, trackingNotifiedAt: new Date().toISOString() } : o));
-
-    setActionSuccessToast(`💬 WhatsApp tracking notification opened for ${ord.customer} (${ord.phone})!`);
-    setTimeout(() => setActionSuccessToast(''), 4500);
+    const cleanPhone = (ord.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    if (!cleanPhone) {
+      showActionError('This order has no customer phone number, so WhatsApp cannot be opened.');
+      return;
+    }
+    const trackingMsg = ord.trackingMessage || generateTrackingMessage(ord, ord.courier || courierName, ord.tracking);
+    const waWindow = window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(trackingMsg)}`, '_blank');
+    if (!waWindow) {
+      showActionError('The browser blocked the WhatsApp window. Allow popups and try again.');
+      return;
+    }
+    setActionSuccessToast(`WhatsApp tracking message opened for ${ord.customer || 'the customer'}.`);
+    setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   const handleBulkSendTracking = () => {
     const shippedOrders = ordersList.filter(o => o.status === 'SHIPPED');
     if (shippedOrders.length === 0) {
-      alert('No Shipped orders available to notify.');
+      showActionError('No shipped orders are available to notify.');
+      return;
+    }
+    const withTracking = shippedOrders.filter(o => o.tracking);
+    if (withTracking.length === 0) {
+      showActionError('No shipped order has a tracking number yet. Dispatch orders with real tracking numbers first.');
       return;
     }
 
-    const nowIso = new Date().toISOString();
-    setOrdersList(prev => prev.map(o => {
-      if (o.status === 'SHIPPED') {
-        const trk = o.tracking || ('DEL-' + Math.floor(100000 + Math.random() * 900000));
-        const cour = o.courier || 'Delhivery Express';
-        const trkUrl = o.trackingUrl || getCourierTrackingUrl(cour, trk, o.orderNumber || o.id, o.phone);
-        const msg = o.trackingMessage || generateTrackingMessage(o, cour, trk);
-        return {
-          ...o,
-          tracking: trk,
-          courier: cour,
-          trackingUrl: trkUrl,
-          trackingNotified: true,
-          trackingNotifiedAt: nowIso,
-          trackingMessage: msg
-        };
+    const orderKey = (o) => o.id || o._id || o.orderNumber;
+    const openedKeys = new Set();
+    let opened = 0;
+    let blocked = 0;
+    let missingPhone = 0;
+
+    withTracking.forEach(o => {
+      const cleanPhone = (o.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      if (!cleanPhone) {
+        missingPhone += 1;
+        return;
       }
-      return o;
-    }));
+      const msg = o.trackingMessage || generateTrackingMessage(o, o.courier || courierName, o.tracking);
+      const waWindow = window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+      if (waWindow) {
+        opened += 1;
+        openedKeys.add(orderKey(o));
+      } else {
+        blocked += 1;
+      }
+    });
 
-    setAutomationRules(prev => prev.map(r => r._id === 'rule_02' ? {
-      ...r,
-      executionCount: (r.executionCount || 0) + shippedOrders.length,
-      lastExecutedAt: nowIso
-    } : r));
+    const missingTracking = shippedOrders.length - withTracking.length;
+    const details = [
+      missingTracking > 0 ? `${missingTracking} shipped order(s) have no tracking number` : '',
+      missingPhone > 0 ? `${missingPhone} order(s) have no customer phone` : '',
+      blocked > 0 ? `${blocked} browser popup(s) were blocked` : '',
+    ].filter(Boolean);
 
-    const newLogs = shippedOrders.map(o => ({
-      _id: `log_bulk_${o.id}_${Date.now()}`,
-      ruleName: 'Order Dispatched Courier Tracking Alert',
-      trigger: 'ORDER_SHIPPED',
-      entityType: 'ORDER',
-      entityId: o.id,
-      actionType: 'SEND_WHATSAPP',
-      status: 'SUCCESS',
-      payloadSummary: `Bulk auto-dispatch tracking sent to ${o.customer} (${o.phone}). AWB: ${o.tracking || 'DEL-Auto'}`,
-      createdAt: nowIso
-    }));
-    setAutomationLogs(prev => [...newLogs, ...prev]);
-
-    const firstWithPhone = shippedOrders.find(o => o.phone);
-    if (firstWithPhone) {
-      const cleanPhone = (firstWithPhone.phone || '').replace(/[^0-9]/g, '').slice(-10);
-      const msg = firstWithPhone.trackingMessage || generateTrackingMessage(firstWithPhone, firstWithPhone.courier || 'Delhivery Express', firstWithPhone.tracking || 'DEL-98402150');
-      window.open(`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    if (opened === 0) {
+      showActionError(`No WhatsApp window was opened. ${details.join('. ') || 'Check the order data and browser popup settings.'}`);
+    } else if (details.length > 0) {
+      showActionError(`Opened ${opened} WhatsApp window(s). ${details.join('. ')}.`);
+    } else {
+      setActionSuccessToast(`Opened ${opened} WhatsApp tracking window(s).`);
     }
-
-    setActionSuccessToast(`⚡ Batch Automated Dispatch: Tracking IDs generated & sent for all ${shippedOrders.length} Shipped Orders!`);
     setTimeout(() => setActionSuccessToast(''), 5000);
   };
 
@@ -1615,22 +1112,24 @@ export const MerchantDashboard = () => {
       o.id === `#${orderId}` || 
       orderId === `#${o.orderNumber}`
     );
-    if (target?._id || target?.orderNumber) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${target._id || target.orderNumber}/status`, {
-          orderStatus: 'DELIVERED',
-          paymentStatus: 'PAID'
-        }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update delivered status on backend:', err);
-      }
+    if (!target) {
+      showActionError('Order not found. Refresh the order list and try again.');
+      return;
     }
-    syncLiveOrderStatus(orderId, 'DELIVERED');
-    if (target?.orderNumber) syncLiveOrderStatus(target.orderNumber, 'DELIVERED');
+    if (!window.confirm('Mark this order delivered and record payment as PAID? Continue only if payment has been collected.')) {
+      return;
+    }
+    try {
+      await patchOrderOnServer(target, {
+        orderStatus: 'DELIVERED',
+        paymentStatus: 'PAID'
+      });
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not mark the order as delivered.');
+      return;
+    }
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId || (target && o._id === target._id)) {
+      if (o.id === orderId || o.orderNumber === orderId || o._id === target._id) {
         return {
           ...o,
           status: 'DELIVERED',
@@ -1638,127 +1137,118 @@ export const MerchantDashboard = () => {
           statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           pay: 'Paid',
           payColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 4 ? { ...t, time: 'Delivered Successfully Just Now', done: true } : t) : []
+          timeline: Array.isArray(o.timeline) ? o.timeline.map((t, idx) => idx === 4 ? { ...t, time: 'Delivered just now', done: true } : t) : []
         };
       }
       return o;
     }));
-    setActionSuccessToast(`Order ${orderId} marked Delivered! Payment verified & recorded.`);
+    setActionSuccessToast(`Order ${orderId} marked delivered. Payment status was set to PAID.`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   const handleConfirmCancel = async () => {
     if (!cancelModalOrder) return;
-    const orderId = cancelModalOrder.id;
-    if (cancelModalOrder._id || cancelModalOrder.orderNumber) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.patch(`/api/orders/${cancelModalOrder._id || cancelModalOrder.orderNumber}/status`, {
-          orderStatus: 'CANCELLED',
-          note: cancelReason
-        }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update cancelled status on backend:', err);
-      }
+    const orderId = cancelModalOrder.id || cancelModalOrder.orderNumber;
+    try {
+      await patchOrderOnServer(cancelModalOrder, {
+        orderStatus: 'CANCELLED',
+        note: cancelReason
+      });
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not cancel the order.');
+      return;
     }
-    syncLiveOrderStatus(orderId, 'CANCELLED');
-    if (cancelModalOrder.orderNumber) syncLiveOrderStatus(cancelModalOrder.orderNumber, 'CANCELLED');
     setOrdersList(prev => prev.map(o => {
-      if (o.id === orderId || o.orderNumber === orderId) {
+      if (o.id === orderId || o.orderNumber === orderId || o._id === cancelModalOrder._id) {
         return {
           ...o,
           status: 'CANCELLED',
           statusLabel: 'Cancelled',
           statusColor: 'bg-rose-50 text-rose-700 border-rose-200',
-          timeline: Array.isArray(o.timeline) ? [...o.timeline, { title: `Cancelled: ${cancelReason}`, time: 'Just Now', done: true }] : []
+          timeline: Array.isArray(o.timeline) ? [...o.timeline, { title: `Cancelled: ${cancelReason}`, time: 'Just now', done: true }] : []
         };
       }
       return o;
     }));
     setCancelModalOrder(null);
-    setActionSuccessToast(`Order ${orderId} cancelled. Inventory restored to stock.`);
-    setTimeout(() => setActionSuccessToast(''), 4000);
-  };
-
-  const handleApplyPreset = (preset) => {
-    setDatePreset(preset);
-    let s = '2026-10-02';
-    let e = '2026-10-07';
-    if (preset === 'TODAY') {
-      s = '2026-10-07';
-      e = '2026-10-07';
-    } else if (preset === 'YESTERDAY') {
-      s = '2026-10-06';
-      e = '2026-10-06';
-    } else if (preset === 'THIS_WEEK') {
-      s = '2026-10-01';
-      e = '2026-10-07';
-    } else if (preset === 'OCT_1_TO_5') {
-      s = '2026-10-01';
-      e = '2026-10-05';
-    } else if (preset === 'OCT_2_TO_7') {
-      s = '2026-10-02';
-      e = '2026-10-07';
-    } else if (preset === 'THIS_MONTH') {
-      s = '2026-10-01';
-      e = '2026-10-31';
-    } else if (preset === 'SEP_MONTH') {
-      s = '2026-09-01';
-      e = '2026-09-30';
-      setCalPickerMonth(8);
-    }
-    setStartDate(s);
-    setEndDate(e);
-    setSelectedRangeStart(s);
-    setSelectedRangeEnd(e);
-    setActionSuccessToast(`Date range auto-arranged: ${s} to ${e}. Analytics updated!`);
+    setActionSuccessToast(`Order ${orderId} cancelled.`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   const handleSaveCategoryPhoto = async () => {
     if (!editingCategory) return;
     const catId = editingCategory._id || editingCategory.id;
-    if (editingCategory._id) {
-      try {
-        const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-        await axios.put(`/api/categories/${editingCategory._id}`, { image: categoryPhotoUrl }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update category photo on backend:', err);
+    if (!editingCategory._id) {
+      showActionError('This category is not linked to a saved server record. Refresh and try again.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.put(
+        `/api/categories/${editingCategory._id}`,
+        { image: categoryPhotoUrl },
+        { headers: authHeaders }
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm the category update.');
       }
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not update the category image.'
+      );
+      return;
     }
     setCategoriesList(prev => prev.map(c => ((c._id && c._id === catId) || c.id === catId) ? { ...c, image: categoryPhotoUrl } : c));
     setEditingCategory(null);
-    setActionSuccessToast(`Category image updated successfully! Synchronized with customer storefront.`);
+    setActionSuccessToast('Category image updated.');
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   // Interactive Settings Form State
   const [bizProfileName, setBizProfileName] = useState(businessName);
-  const [bizType, setBizType] = useState('Product selling');
-  const [contactEmail, setContactEmail] = useState('support@desiachar.example');
-  const [contactPhone, setContactPhone] = useState('+91 98765 43210');
-  const [bizAddress, setBizAddress] = useState('Jaipur, Rajasthan, India');
-  const [showStorePage, setShowStorePage] = useState(true);
+  const [bizType, setBizType] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [bizAddress, setBizAddress] = useState('');
   const [enableCod, setEnableCod] = useState(true);
-  const [sendOrderNotifications, setSendOrderNotifications] = useState(true);
-  const [enableMarketingByDefault, setEnableMarketingByDefault] = useState(false);
 
   // Marketing & Settings Sub-tabs State
   const [marketingSubTab, setMarketingSubTab] = useState('meta-orders'); // 'meta-orders' | 'campaigns' | 'meta-setup'
   const [metaOrdersPlatformFilter, setMetaOrdersPlatformFilter] = useState('ALL_META'); // 'ALL_META' | 'INSTAGRAM' | 'FACEBOOK' | 'WHATSAPP'
 
   // Additional settings state
-  const [gstinNumber, setGstinNumber] = useState('08AABCR1234F1Z8');
-  const [brandTagline, setBrandTagline] = useState('Authentic Handcrafted Pickles & Murabbas of Rajasthan');
-  const [brandColor, setBrandColor] = useState('#5046e5');
-  const [minOrderValue, setMinOrderValue] = useState('249');
-  const [shippingFee, setShippingFee] = useState('49');
-  const [razorpayKeyId, setRazorpayKeyId] = useState('rzp_live_98a76d5432');
-  const [razorpayKeySecret, setRazorpayKeySecret] = useState('••••••••••••');
-  const [merchantUpiId, setMerchantUpiId] = useState('desiachar@icici');
-  const [whatsappAlerts, setWhatsappAlerts] = useState(true);
+  const [gstinNumber, setGstinNumber] = useState('');
+  const [brandTagline, setBrandTagline] = useState('');
+  const [brandColor, setBrandColor] = useState('#4f46e5');
+  const [minOrderValue, setMinOrderValue] = useState('0');
+  const [shippingFee, setShippingFee] = useState('0');
+  const [merchantUpiId, setMerchantUpiId] = useState('');
+
+  // Hydrate settings strictly from the authenticated tenant. Never pre-fill a
+  // real merchant's dashboard with another business's contact or tax details.
+  useEffect(() => {
+    if (!tenant) return;
+    const settings = tenant.settings || {};
+    setBizProfileName(tenant.businessName || '');
+    setBizType(
+      tenant.businessType === 'SERVICE'
+        ? 'Service selling'
+        : tenant.businessType === 'TRAVEL'
+        ? 'Travel & experiences'
+        : 'Product selling'
+    );
+    setContactEmail(tenant.contact?.email || '');
+    setContactPhone(tenant.contact?.phone || '');
+    setBizAddress(tenant.contact?.address || '');
+    setGstinNumber(settings.gstinNumber || '');
+    setBrandTagline(tenant.branding?.tagline || '');
+    setBrandColor(tenant.branding?.primaryColor || '#4f46e5');
+    setMinOrderValue(settings.minOrderValue != null ? String(settings.minOrderValue) : '0');
+    setShippingFee(settings.shippingFee != null ? String(settings.shippingFee) : '0');
+    setMerchantUpiId(settings.merchantUpiId || '');
+    setEnableCod(settings.enableCOD !== false);
+  }, [tenant]);
 
   // CRM Pipeline Stages Definition
   const CRM_STAGES = [
@@ -1771,122 +1261,7 @@ export const MerchantDashboard = () => {
     { key: 'LOST', label: 'Lost / Closed', badgeColor: 'bg-slate-100 text-slate-600 border-slate-200', dotColor: 'bg-slate-400' }
   ];
 
-  const defaultCrmLeads = [
-    {
-      _id: 'lead_meta_01',
-      name: 'Pooja Agarwal',
-      phone: '9844556677',
-      email: 'pooja.agarwal@example.com',
-      source: 'META_ADS',
-      campaignName: 'Instagram Reel Ad - Organic Achar Launch',
-      adName: 'Video Reel Creative 15s',
-      status: 'NEW',
-      budget: 1250,
-      notes: [
-        {
-          note: 'Inquired about Festive Mango & Chilli combo box on Instagram Reel Ad.',
-          authorName: 'Meta Ads Webhook',
-          createdAt: '2026-10-14T11:20:00Z'
-        }
-      ],
-      createdAt: '2026-10-14T11:20:00Z'
-    },
-    {
-      _id: 'lead_meta_02',
-      name: 'Aarav Sharma',
-      phone: '9811223344',
-      email: 'aarav.sharma@gmail.com',
-      source: 'META_ADS',
-      campaignName: 'Diwali Homemade Pickle Special',
-      adName: 'Delhi NCR Foodies 25-45',
-      status: 'CONTACTED',
-      budget: 1500,
-      notes: [
-        {
-          note: 'Called customer; discussed sample jars. Customer requested WhatsApp catalogue.',
-          authorName: 'Rahul Sharma',
-          createdAt: '2026-10-14T10:15:00Z'
-        }
-      ],
-      createdAt: '2026-10-14T10:15:00Z'
-    },
-    {
-      _id: 'lead_web_03',
-      name: 'Priya Verma',
-      phone: '9788112233',
-      email: 'priya.v@outlook.com',
-      source: 'WEBSITE',
-      campaignName: 'Storefront Organic Search',
-      adName: 'Product Enquiry',
-      status: 'QUALIFIED',
-      budget: 850,
-      notes: [
-        {
-          note: 'Customer wants 2x Banarasi Red Chilli and 1x Garlic Achar. Price agreed.',
-          authorName: 'Neha',
-          createdAt: '2026-10-14T09:30:00Z'
-        }
-      ],
-      createdAt: '2026-10-14T09:30:00Z'
-    },
-    {
-      _id: 'lead_wa_04',
-      name: 'Amit Patel',
-      phone: '9655443322',
-      email: 'amit.patel@yahoo.com',
-      source: 'WHATSAPP',
-      campaignName: 'WhatsApp Click-to-Chat Ad',
-      adName: 'Direct Chat',
-      status: 'QUOTATION_SENT',
-      budget: 2200,
-      notes: [
-        {
-          note: 'Sent corporate Diwali gift pack quotation with 10% volume discount.',
-          authorName: 'Rahul Sharma',
-          createdAt: '2026-10-13T16:45:00Z'
-        }
-      ],
-      createdAt: '2026-10-13T16:45:00Z'
-    },
-    {
-      _id: 'lead_ref_05',
-      name: 'Sneha Joshi',
-      phone: '9944332211',
-      email: 'sneha.joshi@example.com',
-      source: 'REFERRAL',
-      campaignName: 'Word of Mouth / Existing Buyer',
-      adName: '—',
-      status: 'WON',
-      budget: 3100,
-      notes: [
-        {
-          note: 'Placed order ORD-9921 for 6 jars. Advance payment verified via UPI.',
-          authorName: 'Rahul Sharma',
-          createdAt: '2026-10-13T14:10:00Z'
-        }
-      ],
-      createdAt: '2026-10-13T14:10:00Z'
-    },
-    {
-      _id: 'lead_lost_06',
-      name: 'Vikram Choudhary',
-      phone: '9877665544',
-      email: 'vikram.c@gmail.com',
-      source: 'META_ADS',
-      campaignName: 'Facebook Feed Sponsored Post',
-      adName: 'Spicy Mirch Achar Ad',
-      status: 'LOST',
-      budget: 450,
-      notes: [
-        {
-          note: 'Customer decided to buy local market pickles. Dropped from pipeline.',
-          authorName: 'Neha',
-          createdAt: '2026-10-12T18:00:00Z'
-        }
-      ],
-      createdAt: '2026-10-12T18:00:00Z'
-    }
-  ];
+  const defaultCrmLeads = [];
 
   // CRM Leads State
   const [crmLeads, setCrmLeads] = useState(defaultCrmLeads);
@@ -1901,153 +1276,41 @@ export const MerchantDashboard = () => {
     name: '',
     phone: '',
     email: '',
-    source: 'META_ADS',
-    campaignName: 'Instagram Reel Ad',
-    budget: '750',
+    source: 'MANUAL',
+    campaignName: '',
+    budget: '',
     note: ''
   });
   const [newLeadNote, setNewLeadNote] = useState('');
 
   // Calendar month state
-  const [calendarMonth, setCalendarMonth] = useState('October 2026');
+  const [calendarMonthDate, setCalendarMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const calendarMonth = calendarMonthDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const currentMonthLabel = new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const shiftCalendarMonth = (delta) => {
+    const next = new Date(calendarMonthDate.getFullYear(), calendarMonthDate.getMonth() + delta, 1);
+    setCalendarMonthDate(next);
+    setActionSuccessToast(`Viewing ${next.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} calendar`);
+    setTimeout(() => setActionSuccessToast(''), 3000);
+  };
 
   // Meta Ads Real-Time Syncing State
   const [syncingMeta, setSyncingMeta] = useState(false);
 
   // Products State (so Add Product updates catalog immediately)
-  const [productsList, setProductsList] = useState([
-    {
-      name: 'Traditional Rajasthani Mango Pickle',
-      sku: 'ACH-MG-500',
-      cat: 'Mango Pickles',
-      price: '₹299',
-      stock: 120,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 189, stock: 40, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 299, stock: 50, enabled: true },
-        { id: 'j1000', name: '1kg Family Pack Jar', price: 499, stock: 30, enabled: true },
-        { id: 'jmartban', name: 'Ceramic Martban Jar 1.2kg', price: 799, stock: 10, enabled: true }
-      ]
-    },
-    {
-      name: 'Spicy Green Chilli Pickle (Hari Mirch)',
-      sku: 'ACH-GC-250',
-      cat: 'Green Chilli',
-      price: '₹189',
-      stock: 85,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 189, stock: 45, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 299, stock: 40, enabled: true }
-      ]
-    },
-    {
-      name: 'Piquant Garlic Pickle (Lahsun Achar)',
-      sku: 'ACH-GA-400',
-      cat: 'Garlic Pickle',
-      price: '₹249',
-      stock: 42,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 179, stock: 22, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 249, stock: 20, enabled: true }
-      ]
-    },
-    {
-      name: 'Sweet & Tangy Lemon Pickle (Nimbu)',
-      sku: 'ACH-NM-500',
-      cat: 'Mixed & Lemon',
-      price: '₹229',
-      stock: 60,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 149, stock: 20, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 229, stock: 40, enabled: true }
-      ]
-    },
-    {
-      name: 'Organic Mixed Vegetable Achar',
-      sku: 'ACH-MX-500',
-      cat: 'Mixed & Lemon',
-      price: '₹249',
-      stock: 55,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 169, stock: 25, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 249, stock: 30, enabled: true }
-      ]
-    },
-    {
-      name: 'Royal Heritage Festive Pickle Combo Box 1.2kg',
-      sku: 'COM-RAJ-12',
-      cat: 'Gift Combos',
-      price: '₹799',
-      stock: 24,
-      status: 'In stock',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'jcombo', name: '1.2kg Festive Heritage Box', price: 799, stock: 24, enabled: true }
-      ]
-    },
-    {
-      name: 'Stuffed Red Chilli Banarasi Achar',
-      sku: 'ACH-RC-300',
-      cat: 'Green Chilli',
-      price: '₹299',
-      stock: 8,
-      status: 'Low stock',
-      statusColor: 'bg-amber-50 text-amber-700',
-      vis: 'Published',
-      img: 'https://images.unsplash.com/photo-1596040033282-5d9b23b72c4d?w=600&auto=format&fit=crop&q=80',
-      jars: [
-        { id: 'j250', name: '250g Glass Jar', price: 199, stock: 3, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: 299, stock: 5, enabled: true }
-      ]
-    }
-  ]);
+  const [productsList, setProductsList] = useState([]);
   const products = productsList;
 
 
   // Inventory State (so Adjust Stock updates stock immediately)
-  const [inventoryList, setInventoryList] = useState([
-    { name: 'Mango Achar · 500g', sku: 'ACH-MG-500', onHand: 120, reorder: 25, avail: 95, health: 'Healthy', healthColor: 'bg-emerald-50 text-emerald-700', suggested: '—' },
-    { name: 'Mixed Achar · 500g', sku: 'ACH-MX-500', onHand: 85, reorder: 20, avail: 65, health: 'Healthy', healthColor: 'bg-emerald-50 text-emerald-700', suggested: '—' },
-    { name: 'Lal Mirch Achar', sku: 'ACH-MR-250', onHand: 8, reorder: 10, avail: -2, health: 'Reorder', healthColor: 'bg-amber-50 text-amber-700', suggested: '10 units' },
-    { name: 'Nimbu Achar · 500g', sku: 'ACH-NM-500', onHand: 42, reorder: 15, avail: 27, health: 'Healthy', healthColor: 'bg-emerald-50 text-emerald-700', suggested: '—' },
-    { name: 'Gift Hamper', sku: 'GFT-001', onHand: 0, reorder: 5, avail: -5, health: 'Out of stock', healthColor: 'bg-rose-50 text-rose-700', suggested: '5 units' },
-    { name: 'Green Chilli Achar', sku: 'ACH-GC-250', onHand: 5, reorder: 10, avail: -5, health: 'Reorder', healthColor: 'bg-amber-50 text-amber-700', suggested: '10 units' }
-  ]);
 
   // Travel Bookings State
-  const [travelList, setTravelList] = useState([
-    { customer: 'Aarav Sharma', pkg: 'RJ Desert Explorer', pass: '2 passengers', date: '18 Oct', loc: 'Jaisalmer', status: 'Confirmed', statusColor: 'bg-emerald-50 text-emerald-700', pay: 'Paid' },
-    { customer: 'Priya Verma', pkg: 'Jaipur Heritage Tour', pass: '4 passengers', date: '20 Oct', loc: 'Jaipur', status: 'Pending', statusColor: 'bg-amber-50 text-amber-700', pay: 'Advance due' },
-    { customer: 'Amit Patel', pkg: 'Udaipur Weekend', pass: '2 passengers', date: '22 Oct', loc: 'Udaipur', status: 'Confirmed', statusColor: 'bg-emerald-50 text-emerald-700', pay: 'Paid' },
-    { customer: 'Neha Singh', pkg: 'Ranthambore Safari', pass: '3 passengers', date: '24 Oct', loc: 'Sawai Madhopur', status: 'Quotation', statusColor: 'bg-purple-50 text-purple-700', pay: 'Unpaid' },
-    { customer: 'Karan Singh', pkg: 'Mount Abu Escape', pass: '5 passengers', date: '26 Oct', loc: 'Mount Abu', status: 'Confirmed', statusColor: 'bg-emerald-50 text-emerald-700', pay: 'Paid' },
-    { customer: 'Meera Joshi', pkg: 'Bikaner Heritage', pass: '2 passengers', date: '28 Oct', loc: 'Bikaner', status: 'Pending', statusColor: 'bg-amber-50 text-amber-700', pay: 'Pending' }
-  ]);
+  const [travelList, setTravelList] = useState([]);
 
   // Customers Directory State (Dynamically Aggregated from live Orders & CRM Leads)
-  const [manualCustomers, setManualCustomers] = useState([]);
 
   const customersList = useMemo(() => {
     const customerMap = new Map();
@@ -2063,14 +1326,14 @@ export const MerchantDashboard = () => {
         customerMap.set(uniqueKey, {
           id: `CUST-${phoneDigits.slice(-4) || String(100 + customerMap.size)}`,
           name: rawName,
-          last: `Last order · ${ord.displayDate || ord.date || 'Recent'}`,
+          last: `Last order · ${ord.displayDate || ord.date || 'Date not recorded'}`,
           mobile: rawPhone || 'N/A',
-          email: ord.email || `${rawName.toLowerCase().replace(/\s+/g, '')}@example.com`,
+          email: ord.email || '',
           orders: 0,
           ltv: 0,
           displayLtv: '₹0',
-          comm: 'Opted in',
-          commColor: 'bg-emerald-50 text-emerald-700'
+          comm: 'Not tracked',
+          commColor: 'bg-slate-50 text-slate-600'
         });
       }
 
@@ -2086,7 +1349,7 @@ export const MerchantDashboard = () => {
     // 2. Ingest CRM leads who haven't ordered yet
     crmLeads.forEach((lead, idx) => {
       const rawPhone = (lead.phone || '').trim();
-      const rawName = (lead.name || 'Meta Ads Lead').trim();
+      const rawName = (lead.name || 'Unnamed lead').trim();
       const phoneDigits = rawPhone.replace(/\D/g, '');
       const uniqueKey = phoneDigits.length >= 6 ? phoneDigits.slice(-10) : (rawName.toLowerCase() || `lead_${idx}`);
 
@@ -2094,155 +1357,28 @@ export const MerchantDashboard = () => {
         customerMap.set(uniqueKey, {
           id: `LEAD-${phoneDigits.slice(-4) || String(200 + customerMap.size)}`,
           name: rawName,
-          last: `Lead · ${lead.platform || 'Meta'} (${lead.status || 'NEW'})`,
+          last: `Lead · ${lead.platform || 'Platform not recorded'} (${lead.status || 'NEW'})`,
           mobile: rawPhone || 'N/A',
           email: lead.email || '',
           orders: 0,
           ltv: 0,
           displayLtv: '₹0',
-          comm: 'Opted in',
-          commColor: 'bg-blue-50 text-blue-700'
+          comm: 'Not tracked',
+          commColor: 'bg-slate-50 text-slate-600'
         });
       }
     });
 
     const aggregated = Array.from(customerMap.values());
-    return [...manualCustomers, ...aggregated];
-  }, [ordersList, crmLeads, manualCustomers]);
+    return aggregated;
+  }, [ordersList, crmLeads]);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', mobile: '', email: '', address: '' });
 
   // ==================== AUTOMATIONS ENGINE STATE ====================
-  const [automationRules, setAutomationRules] = useState([
-    {
-      _id: 'rule_01',
-      name: 'Customer WhatsApp Order Confirmation',
-      trigger: 'ORDER_CREATED',
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: '{{customerPhone}}',
-        template: 'Hello {{customerName}}! Your Desi Achar House order {{orderNumber}} of ₹{{totalAmount}} is confirmed. We will dispatch it shortly.'
-      },
-      isActive: true,
-      executionCount: 124,
-      lastExecutedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString()
-    },
-    {
-      _id: 'rule_02',
-      name: 'Order Dispatched Courier Tracking Alert',
-      trigger: 'ORDER_SHIPPED',
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'SEND_WHATSAPP',
-        target: '{{customerPhone}}',
-        template: 'Your order {{orderNumber}} has been dispatched via {{courier}}! Tracking ID: {{trackingNumber}}'
-      },
-      isActive: true,
-      executionCount: 88,
-      lastExecutedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString()
-    },
-    {
-      _id: 'rule_03',
-      name: 'Meta Ads New Lead Instant Team Alert',
-      trigger: 'LEAD_INGESTED',
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'IN_APP_ALERT',
-        target: 'TEAM_SLACK_OR_PUSH',
-        template: '🎯 New Meta Ads lead received: {{customerName}} ({{phone}}) for campaign {{campaignName}}!'
-      },
-      isActive: true,
-      executionCount: 42,
-      lastExecutedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString()
-    },
-    {
-      _id: 'rule_04',
-      name: 'High-Value VIP Order Sync to ERP Webhook',
-      trigger: 'ORDER_CREATED',
-      condition: { field: 'totalAmount', operator: 'GREATER_THAN', value: '1000' },
-      action: {
-        type: 'OUTBOUND_WEBHOOK',
-        target: 'https://webhook.site/omniva-erp-sync',
-        template: '{"event":"VIP_ORDER","customer":"{{customerName}}","amount":{{totalAmount}}}'
-      },
-      isActive: true,
-      executionCount: 19,
-      lastExecutedAt: new Date(Date.now() - 1000 * 60 * 300).toISOString()
-    },
-    {
-      _id: 'rule_05',
-      name: 'Low Stock Restock Inventory Notification',
-      trigger: 'STOCK_LOW',
-      condition: { field: 'always', operator: 'ALWAYS', value: '' },
-      action: {
-        type: 'IN_APP_ALERT',
-        target: 'INVENTORY_STAFF',
-        template: '⚠️ Stock Warning: {{productName}} stock is below reorder threshold!'
-      },
-      isActive: true,
-      executionCount: 5,
-      lastExecutedAt: new Date(Date.now() - 1000 * 60 * 720).toISOString()
-    }
-  ]);
+  const [automationRules, setAutomationRules] = useState([]);
 
-  const [automationLogs, setAutomationLogs] = useState([
-    {
-      _id: 'log_01',
-      ruleName: 'Customer WhatsApp Order Confirmation',
-      trigger: 'ORDER_CREATED',
-      entityType: 'ORDER',
-      entityId: 'ORD-1087',
-      actionType: 'SEND_WHATSAPP',
-      status: 'SUCCESS',
-      payloadSummary: 'Hello Vikram Rathore! Your Desi Achar House order ORD-1087 of ₹488 has been received.',
-      createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString()
-    },
-    {
-      _id: 'log_02',
-      ruleName: 'Meta Ads New Lead Instant Team Alert',
-      trigger: 'LEAD_INGESTED',
-      entityType: 'LEAD',
-      entityId: 'lead_meta_01',
-      actionType: 'IN_APP_ALERT',
-      status: 'SUCCESS',
-      payloadSummary: '🎯 New Meta Ads lead received: Pooja Agarwal (9844556677) for campaign Instagram Reel Ad - Organic Achar Launch!',
-      createdAt: new Date(Date.now() - 1000 * 60 * 50).toISOString()
-    },
-    {
-      _id: 'log_03',
-      ruleName: 'Customer WhatsApp Order Confirmation',
-      trigger: 'ORDER_CREATED',
-      entityType: 'ORDER',
-      entityId: 'ORD-1086',
-      actionType: 'SEND_WHATSAPP',
-      status: 'SUCCESS',
-      payloadSummary: 'Hello Meera Joshi! Your Desi Achar House order ORD-1086 of ₹1598 has been received.',
-      createdAt: new Date(Date.now() - 1000 * 60 * 125).toISOString()
-    },
-    {
-      _id: 'log_04',
-      ruleName: 'High-Value VIP Order Sync to ERP Webhook',
-      trigger: 'ORDER_CREATED',
-      entityType: 'ORDER',
-      entityId: 'ORD-1086',
-      actionType: 'OUTBOUND_WEBHOOK',
-      status: 'SUCCESS',
-      payloadSummary: 'Outbound webhook dispatched to https://webhook.site/omniva-erp-sync (Status: 200 OK)',
-      createdAt: new Date(Date.now() - 1000 * 60 * 125).toISOString()
-    },
-    {
-      _id: 'log_05',
-      ruleName: 'Order Dispatched Courier Tracking Alert',
-      trigger: 'ORDER_SHIPPED',
-      entityType: 'ORDER',
-      entityId: 'ORD-1083',
-      actionType: 'SEND_WHATSAPP',
-      status: 'SUCCESS',
-      payloadSummary: 'Your order ORD-1083 has been dispatched via Delhivery Surface! Tracking: DEL-98402150',
-      createdAt: new Date(Date.now() - 1000 * 60 * 360).toISOString()
-    }
-  ]);
+  const [automationLogs, setAutomationLogs] = useState([]);
 
   const [automationRulesFilter, setAutomationRulesFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PAUSED' | 'ORDER' | 'LEAD'
   const [showCreateRuleModal, setShowCreateRuleModal] = useState(false);
@@ -2268,39 +1404,33 @@ export const MerchantDashboard = () => {
   const [testEventForm, setTestEventForm] = useState({
     trigger: 'ORDER_CREATED',
     entityType: 'ORDER',
-    entityId: 'ORD-1087',
-    customerName: 'Vikram Rathore',
-    customerPhone: '+91 98290 12345',
-    totalAmount: '1598',
-    campaignName: 'Instagram Reel Achar Promo',
-    courier: 'Delhivery Express',
-    trackingNumber: 'DEL-887766',
-    productName: 'Traditional Rajasthani Mango Pickle'
+    entityId: '',
+    customerName: '',
+    customerPhone: '',
+    totalAmount: '',
+    campaignName: '',
+    courier: '',
+    trackingNumber: '',
+    productName: ''
   });
 
-  // Default packaging jar presets for authentic pickle storefronts
-  const DEFAULT_JAR_PRESETS = [
-    { id: 'j250', name: '250g Glass Jar', price: 189, stock: 40, enabled: true },
-    { id: 'j500', name: '500g Traditional Jar', price: 299, stock: 60, enabled: true },
-    { id: 'j1000', name: '1kg Family Pack Jar', price: 499, stock: 25, enabled: true },
-    { id: 'j5000', name: '5kg Bulk Catering Can', price: 1999, stock: 5, enabled: false },
-    { id: 'jmartban', name: 'Ceramic Martban Jar 1.2kg', price: 799, stock: 10, enabled: false }
-  ];
+  // Optional packaging variants; empty until the merchant defines them.
+  const DEFAULT_JAR_PRESETS = [];
 
   // Modals State
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showCustomCatInput, setShowCustomCatInput] = useState(false);
   const [newJarName, setNewJarName] = useState('');
   const [newJarPrice, setNewJarPrice] = useState('');
-  const [newJarStock, setNewJarStock] = useState('25');
+  const [newJarStock, setNewJarStock] = useState('');
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     sku: '',
-    cat: 'Mango Pickles (Aam ka Achar)',
+    cat: '',
     newCatInput: '',
     price: '',
-    stock: 50,
-    img: '', // Starts empty as requested - pick from gallery or achar presets
+    stock: '',
+    img: '', // Starts empty - choose a real product image before publishing
     jars: DEFAULT_JAR_PRESETS.map(j => ({ ...j }))
   });
 
@@ -2310,14 +1440,14 @@ export const MerchantDashboard = () => {
   const [showEditCustomCatInput, setShowEditCustomCatInput] = useState(false);
   const [editNewJarName, setEditNewJarName] = useState('');
   const [editNewJarPrice, setEditNewJarPrice] = useState('');
-  const [editNewJarStock, setEditNewJarStock] = useState('25');
+  const [editNewJarStock, setEditNewJarStock] = useState('');
   const [editProductForm, setEditProductForm] = useState({
     name: '',
     sku: '',
-    cat: 'Mango Pickles (Aam ka Achar)',
+    cat: '',
     newCatInput: '',
     price: '',
-    stock: 50,
+    stock: '',
     img: '',
     status: 'In stock',
     vis: 'Published',
@@ -2325,59 +1455,16 @@ export const MerchantDashboard = () => {
   });
 
   // Coupons & Promo Offers State
-  const [couponsList, setCouponsList] = useState([
-    {
-      _id: 'coup_desi15',
-      id: 'coup_desi15',
-      code: 'DESI15',
-      title: '15% Off Traditional Jars',
-      description: 'Get 15% discount on all orders above ₹399',
-      discountType: 'PERCENTAGE',
-      discountValue: 15,
-      minOrderValue: 399,
-      maxDiscount: 150,
-      isActive: true,
-      usageCount: 142,
-      createdAt: '2026-10-15',
-    },
-    {
-      _id: 'coup_save100',
-      id: 'coup_save100',
-      code: 'SAVE100',
-      title: 'Flat ₹100 Off Festive Offer',
-      description: 'Instant ₹100 discount on orders above ₹599',
-      discountType: 'FLAT',
-      discountValue: 100,
-      minOrderValue: 599,
-      maxDiscount: 100,
-      isActive: true,
-      usageCount: 89,
-      createdAt: '2026-10-12',
-    },
-    {
-      _id: 'coup_welcome10',
-      id: 'coup_welcome10',
-      code: 'WELCOME10',
-      title: '10% First Order Welcome',
-      description: 'Special 10% welcome discount for new customers',
-      discountType: 'PERCENTAGE',
-      discountValue: 10,
-      minOrderValue: 199,
-      maxDiscount: 100,
-      isActive: true,
-      usageCount: 310,
-      createdAt: '2026-10-01',
-    },
-  ]);
+  const [couponsList, setCouponsList] = useState([]);
   const [showAddCouponModal, setShowAddCouponModal] = useState(false);
   const [newCouponForm, setNewCouponForm] = useState({
     code: '',
     title: '',
     description: '',
     discountType: 'PERCENTAGE',
-    discountValue: '15',
-    minOrderValue: '399',
-    maxDiscount: '150',
+    discountValue: '',
+    minOrderValue: '',
+    maxDiscount: '',
     isActive: true,
   });
 
@@ -2427,14 +1514,10 @@ export const MerchantDashboard = () => {
     reader.readAsDataURL(file);
   };
 
-  const [showManualOrderModal, setShowManualOrderModal] = useState(false);
-  const [manualOrderForm, setManualOrderForm] = useState({ customer: '', phone: '', address: '', itemName: 'Traditional Rajasthani Mango Pickle 500g', qty: 1, total: 299, payMethod: 'COD' });
 
-  const [showAdjustStockModal, setShowAdjustStockModal] = useState(false);
-  const [adjustStockForm, setAdjustStockForm] = useState({ sku: 'ACH-MG-500', qtyChange: 20, reason: 'Fresh kitchen batch prepared' });
 
   const [showAddTourModal, setShowAddTourModal] = useState(false);
-  const [addTourForm, setAddTourForm] = useState({ customer: '', pkg: 'RJ Desert Explorer', pass: '2 passengers', date: '25 Oct 2026', loc: 'Jaisalmer' });
+  const [addTourForm, setAddTourForm] = useState({ customer: '', pkg: '', pass: '1 passenger', date: '', loc: '' });
 
   // Business Type Mode (Super Admin controlled / Switchable: PRODUCT, SERVICE, TRAVEL, ALL)
   const [businessTypeMode, setBusinessTypeMode] = useState(() => tenant?.businessType || 'PRODUCT');
@@ -2455,194 +1538,91 @@ export const MerchantDashboard = () => {
 
   const [newServiceForm, setNewServiceForm] = useState({
     client: '',
-    service: 'Photo session',
+    service: '',
     phone: '',
-    date: '2026-10-15',
-    dayNumber: 15,
-    time: '11:00 AM - 01:00 PM',
-    price: 5000,
-    advancePaid: 2000,
-    status: 'Confirmed'
+    date: '',
+    dayNumber: null,
+    time: '',
+    price: '',
+    advancePaid: '',
+    status: 'PENDING'
   });
 
-  const [serviceBookingsList, setServiceBookingsList] = useState([
-    {
-      id: 'SRV-201',
-      client: 'Pooja Agarwal',
-      service: 'Photo session',
-      phone: '+91 98291 55667',
-      date: '2026-10-03',
-      dayNumber: 3,
-      time: '11:00 AM - 01:00 PM',
-      price: 4500,
-      status: 'Confirmed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      color: 'bg-purple-100 text-purple-700 border-purple-200',
-      payStatus: 'Advance Paid (₹2,000)'
-    },
-    {
-      id: 'SRV-202',
-      client: 'Aditya & Ananya',
-      service: 'Wedding shoot',
-      phone: '+91 98112 33445',
-      date: '2026-10-12',
-      dayNumber: 12,
-      time: '04:00 PM - 09:00 PM',
-      price: 35000,
-      status: 'Confirmed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      color: 'bg-blue-100 text-blue-700 border-blue-200',
-      payStatus: '50% Advance Paid (₹17,500)'
-    },
-    {
-      id: 'SRV-203',
-      client: 'Sanjay Mehra',
-      service: 'Video booking',
-      phone: '+91 98765 11223',
-      date: '2026-10-16',
-      dayNumber: 16,
-      time: '02:00 PM - 06:00 PM',
-      price: 12000,
-      status: 'Pending Quotation',
-      statusColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      color: 'bg-purple-100 text-purple-700 border-purple-200',
-      payStatus: 'Quotation Shared'
-    },
-    {
-      id: 'SRV-204',
-      client: 'Ramesh Cloth Store',
-      service: 'New enquiry',
-      phone: '+91 98223 99887',
-      date: '2026-10-20',
-      dayNumber: 20,
-      time: '10:00 AM - 12:00 PM',
-      price: 6000,
-      status: 'New Enquiry',
-      statusColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      color: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-      payStatus: 'Unpaid'
-    },
-    {
-      id: 'SRV-205',
-      client: 'Jaipur Tech Meetup',
-      service: 'Event coverage',
-      phone: '+91 97110 88221',
-      date: '2026-10-24',
-      dayNumber: 24,
-      time: '09:00 AM - 05:00 PM',
-      price: 18000,
-      status: 'Confirmed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      color: 'bg-blue-100 text-blue-700 border-blue-200',
-      payStatus: 'Advance Paid (₹10,000)'
-    },
-    {
-      id: 'SRV-206',
-      client: 'Organic Naturals Brand',
-      service: 'Product shoot',
-      phone: '+91 98450 11992',
-      date: '2026-10-31',
-      dayNumber: 31,
-      time: '11:00 AM - 04:00 PM',
-      price: 8500,
-      status: 'Confirmed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      color: 'bg-purple-100 text-purple-700 border-purple-200',
-      payStatus: 'Paid in Full'
-    }
-  ]);
+  const [serviceBookingsList, setServiceBookingsList] = useState([]);
 
   const handleSaveServiceBooking = (e) => {
     e.preventDefault();
-    const day = parseInt(newServiceForm.date.split('-')[2]) || 15;
-    const newBooking = {
-      id: `SRV-${Math.floor(200 + Math.random() * 800)}`,
-      client: newServiceForm.client,
-      service: newServiceForm.service,
-      phone: newServiceForm.phone,
-      date: newServiceForm.date,
-      dayNumber: day,
-      time: newServiceForm.time,
-      price: parseInt(newServiceForm.price) || 0,
-      status: newServiceForm.status,
-      statusColor: newServiceForm.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200',
-      color: newServiceForm.service.toLowerCase().includes('wedding') ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-purple-100 text-purple-700 border-purple-200',
-      payStatus: parseInt(newServiceForm.advancePaid) > 0 ? `Advance Paid (₹${newServiceForm.advancePaid})` : 'Unpaid'
-    };
-    setServiceBookingsList(prev => [newBooking, ...prev]);
-    setShowAddServiceBookingModal(false);
-    setNewServiceForm({
-      client: '',
-      service: 'Photo session',
-      phone: '',
-      date: '2026-10-15',
-      dayNumber: 15,
-      time: '11:00 AM - 01:00 PM',
-      price: 5000,
-      advancePaid: 2000,
-      status: 'Confirmed'
-    });
-    setActionSuccessToast(`Booking for "${newBooking.client}" (${newBooking.service}) confirmed for ${newBooking.date}!`);
-    setTimeout(() => setActionSuccessToast(''), 4500);
+    showActionError(
+      'Dashboard booking creation is not connected to the server. No booking was created. Customers create bookings through the public booking flow.'
+    );
   };
 
   const handleUpdateServiceBookingStatus = async (bookingId, newStatus) => {
-    setServiceBookingsList(prev => prev.map(b => {
-      if (b.id === bookingId) {
-        return {
-          ...b,
-          status: newStatus,
-          statusColor: newStatus === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : newStatus === 'Completed' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-        };
-      }
-      return b;
-    }));
-    if (selectedServiceBooking && selectedServiceBooking.id === bookingId) {
-      setSelectedServiceBooking(prev => ({
-        ...prev,
-        status: newStatus,
-        statusColor: newStatus === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : newStatus === 'Completed' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-      }));
-    }
+    const statusMap = {
+      'Confirmed': 'CONFIRMED',
+      'In Progress': 'IN_PROGRESS',
+      'Completed': 'COMPLETED',
+      'Cancelled': 'CANCELLED'
+    };
     try {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-      const statusMap = {
-        'Confirmed': 'CONFIRMED',
-        'In Progress': 'IN_PROGRESS',
-        'Completed': 'COMPLETED',
-        'Cancelled': 'CANCELLED'
-      };
-      await axios.patch(`/api/bookings/${bookingId}/status`, {
+      const res = await axios.patch(`/api/bookings/${bookingId}/status`, {
         bookingStatus: statusMap[newStatus] || newStatus.toUpperCase()
       }, { headers: authHeaders });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Booking status update was rejected.');
+      }
     } catch (err) {
-      console.warn('Could not sync status to backend:', err.message);
+      showActionError(err.response?.data?.message || err.message || 'Could not update the booking status.');
+      return;
     }
-    setActionSuccessToast(`Booking status updated to "${newStatus}"!`);
+
+    const statusColor =
+      newStatus === 'Confirmed'
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : newStatus === 'Completed' || newStatus === 'In Progress'
+        ? 'bg-blue-50 text-blue-700 border-blue-200'
+        : 'bg-rose-50 text-rose-700 border-rose-200';
+    setServiceBookingsList(prev => prev.map(b => b.id === bookingId ? { ...b, status: newStatus, statusColor } : b));
+    if (selectedServiceBooking && selectedServiceBooking.id === bookingId) {
+      setSelectedServiceBooking(prev => ({ ...prev, status: newStatus, statusColor }));
+    }
+    setActionSuccessToast(`Booking status updated to "${newStatus}".`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   // Action Handlers
-  const handleSaveCustomer = (e) => {
+  const handleSaveCustomer = async (e) => {
     e.preventDefault();
-    const newCust = {
-      id: `CUST-${Math.floor(100 + Math.random() * 900)}`,
-      name: newCustomerForm.name,
-      last: 'Registered Just Now',
-      mobile: newCustomerForm.mobile,
-      email: newCustomerForm.email || `${newCustomerForm.name.toLowerCase().replace(/\\s+/g, '')}@example.com`,
-      orders: 0,
-      ltv: 0,
-      displayLtv: '₹0',
-      comm: 'Opted in',
-      commColor: 'bg-emerald-50 text-emerald-700'
-    };
-    setManualCustomers(prev => [newCust, ...prev]);
-    setShowAddCustomerModal(false);
-    setNewCustomerForm({ name: '', mobile: '', email: '', address: '' });
-    setActionSuccessToast(`Customer "${newCust.name}" added successfully to customer directory!`);
-    setTimeout(() => setActionSuccessToast(''), 4500);
+    if (!newCustomerForm.name.trim() || !newCustomerForm.mobile.trim()) {
+      showActionError('Enter the customer name and mobile number.');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post('/api/crm/leads', {
+        name: newCustomerForm.name.trim(),
+        phone: newCustomerForm.mobile.trim(),
+        email: newCustomerForm.email?.trim() || '',
+        source: 'MANUAL',
+        budget: 0,
+        notes: newCustomerForm.address?.trim()
+          ? [{ note: `Address: ${newCustomerForm.address.trim()}`, authorName: 'Merchant' }]
+          : [],
+      }, { headers: authHeaders });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The customer could not be saved.');
+      }
+      await fetchCrmLeads();
+      setShowAddCustomerModal(false);
+      setNewCustomerForm({ name: '', mobile: '', email: '', address: '' });
+      setActionSuccessToast(`Customer "${newCustomerForm.name.trim()}" saved as a CRM lead.`);
+      setTimeout(() => setActionSuccessToast(''), 4500);
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not save the customer.');
+    }
   };
 
   const handleExportCustomersCsv = () => {
@@ -2666,11 +1646,9 @@ export const MerchantDashboard = () => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { limit: 100 }
       });
-      if (res.data?.leads && res.data.leads.length > 0) {
-        setCrmLeads(res.data.leads);
-      }
+      setCrmLeads(Array.isArray(res.data?.leads) ? res.data.leads : []);
     } catch (err) {
-      console.warn('Fallback loading CRM leads:', err);
+      console.warn('Could not load CRM leads:', err);
     } finally {
       setCrmLoading(false);
     }
@@ -2681,13 +1659,13 @@ export const MerchantDashboard = () => {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await axios.get('/api/bookings', { headers: authHeaders, params: { limit: 100 } });
-      if (res.data?.data && res.data.data.length > 0) {
+      if (Array.isArray(res.data?.data)) {
         const serviceItems = [];
         const travelItems = [];
 
         res.data.data.forEach(b => {
-          const dateStr = b.eventDate ? new Date(b.eventDate).toISOString().split('T')[0] : '2026-10-15';
-          const dayNum = b.eventDate ? new Date(b.eventDate).getDate() : 15;
+          const dateStr = b.eventDate ? new Date(b.eventDate).toISOString().split('T')[0] : '';
+          const dayNum = b.eventDate ? new Date(b.eventDate).getDate() : null;
           let color = 'bg-purple-100 text-purple-700 border-purple-200';
           let statusColor = 'bg-slate-100 text-slate-700 border-slate-200';
           if (b.bookingStatus === 'CONFIRMED' || b.bookingStatus === 'COMPLETED') {
@@ -2704,13 +1682,17 @@ export const MerchantDashboard = () => {
               bookingNumber: b.bookingNumber,
               customer: b.customerName,
               phone: b.customerPhone,
-              pkg: b.packageName || 'Expedition Tour',
-              pass: b.passengers?.length ? `${b.passengers.length} Pax` : '2 Pax',
+              pkg: b.packageName || '',
+              pass: b.passengers?.length ? `${b.passengers.length} Pax` : '',
               date: dateStr,
-              loc: b.location || 'Jaipur Central',
+              loc: b.location || '',
               status: b.bookingStatus === 'CONFIRMED' ? 'Confirmed' : b.bookingStatus === 'PENDING' ? 'Pending' : b.bookingStatus,
               statusColor,
-              pay: b.advancePaid > 0 ? `Adv ₹${b.advancePaid.toLocaleString('en-IN')}` : `Total ₹${b.totalAmount.toLocaleString('en-IN')}`,
+              pay: b.paymentStatus === 'PAID'
+                ? `Paid ₹${Number(b.totalAmount || 0).toLocaleString('en-IN')}`
+                : b.advancePaid > 0
+                ? `Advance ₹${Number(b.advancePaid).toLocaleString('en-IN')}`
+                : `Unpaid · Total ₹${Number(b.totalAmount || 0).toLocaleString('en-IN')}`,
               totalAmount: b.totalAmount,
               advancePaid: b.advancePaid,
               balanceDue: b.balanceDue
@@ -2720,37 +1702,27 @@ export const MerchantDashboard = () => {
               id: b._id,
               bookingNumber: b.bookingNumber,
               client: b.customerName,
-              service: b.packageName || 'Studio Session',
+              service: b.packageName || '',
               phone: b.customerPhone,
               email: b.customerEmail,
               date: dateStr,
               dayNumber: dayNum,
-              time: b.timeSlot || '10:00 AM - 01:00 PM',
+              time: b.timeSlot || '',
               price: b.totalAmount,
               advancePaid: b.advancePaid,
               balanceDue: b.balanceDue,
               status: b.bookingStatus === 'CONFIRMED' ? 'Confirmed' : b.bookingStatus === 'IN_PROGRESS' ? 'In Progress' : b.bookingStatus === 'PENDING' ? 'Pending' : b.bookingStatus,
               statusColor,
               color,
-              payStatus: b.advancePaid > 0 ? `Advance Paid (₹${b.advancePaid.toLocaleString('en-IN')})` : 'Unpaid'
+              payStatus: b.advancePaid > 0
+                ? `Advance Paid (₹${Number(b.advancePaid).toLocaleString('en-IN')}) · Balance ₹${Number(b.balanceDue || 0).toLocaleString('en-IN')}`
+                : `Unpaid · Balance ₹${Number(b.balanceDue ?? b.totalAmount ?? 0).toLocaleString('en-IN')}`
             });
           }
         });
 
-        if (serviceItems.length > 0) {
-          setServiceBookingsList(prev => {
-            const apiIds = new Set(serviceItems.map(i => i.id));
-            const existingUnmatched = prev.filter(p => !apiIds.has(p.id));
-            return [...serviceItems, ...existingUnmatched];
-          });
-        }
-        if (travelItems.length > 0) {
-          setTravelList(prev => {
-            const apiIds = new Set(travelItems.map(i => i.id));
-            const existingUnmatched = prev.filter(p => !apiIds.has(p.id));
-            return [...travelItems, ...existingUnmatched];
-          });
-        }
+        setServiceBookingsList(serviceItems);
+        setTravelList(travelItems);
       }
     } catch (err) {
       console.warn('Error loading bookings from API:', err);
@@ -2763,14 +1735,14 @@ export const MerchantDashboard = () => {
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
       const [catsRes, prodsRes] = await Promise.all([
-        axios.get('/api/categories', { headers: authHeaders }).catch(e => ({ data: { data: [] } })),
-        axios.get('/api/products', { headers: authHeaders }).catch(e => ({ data: { data: [] } }))
+        axios.get('/api/categories', { headers: authHeaders }),
+        axios.get('/api/products', { headers: authHeaders })
       ]);
 
       const apiCats = catsRes.data?.data || [];
       const apiProds = prodsRes.data?.data || [];
 
-      if (apiCats.length > 0) {
+      {
         const formattedCats = apiCats.map(c => {
           const count = apiProds.filter(p => {
             const pCatId = p.categoryId?._id ? String(p.categoryId._id) : (p.categoryId ? String(p.categoryId) : '');
@@ -2782,7 +1754,7 @@ export const MerchantDashboard = () => {
             name: c.name,
             slug: c.slug,
             description: c.description || '',
-            image: c.image || (photoPresets && photoPresets[0]?.url) || '',
+            image: c.image || '',
             productsCount: count,
             status: c.isActive !== false ? 'Active' : 'Inactive'
           };
@@ -2790,13 +1762,13 @@ export const MerchantDashboard = () => {
         setCategoriesList(formattedCats);
       }
 
-      if (apiProds.length > 0) {
+      {
         const formattedProds = apiProds.map(p => {
           const catObj = p.categoryId;
-          const catName = catObj?.name || (typeof p.categoryId === 'string' ? p.categoryId : 'Pickles');
-          const rawPrice = Number(p.price) || 299;
+          const catName = catObj?.name || (typeof p.categoryId === 'string' ? p.categoryId : '');
+          const rawPrice = Number(p.price) || 0;
           const rawStock = Number(p.stockQuantity) || 0;
-          const imgUrl = (Array.isArray(p.images) && p.images[0]) || p.image || (photoPresets && photoPresets[0]?.url) || '';
+          const imgUrl = (Array.isArray(p.images) && p.images[0]) || p.image || '';
 
           const jars = (p.variants && p.variants.length > 0)
             ? p.variants.map((v, idx) => ({
@@ -2806,27 +1778,24 @@ export const MerchantDashboard = () => {
                 stock: Number(v.stockQuantity) || 0,
                 enabled: true
               }))
-            : [
-                { id: 'j250', name: '250g Glass Jar', price: Math.round(rawPrice * 0.65), stock: Math.round(rawStock * 0.3) || 20, enabled: true },
-                { id: 'j500', name: '500g Traditional Jar', price: rawPrice, stock: rawStock, enabled: true },
-                { id: 'j1000', name: '1kg Family Pack Jar', price: Math.round(rawPrice * 1.7), stock: Math.round(rawStock * 0.2) || 15, enabled: true }
-              ];
+            : [];
 
           return {
             id: p._id,
             _id: p._id,
             name: p.name,
-            sku: p.variants?.[0]?.sku || p.slug || `ACH-${String(p._id).slice(-4)}`,
+            sku: p.variants?.[0]?.sku || p.slug || '',
             cat: catName,
             categoryId: catObj?._id || p.categoryId,
             price: `₹${rawPrice}`,
-            compareAtPrice: p.compareAtPrice || Math.round(rawPrice * 1.3),
+            compareAtPrice: p.compareAtPrice || null,
             discountPercent: (p.compareAtPrice && p.compareAtPrice > rawPrice)
               ? Math.round(((p.compareAtPrice - rawPrice) / p.compareAtPrice) * 100)
-              : 23,
+              : 0,
             stock: rawStock,
-            status: rawStock > 10 ? 'In stock' : (rawStock > 0 ? 'Low stock' : 'Out of stock'),
-            statusColor: rawStock > 10 ? 'bg-emerald-50 text-emerald-700' : (rawStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
+            trackQuantity: p.trackQuantity !== false,
+            status: p.trackQuantity === false || rawStock > 10 ? 'In stock' : (rawStock > 0 ? 'Low stock' : 'Out of stock'),
+            statusColor: p.trackQuantity === false || rawStock > 10 ? 'bg-emerald-50 text-emerald-700' : (rawStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
             vis: p.isAvailable ? 'Published' : 'Hidden',
             img: imgUrl,
             jars: jars
@@ -2836,33 +1805,40 @@ export const MerchantDashboard = () => {
       }
     } catch (err) {
       console.warn('Error fetching products/categories from backend:', err);
+      showActionError(
+        err.response?.data?.message ||
+          'Could not load products and categories from the server. Existing data was not replaced.'
+      );
     }
   };
 
   const formatRawOrder = (o) => {
-    const d = o.createdAt ? new Date(o.createdAt) : new Date();
-    const dateStr = d.toISOString().slice(0, 10);
-    const displayDate = d.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const created = o.createdAt ? new Date(o.createdAt) : null;
+    const hasCreatedDate = Boolean(created && !Number.isNaN(created.getTime()));
+    const dateStr = hasCreatedDate ? formatDateInput(created) : '';
+    const displayDate = hasCreatedDate
+      ? created.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : 'Date not provided';
 
     const items = (o.items && o.items.length > 0)
       ? o.items.map(it => ({
           name: it.name,
-          variant: it.variantName || 'Standard Jar',
+          variant: it.variantName || 'No variant',
           qty: it.quantity || 1,
           price: it.price || 0,
-          image: it.image || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80'
+          image: it.image || ''
         }))
       : [];
 
     const itemSummary = items.length > 0
       ? `${items.reduce((acc, it) => acc + (it.qty || 1), 0)} items (${items.map(it => it.name).join(', ')})`
-      : '1 item';
+      : 'No line items returned';
 
     const addr = o.shippingAddress
       ? (typeof o.shippingAddress === 'string'
@@ -2871,11 +1847,11 @@ export const MerchantDashboard = () => {
       : '';
 
     const utm = (o.attribution?.utmSource || '').toUpperCase();
-    const source = utm.includes('INSTA') ? 'INSTAGRAM' : (utm.includes('FACE') ? 'FACEBOOK' : (utm.includes('WHATS') ? 'WHATSAPP' : 'WEBSITE'));
-    const channelName = o.attribution?.utmSource || 'Direct Online Store';
-    const campaign = o.attribution?.utmCampaign || 'Organic Storefront Visit';
+    const source = utm.includes('INSTA') ? 'INSTAGRAM' : (utm.includes('FACE') ? 'FACEBOOK' : (utm.includes('WHATS') ? 'WHATSAPP' : 'UNATTRIBUTED'));
+    const channelName = o.attribution?.utmSource || 'No UTM source recorded';
+    const campaign = o.attribution?.utmCampaign || 'No campaign data';
 
-    const pay = o.paymentMethod || o.pay || o.payMethod || 'COD';
+    const pay = o.paymentMethod || o.pay || o.payMethod || 'Not recorded';
     const status = o.orderStatus || o.status || 'NEW';
     const statusLabel = status === 'NEW' ? 'New / Awaiting Acceptance'
       : status === 'CONFIRMED' ? 'Accepted / Confirmed'
@@ -2897,7 +1873,7 @@ export const MerchantDashboard = () => {
     const timeline = (o.timeline && o.timeline.length > 0)
       ? o.timeline.map(t => ({
           title: t.note || t.status,
-          time: t.timestamp ? new Date(t.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+          time: t.timestamp ? new Date(t.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Not recorded',
           done: true
         }))
       : [
@@ -2910,7 +1886,7 @@ export const MerchantDashboard = () => {
 
     const custName = o.customerName || o.customer || 'Customer';
     const custPhone = o.customerPhone || o.phone || '';
-    const custEmail = o.customerEmail || o.email || `${custName.toLowerCase().replace(/\s+/g, '')}@example.com`;
+    const custEmail = o.customerEmail || o.email || '';
     const totAmount = o.totalAmount !== undefined ? o.totalAmount : (o.total !== undefined ? o.total : 0);
 
     return {
@@ -2932,6 +1908,7 @@ export const MerchantDashboard = () => {
       displayTotal: `₹${totAmount}`,
       pay,
       payMethod: pay,
+      paymentStatus: o.paymentStatus || 'UNKNOWN',
       payColor,
       status,
       statusLabel,
@@ -2946,19 +1923,10 @@ export const MerchantDashboard = () => {
 
   const fetchOrders = async () => {
     try {
-      let token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       if (!token) {
-        try {
-          const authRes = await axios.post('/api/auth/login', {
-            email: 'rahul@desirasoi.com',
-            password: 'password123'
-          });
-          if (authRes.data?.token) {
-            token = authRes.data.token;
-            localStorage.setItem('omniva_token', token);
-            localStorage.setItem('omniva_user', JSON.stringify(authRes.data.user));
-          }
-        } catch (e) {}
+        // ProtectedRoute handles unauthenticated users. Never auto-login with demo credentials.
+        return false;
       }
 
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -2973,33 +1941,12 @@ export const MerchantDashboard = () => {
         rawOrders = res.data.data;
       }
 
-      // Merge local storage newly placed orders (from storefront)
-      try {
-        const localPlaced = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
-        if (Array.isArray(localPlaced) && localPlaced.length > 0) {
-          const existingNums = new Set(rawOrders.map(o => o.orderNumber));
-          const toPrepend = localPlaced.filter(o => !existingNums.has(o.orderNumber));
-          rawOrders = [...toPrepend, ...rawOrders];
-        }
-      } catch (e) {}
-
-      if (rawOrders.length > 0) {
-        const formattedOrders = rawOrders.map(formatRawOrder);
-        setOrdersList(formattedOrders);
-      }
+      const formattedOrders = rawOrders.map(formatRawOrder);
+      setOrdersList(formattedOrders);
+      return true;
     } catch (err) {
       console.warn('Error fetching orders from backend:', err);
-      // Fallback: merge local storage orders with current list
-      try {
-        const localPlaced = JSON.parse(localStorage.getItem('omniva_live_orders') || '[]');
-        if (Array.isArray(localPlaced) && localPlaced.length > 0) {
-          setOrdersList(prev => {
-            const existingNums = new Set(prev.map(o => o.orderNumber));
-            const newOnes = localPlaced.filter(o => !existingNums.has(o.orderNumber)).map(formatRawOrder);
-            return [...newOnes, ...prev];
-          });
-        }
-      } catch (e) {}
+      return false;
     }
   };
 
@@ -3073,7 +2020,7 @@ export const MerchantDashboard = () => {
       const res = await axios.get('/api/auth/staff', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.data?.staff && Array.isArray(res.data.staff) && res.data.staff.length > 0) {
+      if (Array.isArray(res.data?.staff)) {
         const fetched = res.data.staff.map(s => {
           let scope = 'ALL';
           let statuses = ['NEW', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
@@ -3087,29 +2034,139 @@ export const MerchantDashboard = () => {
             scope = 'PENDING_ONLY';
             statuses = ['NEW'];
           }
+
+          const savedPermissions = Array.isArray(s.customPermissions) ? s.customPermissions : [];
+          const savedScope = savedPermissions.find(p => p.startsWith('scope:'))?.slice('scope:'.length);
+          const scopeStatusMap = {
+            ALL: ['NEW', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
+            CONFIRMED_ONLY: ['CONFIRMED', 'PROCESSING'],
+            PENDING_ONLY: ['NEW'],
+            DISPATCH_ONLY: ['SHIPPED', 'DELIVERED'],
+          };
+          if (savedScope && scopeStatusMap[savedScope]) {
+            scope = savedScope;
+            statuses = scopeStatusMap[savedScope];
+          }
+          const hasSavedPermissions = savedPermissions.length > 0;
+
           return {
             id: s._id || s.id,
+            apiRole: s.role,
             name: s.name,
             email: s.email,
-            phone: s.phone || '+91 98000 00000',
-            role: s.role.replace(/_/g, ' '),
+            phone: s.phone || '',
+            role: String(s.role || '').replace(/_/g, ' '),
             status: s.isActive !== false ? 'Active' : 'Inactive',
             orderScope: scope,
             allowedOrderStatuses: statuses,
             modules: ['orders', 'leads'],
-            canAcceptOrders: true,
-            canPackOrders: true,
-            canDispatchOrders: true,
-            canCancelOrders: false,
-            canViewRevenue: false,
-            lastActive: 'Active'
+            canAcceptOrders: hasSavedPermissions ? savedPermissions.includes('orders:accept') : true,
+            canPackOrders: hasSavedPermissions ? savedPermissions.includes('orders:pack') : true,
+            canDispatchOrders: hasSavedPermissions ? savedPermissions.includes('orders:dispatch') : true,
+            canCancelOrders: hasSavedPermissions ? savedPermissions.includes('orders:cancel') : false,
+            canViewRevenue: hasSavedPermissions ? savedPermissions.includes('revenue:view') : false,
+            lastActive: 'Not tracked'
           };
         });
-        const adminPreset = INITIAL_STAFF_LIST.find(s => s.id === 'staff_admin') || INITIAL_STAFF_LIST[0];
-        setStaffList([adminPreset, ...fetched]);
+        setStaffList(fetched);
+        setTeamMembers(fetched);
       }
     } catch (e) {
       console.warn('Staff fetch notice:', e.message);
+    }
+  };
+
+  const handleSaveStaffPermissions = async (staff, { testView = false } = {}) => {
+    if (!staff?.id) {
+      showActionError('This staff record has no server id. Refresh the staff list and try again.');
+      return;
+    }
+    const permissions = [
+      `scope:${staff.orderScope || 'ALL'}`,
+      ...(staff.canAcceptOrders ? ['orders:accept'] : []),
+      ...(staff.canPackOrders ? ['orders:pack'] : []),
+      ...(staff.canDispatchOrders ? ['orders:dispatch'] : []),
+      ...(staff.canCancelOrders ? ['orders:cancel'] : []),
+      ...(staff.canViewRevenue ? ['revenue:view'] : []),
+    ];
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const res = await axios.put(
+        `/api/auth/staff/${staff.id}`,
+        { customPermissions: permissions },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!res.data?.success || !res.data?.staff) {
+        throw new Error(res.data?.message || 'The server did not confirm the staff permission update.');
+      }
+      const updatedStaff = { ...staff, customPermissions: permissions };
+      setStaffList(prev => prev.map(member => member.id === staff.id ? updatedStaff : member));
+      setTeamMembers(prev => prev.map(member => member.id === staff.id ? updatedStaff : member));
+      setShowEditStaffModal(false);
+      if (testView) {
+        setSimulatedStaffId(staff.id);
+        setActiveTab('orders');
+      }
+      setActionSuccessToast(
+        testView
+          ? `Permissions saved. Viewing Orders as ${staff.name}.`
+          : `Permissions saved for ${staff.name}.`
+      );
+      setTimeout(() => setActionSuccessToast(''), 4000);
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not save staff permissions.'
+      );
+    }
+  };
+
+  const handleToggleStaffStatus = async (staff) => {
+    if (!staff?.id) {
+      showActionError('This staff record has no server id. Refresh the staff list and try again.');
+      return;
+    }
+    const nextActive = staff.status !== 'Active';
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const res = await axios.put(
+        `/api/auth/staff/${staff.id}`,
+        { isActive: nextActive },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm the staff status change.');
+      }
+      const nextStatus = nextActive ? 'Active' : 'Inactive';
+      setStaffList(prev => prev.map(member => member.id === staff.id ? { ...member, status: nextStatus } : member));
+      setTeamMembers(prev => prev.map(member => member.id === staff.id ? { ...member, status: nextStatus } : member));
+      setActionSuccessToast(`${staff.name} is now ${nextStatus.toLowerCase()}.`);
+      setTimeout(() => setActionSuccessToast(''), 3000);
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not change staff status.');
+    }
+  };
+
+  const handleRemoveStaff = async (staff) => {
+    if (!staff?.id) {
+      showActionError('This staff record has no server id. Refresh the staff list and try again.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to remove staff account for ${staff.name}?`)) return;
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const res = await axios.delete(`/api/auth/staff/${staff.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm staff removal.');
+      }
+      setStaffList(prev => prev.filter(member => member.id !== staff.id));
+      setTeamMembers(prev => prev.filter(member => member.id !== staff.id));
+      if (simulatedStaffId === staff.id) setSimulatedStaffId(null);
+      setActionSuccessToast(`Staff member ${staff.name} removed.`);
+      setTimeout(() => setActionSuccessToast(''), 3000);
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not remove the staff member.');
     }
   };
 
@@ -3118,11 +2175,19 @@ export const MerchantDashboard = () => {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-      await axios.put('/api/auth/business-profile', {
+      const businessTypeValue =
+        bizType === 'Service selling'
+          ? 'SERVICE'
+          : bizType === 'Travel & experiences'
+          ? 'TRAVEL'
+          : 'PRODUCT';
+
+      const res = await axios.put('/api/auth/business-profile', {
         businessName: bizProfileName,
-        businessType: bizType,
+        businessType: businessTypeValue,
         contactEmail,
         contactPhone,
+        contactAddress: bizAddress,
         brandTagline,
         brandColor,
         settings: {
@@ -3130,17 +2195,22 @@ export const MerchantDashboard = () => {
           bizAddress,
           minOrderValue: Number(minOrderValue) || 0,
           shippingFee: Number(shippingFee) || 0,
-          enableCod,
-          sendOrderNotifications,
-          whatsappAlerts,
+          enableCOD: Boolean(enableCod),
           merchantUpiId
         }
       }, { headers: authHeaders });
 
-      setActionSuccessToast('All settings updated and saved to database! Storefront synchronized.');
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm the settings update.');
+      }
+
+      setActionSuccessToast('Settings saved to the server.');
     } catch (err) {
-      console.warn('Error saving settings to backend:', err);
-      setActionSuccessToast('Settings updated locally and synced with active session.');
+      console.error('Error saving settings to backend:', err);
+      showActionError(
+        err.response?.data?.message ||
+          'Could not save settings. Nothing was changed on the server.'
+      );
     } finally {
       setTimeout(() => setActionSuccessToast(''), 4000);
     }
@@ -3152,14 +2222,14 @@ export const MerchantDashboard = () => {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await axios.post('/api/meta/integration/sync', {}, { headers: authHeaders });
-      if (res.data?.success) {
-        setActionSuccessToast(`⚡ ${res.data.message || 'Meta Lead Ads synced successfully!'}`);
-      } else {
-        setActionSuccessToast('Meta Lead Ads synced from live database!');
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Meta lead sync did not complete.');
       }
+      setActionSuccessToast(res.data.message || 'Meta Lead Ads synced.');
     } catch (e) {
-      console.warn('Meta sync notice:', e);
-      setActionSuccessToast('Synced latest leads from database.');
+      showActionError(
+        e.response?.data?.message || e.message || 'Could not sync Meta leads. Nothing was changed.'
+      );
     } finally {
       await fetchCrmLeads();
       setSyncingMeta(false);
@@ -3170,27 +2240,25 @@ export const MerchantDashboard = () => {
   const handleUpdateLeadStage = async (leadId, newStage) => {
     try {
       const token = localStorage.getItem('omniva_token');
-      await axios.patch(`/api/crm/leads/${leadId}/status`, { status: newStage }, {
+      const res = await axios.patch(`/api/crm/leads/${leadId}/status`, { status: newStage }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      if (!res.data?.success || !res.data?.lead) {
+        throw new Error(res.data?.message || 'The server did not confirm the lead update.');
+      }
+      const updatedLead = res.data.lead;
+      setCrmLeads(prev => prev.map(l => l._id === leadId ? updatedLead : l));
+      if (selectedLead && selectedLead._id === leadId) {
+        setSelectedLead(updatedLead);
+      }
+      const stageObj = CRM_STAGES.find(s => s.key === newStage);
+      setActionSuccessToast(`Lead stage updated to ${stageObj?.label || newStage}.`);
+      setTimeout(() => setActionSuccessToast(''), 3500);
     } catch (err) {
-      console.warn('Updated lead locally:', err);
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not update the lead stage.'
+      );
     }
-    setCrmLeads(prev => prev.map(l => l._id === leadId ? {
-      ...l,
-      status: newStage,
-      notes: [...(l.notes || []), { note: `Stage changed to ${newStage}`, authorName: user?.name || 'Owner', createdAt: new Date().toISOString() }]
-    } : l));
-    if (selectedLead && selectedLead._id === leadId) {
-      setSelectedLead(prev => ({
-        ...prev,
-        status: newStage,
-        notes: [...(prev.notes || []), { note: `Stage changed to ${newStage}`, authorName: user?.name || 'Owner', createdAt: new Date().toISOString() }]
-      }));
-    }
-    const stageObj = CRM_STAGES.find(s => s.key === newStage);
-    setActionSuccessToast(`Lead stage updated to ${stageObj?.label || newStage}!`);
-    setTimeout(() => setActionSuccessToast(''), 3500);
   };
 
   const handleCreateLead = async (e) => {
@@ -3206,36 +2274,25 @@ export const MerchantDashboard = () => {
         phone: newLeadForm.phone,
         email: newLeadForm.email,
         source: newLeadForm.source,
-        campaignName: newLeadForm.campaignName || 'Manual Entry',
+        campaignName: newLeadForm.campaignName,
         budget: Number(newLeadForm.budget) || 0,
         initialNote: newLeadForm.note || 'Manually captured in CRM'
       }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      if (res.data?.lead) {
-        setCrmLeads([res.data.lead, ...crmLeads]);
-      } else {
-        setCrmLeads([{
-          _id: `lead_${Date.now()}`,
-          ...newLeadForm,
-          status: 'NEW',
-          notes: [{ note: newLeadForm.note || 'Manually captured enquiry', authorName: user?.name || 'Owner', createdAt: new Date().toISOString() }],
-          createdAt: new Date().toISOString()
-        }, ...crmLeads]);
+      if (!res.data?.success || !res.data?.lead) {
+        throw new Error(res.data?.message || 'The server did not confirm lead creation.');
       }
-    } catch {
-      setCrmLeads([{
-        _id: `lead_${Date.now()}`,
-        ...newLeadForm,
-        status: 'NEW',
-        notes: [{ note: newLeadForm.note || 'Manually captured enquiry', authorName: user?.name || 'Owner', createdAt: new Date().toISOString() }],
-        createdAt: new Date().toISOString()
-      }, ...crmLeads]);
+      setCrmLeads(prev => [res.data.lead, ...prev]);
+      setShowAddLeadModal(false);
+      setNewLeadForm({ name: '', phone: '', email: '', source: 'MANUAL', campaignName: '', budget: '', note: '' });
+      setActionSuccessToast(`New enquiry for ${res.data.lead.name || newLeadForm.name} added to CRM.`);
+      setTimeout(() => setActionSuccessToast(''), 4000);
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not create the lead.'
+      );
     }
-    setShowAddLeadModal(false);
-    setNewLeadForm({ name: '', phone: '', email: '', source: 'META_ADS', campaignName: 'Instagram Reel Ad', budget: '750', note: '' });
-    setActionSuccessToast(`New enquiry for ${newLeadForm.name} added to CRM!`);
-    setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   const handleAddLeadNote = async (leadId) => {
@@ -3243,26 +2300,31 @@ export const MerchantDashboard = () => {
     const noteText = newLeadNote.trim();
     const token = localStorage.getItem('omniva_token');
     try {
-      await axios.post(`/api/crm/leads/${leadId}/notes`, { note: noteText }, {
+      const res = await axios.post(`/api/crm/leads/${leadId}/notes`, { note: noteText }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      if (!res.data?.success || !res.data?.note) {
+        throw new Error(res.data?.message || 'The server did not confirm the note.');
+      }
+      const newNoteObj = res.data.note;
+      setCrmLeads(prev => prev.map(l => l._id === leadId ? {
+        ...l,
+        notes: [...(l.notes || []), newNoteObj]
+      } : l));
+      if (selectedLead && selectedLead._id === leadId) {
+        setSelectedLead(prev => ({
+          ...prev,
+          notes: [...(prev.notes || []), newNoteObj]
+        }));
+      }
+      setNewLeadNote('');
+      setActionSuccessToast('Follow-up note saved to lead timeline.');
+      setTimeout(() => setActionSuccessToast(''), 3000);
     } catch (err) {
-      console.warn('Note added locally:', err);
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not save the lead note.'
+      );
     }
-    const newNoteObj = { note: noteText, authorName: user?.name || 'Owner', createdAt: new Date().toISOString() };
-    setCrmLeads(prev => prev.map(l => l._id === leadId ? {
-      ...l,
-      notes: [...(l.notes || []), newNoteObj]
-    } : l));
-    if (selectedLead && selectedLead._id === leadId) {
-      setSelectedLead(prev => ({
-        ...prev,
-        notes: [...(prev.notes || []), newNoteObj]
-      }));
-    }
-    setNewLeadNote('');
-    setActionSuccessToast('Follow-up note saved to lead timeline!');
-    setTimeout(() => setActionSuccessToast(''), 3000);
   };
 
   const getStageMeta = (status) => {
@@ -3273,7 +2335,7 @@ export const MerchantDashboard = () => {
     switch (source) {
       case 'META_ADS':
         return {
-          label: platform === 'ig' ? '📸 Instagram Ad' : '🔵 Meta / FB Ad',
+          label: platform === 'ig' ? '📸 Instagram Ad' : platform === 'fb' ? '🔵 Facebook Ad' : '🔵 Meta Ad',
           color: platform === 'ig' ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-blue-50 text-blue-700 border-blue-200'
         };
       case 'WHATSAPP':
@@ -3282,8 +2344,10 @@ export const MerchantDashboard = () => {
         return { label: '🌐 Online Store', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
       case 'REFERRAL':
         return { label: '🤝 Referral', color: 'bg-purple-50 text-purple-700 border-purple-200' };
+      case 'MANUAL':
+        return { label: '✍️ Manual entry', color: 'bg-slate-100 text-slate-700 border-slate-200' };
       default:
-        return { label: '📞 Phone / Direct', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+        return { label: '❔ Other / unknown source', color: 'bg-slate-100 text-slate-700 border-slate-200' };
     }
   };
 
@@ -3308,11 +2372,10 @@ export const MerchantDashboard = () => {
       const res = await axios.get('/api/automations/rules', {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      if (res.data?.data && res.data.data.length > 0) {
-        setAutomationRules(res.data.data);
-      }
+      setAutomationRules(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch (err) {
-      console.warn('Fallback loading automation rules:', err.message);
+      console.warn('Could not load automation rules:', err.message);
+      setAutomationRules([]);
     }
   };
 
@@ -3322,11 +2385,10 @@ export const MerchantDashboard = () => {
       const res = await axios.get('/api/automations/logs', {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      if (res.data?.data && res.data.data.length > 0) {
-        setAutomationLogs(res.data.data);
-      }
+      setAutomationLogs(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch (err) {
-      console.warn('Fallback loading automation logs:', err.message);
+      console.warn('Could not load automation logs:', err.message);
+      setAutomationLogs([]);
     }
   };
 
@@ -3344,23 +2406,24 @@ export const MerchantDashboard = () => {
       setActionSuccessToast(`Automation Rule ${updatedStatus ? 'Activated 🟢' : 'Paused ⏸️'} successfully!`);
       setTimeout(() => setActionSuccessToast(''), 3000);
     } catch (err) {
-      setActionSuccessToast(`Automation Rule updated: ${updatedStatus ? 'Active 🟢' : 'Paused ⏸️'}`);
-      setTimeout(() => setActionSuccessToast(''), 3000);
+      setAutomationRules(prev =>
+        prev.map(r => (r._id === ruleId || r.id === ruleId ? { ...r, isActive: currentStatus } : r))
+      );
+      showActionError(err.response?.data?.message || 'Could not update the automation rule.');
     }
   };
 
   const handleDeleteRule = async (ruleId) => {
-    setAutomationRules(prev => prev.filter(r => r._id !== ruleId && r.id !== ruleId));
     try {
       const token = localStorage.getItem('omniva_token');
       await axios.delete(`/api/automations/rules/${ruleId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      setAutomationRules(prev => prev.filter(r => r._id !== ruleId && r.id !== ruleId));
       setActionSuccessToast('Automation rule deleted successfully.');
       setTimeout(() => setActionSuccessToast(''), 3000);
     } catch (err) {
-      setActionSuccessToast('Rule removed from dashboard.');
-      setTimeout(() => setActionSuccessToast(''), 3000);
+      showActionError(err.response?.data?.message || 'Could not delete the automation rule.');
     }
   };
 
@@ -3393,18 +2456,10 @@ export const MerchantDashboard = () => {
       const res = await axios.post('/api/automations/rules', payload, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
-      if (res.data?.data) {
-        setAutomationRules(prev => [res.data.data, ...prev]);
-      } else {
-        const localRule = {
-          _id: 'rule_' + Date.now(),
-          ...payload,
-          isActive: true,
-          executionCount: 0,
-          createdAt: new Date().toISOString()
-        };
-        setAutomationRules(prev => [localRule, ...prev]);
+      if (!res.data?.data) {
+        throw new Error('The server did not return the created rule.');
       }
+      setAutomationRules(prev => [res.data.data, ...prev]);
       setShowCreateRuleModal(false);
       setNewRuleForm({
         name: '',
@@ -3420,17 +2475,7 @@ export const MerchantDashboard = () => {
       setActionSuccessToast(`New Automation Rule "${payload.name}" created successfully! ⚡`);
       setTimeout(() => setActionSuccessToast(''), 4000);
     } catch (err) {
-      const localRule = {
-        _id: 'rule_' + Date.now(),
-        ...payload,
-        isActive: true,
-        executionCount: 0,
-        createdAt: new Date().toISOString()
-      };
-      setAutomationRules(prev => [localRule, ...prev]);
-      setShowCreateRuleModal(false);
-      setActionSuccessToast(`Rule "${payload.name}" ready & active! ⚡`);
-      setTimeout(() => setActionSuccessToast(''), 4000);
+      showActionError(err.response?.data?.message || 'Could not create the automation rule.');
     }
   };
 
@@ -3446,7 +2491,7 @@ export const MerchantDashboard = () => {
       testData: {
         customerName: testEventForm.customerName,
         customerPhone: testEventForm.customerPhone,
-        totalAmount: Number(testEventForm.totalAmount) || 1250,
+        totalAmount: Number(testEventForm.totalAmount) || 0,
         campaignName: testEventForm.campaignName,
         courier: testEventForm.courier,
         trackingNumber: testEventForm.trackingNumber,
@@ -3464,70 +2509,57 @@ export const MerchantDashboard = () => {
       const resultData = res.data;
       setTestTriggerResult(resultData);
 
-      // Add to local audit log
-      const newLog = {
-        _id: 'log_test_' + Date.now(),
-        ruleName: resultData.results?.[0]?.ruleName || `Test Trigger (${testEventForm.trigger})`,
-        trigger: testEventForm.trigger,
-        entityType: testEventForm.entityType,
-        entityId: testEventForm.entityId,
-        actionType: resultData.results?.[0]?.action || 'SEND_WHATSAPP',
-        status: 'SUCCESS',
-        payloadSummary: resultData.results?.[0]?.summary || `Test event fired successfully for ${testEventForm.customerName} (₹${testEventForm.totalAmount})`,
-        createdAt: new Date().toISOString()
-      };
-      setAutomationLogs(prev => [newLog, ...prev]);
+      // The backend owns audit logs and execution counters, including
+      // SKIPPED/FAILED outcomes. Refresh instead of inventing a SUCCESS log.
+      await Promise.all([fetchAutomationLogs(), fetchAutomationRules()]);
 
-      // Update execution count on matched rules
-      setAutomationRules(prev => prev.map(r => {
-        if (r.trigger === testEventForm.trigger && r.isActive) {
-          return { ...r, executionCount: (r.executionCount || 0) + 1, lastExecutedAt: new Date().toISOString() };
-        }
-        return r;
-      }));
-
-      setActionSuccessToast(`⚡ Automation Test Run Successful! Matched ${resultData.matchedRulesCount || 1} active rule(s).`);
-      setTimeout(() => setActionSuccessToast(''), 4000);
-    } catch (err) {
-      // Local simulation fallback
-      const matched = automationRules.filter(r => r.trigger === testEventForm.trigger && r.isActive);
-      const simulatedResult = {
-        success: true,
-        message: 'Simulated dry-run evaluation complete',
-        matchedRulesCount: matched.length,
-        results: matched.map(m => ({
-          ruleName: m.name,
-          status: 'SUCCESS',
-          action: m.action.type,
-          summary: `Executed ${m.action.type}: Message prepared for ${testEventForm.customerName}`
-        }))
-      };
-      setTestTriggerResult(simulatedResult);
-
-      const newLog = {
-        _id: 'log_test_' + Date.now(),
-        ruleName: matched[0]?.name || `Test (${testEventForm.trigger})`,
-        trigger: testEventForm.trigger,
-        entityType: testEventForm.entityType,
-        entityId: testEventForm.entityId,
-        actionType: matched[0]?.action?.type || 'SEND_WHATSAPP',
-        status: 'SUCCESS',
-        payloadSummary: `Executed for ${testEventForm.customerName} (${testEventForm.customerPhone})`,
-        createdAt: new Date().toISOString()
-      };
-      setAutomationLogs(prev => [newLog, ...prev]);
-
-      setAutomationRules(prev => prev.map(r => {
-        if (r.trigger === testEventForm.trigger && r.isActive) {
-          return { ...r, executionCount: (r.executionCount || 0) + 1, lastExecutedAt: new Date().toISOString() };
-        }
-        return r;
-      }));
-
-      setActionSuccessToast(`⚡ Automation Dry-run Successful! Matched ${matched.length} rule(s).`);
-      setTimeout(() => setActionSuccessToast(''), 4000);
+      const matchedCount = Number(resultData.matchedRulesCount) || 0;
+      const failedCount = (resultData.results || []).filter(r => r.status === 'FAILED').length;
+      const skippedCount = (resultData.results || []).filter(r => r.status === 'SKIPPED').length;
+      if (matchedCount === 0) {
+        setActionSuccessToast('Test completed. No active automation rules matched.');
+      } else if (resultData.dryRun) {
+        setActionSuccessToast(
+          `Test validated ${matchedCount} rule(s). No external messages or webhooks were sent.`
+        );
+      } else if (failedCount || skippedCount) {
+        showActionError(
+          `Test completed with ${failedCount} failed and ${skippedCount} skipped action(s). Review run history for details.`
+        );
+      } else {
+        setActionSuccessToast(`Test completed: ${matchedCount} rule(s) executed.`);
+      }
+      setTimeout(() => setActionSuccessToast(''), 5000);
     } finally {
       setTestingAutomation(false);
+    }
+  };
+
+  const handleQuickAddStock = async (product) => {
+    const productId = product?._id || product?.id;
+    if (!productId) {
+      showActionError('This product has no server id. Refresh the catalog and try again.');
+      return;
+    }
+    const currentStock = Number(product.stock ?? product.stockQuantity ?? 0);
+    const newStock = Math.max(0, currentStock + 10);
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const res = await axios.put(
+        `/api/products/${productId}`,
+        { stockQuantity: newStock },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm the stock update.');
+      }
+      await fetchProductsAndCategories();
+      setActionSuccessToast(
+        `Stock for ${product.name || 'the product'} updated to ${res.data.data?.stockQuantity ?? newStock}.`
+      );
+      setTimeout(() => setActionSuccessToast(''), 3000);
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'Could not update product stock.');
     }
   };
 
@@ -3540,7 +2572,7 @@ export const MerchantDashboard = () => {
     const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-    let enteredCat = newProductForm.newCatInput?.trim() || newProductForm.cat || (categoriesList[0]?.name || 'Mango Pickles');
+    let enteredCat = newProductForm.newCatInput?.trim() || newProductForm.cat || categoriesList[0]?.name || '';
     let targetCatId = null;
 
     // 1. If merchant typed a new category, save to MongoDB first
@@ -3555,10 +2587,13 @@ export const MerchantDashboard = () => {
           const catRes = await axios.post('/api/categories', {
             name: catName,
             slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-            description: `Handcrafted ${catName} slow-cured with authentic spices in pure mustard oil.`,
-            image: newProductForm.img || (photoPresets && photoPresets[0]?.url) || ''
+            description: '',
+            image: newProductForm.img || ''
           }, { headers: authHeaders });
-          if (catRes.data?.data) {
+          if (!catRes.data?.success || !catRes.data?.data?._id) {
+            throw new Error(catRes.data?.message || 'The server did not return the saved category.');
+          }
+          {
             const createdCat = catRes.data.data;
             targetCatId = createdCat._id;
             const newCatObj = {
@@ -3567,14 +2602,15 @@ export const MerchantDashboard = () => {
               name: createdCat.name,
               slug: createdCat.slug,
               description: createdCat.description,
-              image: createdCat.image || (photoPresets && photoPresets[0]?.url),
+              image: createdCat.image || '',
               productsCount: 1,
               status: 'Active'
             };
             setCategoriesList(prev => [newCatObj, ...prev]);
           }
         } catch (catErr) {
-          console.warn('Could not save category to backend:', catErr);
+          showActionError(catErr.response?.data?.message || catErr.message || 'Could not create the category. Nothing was saved.');
+          return;
         }
       }
     } else {
@@ -3584,19 +2620,33 @@ export const MerchantDashboard = () => {
       }
     }
 
-    const fallbackImg = (photoPresets && photoPresets[0]?.url) || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
-    const finalImg = newProductForm.img && newProductForm.img.trim() ? newProductForm.img.trim() : fallbackImg;
+    const finalImg = newProductForm.img && newProductForm.img.trim() ? newProductForm.img.trim() : '';
     const activeJars = newProductForm.jars || [];
-    const baseJar = activeJars.find(j => j.enabled);
-    const numericPrice = parseFloat(String(newProductForm.price).replace(/[^0-9.]/g, '')) || (baseJar ? baseJar.price : 299);
-    const enabledJarsStock = activeJars.filter(j => j.enabled).reduce((acc, j) => acc + (parseInt(j.stock) || 0), 0);
-    const numericStock = enabledJarsStock > 0 ? enabledJarsStock : (parseInt(newProductForm.stock) >= 0 ? parseInt(newProductForm.stock) : 50);
+    const enabledJars = activeJars.filter(j => j.enabled);
+    const baseJar = enabledJars[0];
+    const enteredPrice = parseFloat(String(newProductForm.price).replace(/[^0-9.]/g, ''));
+    const numericPrice = enteredPrice > 0
+      ? enteredPrice
+      : (baseJar && Number(baseJar.price) > 0 ? Number(baseJar.price) : NaN);
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      showActionError('Enter a real selling price greater than zero before saving the product.');
+      return;
+    }
+    const enabledJarsStock = enabledJars.reduce((acc, j) => acc + (Number(j.stock) || 0), 0);
+    const enteredStock = Number.parseInt(newProductForm.stock, 10);
+    const numericStock = enabledJarsStock > 0
+      ? enabledJarsStock
+      : (Number.isFinite(enteredStock) && enteredStock >= 0 ? enteredStock : NaN);
+    if (!Number.isFinite(numericStock) || numericStock < 0) {
+      showActionError('Enter the real stock quantity before saving the product.');
+      return;
+    }
 
-    const variantsPayload = activeJars.filter(j => j.enabled).map(j => ({
+    const variantsPayload = enabledJars.map(j => ({
       name: j.name,
       sku: newProductForm.sku ? `${newProductForm.sku}-${j.name.split(' ')[0]}` : '',
-      price: Number(j.price) || numericPrice,
-      stockQuantity: Number(j.stock) || 20
+      price: Number(j.price) > 0 ? Number(j.price) : numericPrice,
+      stockQuantity: Math.max(0, Number(j.stock) || 0)
     }));
 
     let savedProductData = null;
@@ -3609,18 +2659,15 @@ export const MerchantDashboard = () => {
         price: numericPrice,
         stockQuantity: numericStock,
         images: [finalImg],
-        variants: variantsPayload.length > 0 ? variantsPayload : [{
-          name: 'Standard Jar',
-          price: numericPrice,
-          stockQuantity: numericStock
-        }],
+        variants: variantsPayload,
         isAvailable: true,
         tags: [enteredCat.toLowerCase()]
       }, { headers: authHeaders });
 
-      if (prodRes.data?.data) {
-        savedProductData = prodRes.data.data;
+      if (!prodRes.data?.success || !prodRes.data?.data?._id) {
+        throw new Error(prodRes.data?.message || 'The server did not return the saved product.');
       }
+      savedProductData = prodRes.data.data;
     } catch (prodErr) {
       console.error('Failed to save product to backend:', prodErr);
       alert('Could not save product to database: ' + (prodErr.response?.data?.message || prodErr.message));
@@ -3628,17 +2675,17 @@ export const MerchantDashboard = () => {
     }
 
     const newProd = {
-      id: savedProductData?._id || `PROD-${Date.now()}`,
+      id: savedProductData._id,
       _id: savedProductData?._id,
       name: savedProductData?.name || newProductForm.name.trim(),
-      sku: newProductForm.sku?.trim() || savedProductData?.slug || `ACH-${Date.now().toString().slice(-4)}`,
+      sku: newProductForm.sku?.trim() || savedProductData?.slug || '—',
       cat: enteredCat,
       categoryId: targetCatId,
       price: `₹${numericPrice}`,
       stock: numericStock,
       status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
       statusColor: numericStock > 10 ? 'bg-emerald-50 text-emerald-700' : (numericStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
-      vis: 'Published',
+      vis: savedProductData.isAvailable === false ? 'Unpublished' : 'Published',
       img: finalImg,
       jars: activeJars
     };
@@ -3653,18 +2700,18 @@ export const MerchantDashboard = () => {
     setNewProductForm({
       name: '',
       sku: '',
-      cat: categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)',
+      cat: categoriesList[0]?.name || '',
       newCatInput: '',
       price: '',
-      stock: 50,
+      stock: '',
       img: '',
       jars: DEFAULT_JAR_PRESETS.map(j => ({ ...j }))
     });
     setNewJarName('');
     setNewJarPrice('');
-    setNewJarStock('25');
+    setNewJarStock('');
     setProductsActiveSubTab('catalog');
-    setActionSuccessToast(`🎉 Product "${newProd.name}" saved to database and live on customer storefront!`);
+    setActionSuccessToast(`Product "${newProd.name}" saved to the database and added to the catalog.`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
@@ -3679,21 +2726,21 @@ export const MerchantDashboard = () => {
 
     const catName = newCategoryForm.name.trim();
     const slug = newCategoryForm.slug?.trim() || catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const fallbackImg = (photoPresets && photoPresets[0]?.url) || 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
-    const finalImg = newCategoryForm.image && newCategoryForm.image.trim() ? newCategoryForm.image.trim() : fallbackImg;
+    const finalImg = newCategoryForm.image && newCategoryForm.image.trim() ? newCategoryForm.image.trim() : '';
 
     let savedCatData = null;
     try {
       const res = await axios.post('/api/categories', {
         name: catName,
         slug: slug,
-        description: newCategoryForm.description?.trim() || `Freshly prepared handcrafted ${catName} with cold-pressed mustard oil and aromatic spices.`,
+        description: newCategoryForm.description?.trim() || '',
         image: finalImg
       }, { headers: authHeaders });
 
-      if (res.data?.data) {
-        savedCatData = res.data.data;
+      if (!res.data?.success || !res.data?.data?._id) {
+        throw new Error(res.data?.message || 'The server did not return the saved category.');
       }
+      savedCatData = res.data.data;
     } catch (catErr) {
       console.error('Failed to save category to backend:', catErr);
       alert('Could not save category to database: ' + (catErr.response?.data?.message || catErr.message));
@@ -3701,14 +2748,14 @@ export const MerchantDashboard = () => {
     }
 
     const newCat = {
-      id: savedCatData?._id || `CAT-${Date.now().toString().slice(-4)}`,
-      _id: savedCatData?._id,
-      name: savedCatData?.name || catName,
-      slug: savedCatData?.slug || slug,
-      description: savedCatData?.description || newCategoryForm.description?.trim() || `Freshly prepared handcrafted ${catName} with cold-pressed mustard oil and aromatic spices.`,
-      image: savedCatData?.image || finalImg,
+      id: savedCatData._id,
+      _id: savedCatData._id,
+      name: savedCatData.name,
+      slug: savedCatData.slug,
+      description: savedCatData.description || '',
+      image: savedCatData.image || '',
       productsCount: 0,
-      status: 'Active'
+      status: savedCatData.isActive === false ? 'Inactive' : 'Active'
     };
 
     setCategoriesList(prev => [newCat, ...prev]);
@@ -3719,36 +2766,28 @@ export const MerchantDashboard = () => {
       description: '',
       image: ''
     });
-    setActionSuccessToast(`🎉 Category "${newCat.name}" created and synced with customer storefront!`);
+    setActionSuccessToast(`Category "${newCat.name}" created in the catalog.`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
   const handleOpenEditProduct = (prod, index) => {
     setEditingProduct({ ...prod, originalIndex: index });
-    const numPrice = prod.price ? String(prod.price).replace(/[^0-9.]/g, '') : '299';
-    const baseP = parseFloat(numPrice) || 299;
-    const baseStock = typeof prod.stock === 'number' ? prod.stock : parseInt(prod.stock) || 50;
+    const numPrice = prod.price ? String(prod.price).replace(/[^0-9.]/g, '') : '';
+    const baseP = parseFloat(numPrice) || 0;
+    const baseStock = typeof prod.stock === 'number' ? prod.stock : (parseInt(prod.stock, 10) || 0);
 
     let prodJars = [];
     if (prod.jars && Array.isArray(prod.jars) && prod.jars.length > 0) {
       prodJars = prod.jars.map(j => ({ ...j }));
-    } else {
-      prodJars = [
-        { id: 'j250', name: '250g Glass Jar', price: Math.round(baseP * 0.65), stock: Math.round(baseStock * 0.3) || 20, enabled: true },
-        { id: 'j500', name: '500g Traditional Jar', price: baseP, stock: baseStock, enabled: true },
-        { id: 'j1000', name: '1kg Family Pack Jar', price: Math.round(baseP * 1.7), stock: Math.round(baseStock * 0.2) || 15, enabled: true },
-        { id: 'j5000', name: '5kg Bulk Catering Can', price: Math.round(baseP * 6.8), stock: 5, enabled: false },
-        { id: 'jmartban', name: 'Ceramic Martban Jar 1.2kg', price: Math.round(baseP * 2.5), stock: 10, enabled: false }
-      ];
     }
 
     setEditProductForm({
       name: prod.name || '',
       sku: prod.sku || '',
-      cat: prod.cat || categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)',
+      cat: prod.cat || categoriesList[0]?.name || '',
       newCatInput: '',
       price: numPrice,
-      compareAtPrice: prod.compareAtPrice ? String(prod.compareAtPrice).replace(/[^0-9.]/g, '') : String(Math.round(baseP * 1.3)),
+      compareAtPrice: prod.compareAtPrice ? String(prod.compareAtPrice).replace(/[^0-9.]/g, '') : '',
       stock: baseStock,
       img: prod.img || '',
       status: prod.status || 'In stock',
@@ -3758,7 +2797,7 @@ export const MerchantDashboard = () => {
     setShowEditCustomCatInput(false);
     setEditNewJarName('');
     setEditNewJarPrice('');
-    setEditNewJarStock('25');
+    setEditNewJarStock('');
     setShowEditProductModal(true);
   };
 
@@ -3771,7 +2810,7 @@ export const MerchantDashboard = () => {
     const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-    const enteredCat = editProductForm.newCatInput?.trim() || editProductForm.cat || (categoriesList[0]?.name || 'Mango Pickles (Aam ka Achar)');
+    const enteredCat = editProductForm.newCatInput?.trim() || editProductForm.cat || (categoriesList[0]?.name || '');
     let targetCatId = null;
 
     // Auto-create category in categoriesList if a new one was typed
@@ -3785,10 +2824,13 @@ export const MerchantDashboard = () => {
           const catRes = await axios.post('/api/categories', {
             name: catName,
             slug: catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-            description: `Handcrafted ${catName} slow-cured with authentic Marwadi spices in pure mustard oil.`,
-            image: editProductForm.img || (photoPresets && photoPresets[0]?.url) || ''
+            description: '',
+            image: editProductForm.img || ''
           }, { headers: authHeaders });
-          if (catRes.data?.data) {
+          if (!catRes.data?.success || !catRes.data?.data?._id) {
+            throw new Error(catRes.data?.message || 'The server did not return the saved category.');
+          }
+          {
             targetCatId = catRes.data.data._id;
             const newCatObj = {
               id: catRes.data.data._id,
@@ -3796,14 +2838,15 @@ export const MerchantDashboard = () => {
               name: catRes.data.data.name,
               slug: catRes.data.data.slug,
               description: catRes.data.data.description,
-              image: catRes.data.data.image || (photoPresets && photoPresets[0]?.url),
+              image: catRes.data.data.image || '',
               productsCount: 1,
               status: 'Active'
             };
             setCategoriesList(prev => [...prev, newCatObj]);
           }
         } catch (catErr) {
-          console.warn('Could not create category on backend:', catErr);
+          showActionError(catErr.response?.data?.message || catErr.message || 'Could not create the category. Nothing was changed.');
+          return;
         }
       }
     } else {
@@ -3813,57 +2856,86 @@ export const MerchantDashboard = () => {
       }
     }
 
-    const fallbackImg = (photoPresets && photoPresets[0]?.url) || '';
-    const finalImg = editProductForm.img && editProductForm.img.trim() ? editProductForm.img.trim() : fallbackImg;
+    const finalImg = editProductForm.img && editProductForm.img.trim() ? editProductForm.img.trim() : '';
     const activeJars = editProductForm.jars || [];
-    const baseJar = activeJars.find(j => j.enabled);
-    const numericPrice = parseFloat(String(editProductForm.price).replace(/[^0-9.]/g, '')) || (baseJar ? baseJar.price : 299);
-    const numericCompare = parseFloat(String(editProductForm.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(numericPrice * 1.3);
-    const enabledJarsStock = activeJars.filter(j => j.enabled).reduce((acc, j) => acc + (parseInt(j.stock) || 0), 0);
-    const numericStock = enabledJarsStock > 0 ? enabledJarsStock : (parseInt(editProductForm.stock) >= 0 ? parseInt(editProductForm.stock) : 50);
+    const enabledJars = activeJars.filter(j => j.enabled);
+    const baseJar = enabledJars[0];
+    const enteredPrice = parseFloat(String(editProductForm.price).replace(/[^0-9.]/g, ''));
+    const numericPrice = enteredPrice > 0
+      ? enteredPrice
+      : (baseJar && Number(baseJar.price) > 0 ? Number(baseJar.price) : NaN);
+    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+      showActionError('Enter a real selling price greater than zero before saving the product.');
+      return;
+    }
+    const enteredCompare = parseFloat(String(editProductForm.compareAtPrice).replace(/[^0-9.]/g, ''));
+    const numericCompare = Number.isFinite(enteredCompare) && enteredCompare > numericPrice ? enteredCompare : null;
+    const enabledJarsStock = enabledJars.reduce((acc, j) => acc + (Number(j.stock) || 0), 0);
+    const enteredStock = Number.parseInt(editProductForm.stock, 10);
+    const numericStock = enabledJarsStock > 0
+      ? enabledJarsStock
+      : (Number.isFinite(enteredStock) && enteredStock >= 0 ? enteredStock : NaN);
+    if (!Number.isFinite(numericStock) || numericStock < 0) {
+      showActionError('Enter the real stock quantity before saving the product.');
+      return;
+    }
 
-    const variantsPayload = activeJars.filter(j => j.enabled).map(j => ({
+    const variantsPayload = enabledJars.map(j => ({
       name: j.name,
       sku: editProductForm.sku ? `${editProductForm.sku}-${j.name.split(' ')[0]}` : '',
-      price: Number(j.price) || numericPrice,
-      compareAtPrice: j.compareAtPrice ? Number(j.compareAtPrice) : Math.round((Number(j.price) || numericPrice) * 1.3),
-      stockQuantity: Number(j.stock) || 20
+      price: Number(j.price) > 0 ? Number(j.price) : numericPrice,
+      compareAtPrice: Number(j.compareAtPrice) > Number(j.price) ? Number(j.compareAtPrice) : null,
+      stockQuantity: Math.max(0, Number(j.stock) || 0)
     }));
 
     const prodDbId = editingProduct?._id || (editingProduct?.id && String(editingProduct.id).length === 24 ? editingProduct.id : null);
-    if (prodDbId) {
-      try {
-        await axios.put(`/api/products/${prodDbId}`, {
-          name: editProductForm.name.trim(),
-          sku: editProductForm.sku?.trim(),
-          categoryId: targetCatId,
-          categoryName: enteredCat,
-          price: numericPrice,
-          compareAtPrice: numericCompare,
-          stockQuantity: numericStock,
-          images: [finalImg],
-          variants: variantsPayload,
-          isAvailable: editProductForm.vis !== 'Hidden'
-        }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Failed to update product on backend:', err);
+    if (!prodDbId) {
+      showActionError('This product is not linked to a saved server record. Refresh the catalog and try again.');
+      return;
+    }
+
+    let savedProduct = null;
+    try {
+      const res = await axios.put(`/api/products/${prodDbId}`, {
+        name: editProductForm.name.trim(),
+        sku: editProductForm.sku?.trim(),
+        categoryId: targetCatId,
+        categoryName: enteredCat,
+        price: numericPrice,
+        compareAtPrice: numericCompare,
+        stockQuantity: numericStock,
+        images: [finalImg],
+        variants: variantsPayload,
+        isAvailable: editProductForm.vis !== 'Hidden'
+      }, { headers: authHeaders });
+      if (!res.data?.success || !res.data?.data) {
+        throw new Error(res.data?.message || 'The server did not confirm the product update.');
       }
+      savedProduct = res.data.data;
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not update the product. Nothing was changed.'
+      );
+      return;
     }
 
     const updatedProd = {
-      id: editingProduct?.id || editingProduct?._id,
-      _id: editingProduct?._id,
-      name: editProductForm.name.trim(),
-      sku: editProductForm.sku?.trim() || editingProduct?.sku || `ACH-${Date.now().toString().slice(-4)}`,
+      id: savedProduct._id || editingProduct?.id || editingProduct?._id,
+      _id: savedProduct._id || editingProduct?._id,
+      name: savedProduct.name || editProductForm.name.trim(),
+      sku: savedProduct.slug || editingProduct?.sku || editProductForm.sku?.trim() || '',
       cat: enteredCat,
       categoryId: targetCatId,
       price: `₹${numericPrice}`,
       compareAtPrice: numericCompare,
-      discountPercent: numericCompare > numericPrice ? Math.round(((numericCompare - numericPrice) / numericCompare) * 100) : 23,
+      discountPercent: numericCompare > numericPrice
+        ? Math.round(((numericCompare - numericPrice) / numericCompare) * 100)
+        : 0,
       stock: numericStock,
-      status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
-      statusColor: numericStock > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (numericStock > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'),
-      vis: editProductForm.vis || 'Published',
+      trackQuantity: savedProduct.trackQuantity !== false,
+      status: savedProduct.trackQuantity === false || numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
+      statusColor: savedProduct.trackQuantity === false || numericStock > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (numericStock > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'),
+      vis: savedProduct.isAvailable === false ? 'Unpublished' : 'Published',
       img: finalImg,
       jars: activeJars
     };
@@ -3883,28 +2955,38 @@ export const MerchantDashboard = () => {
     });
 
     setShowEditProductModal(false);
-    setActionSuccessToast(`✅ Product "${updatedProd.name}" updated successfully! Price: ${updatedProd.price}, Stock: ${updatedProd.stock} across ${activeJars.filter(j => j.enabled).length} jar sizes`);
+    setActionSuccessToast(`Product "${updatedProd.name}" updated. Price: ${updatedProd.price}, Stock: ${updatedProd.stock}`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
   const handleDeleteProduct = async (prodToDelete) => {
     if (!prodToDelete) return;
-    if (window.confirm(`Are you sure you want to delete "${prodToDelete.name}" from your catalog?`)) {
-      const prodDbId = prodToDelete._id || (prodToDelete.id && String(prodToDelete.id).length === 24 ? prodToDelete.id : null);
-      if (prodDbId) {
-        try {
-          const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-          const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-          await axios.delete(`/api/products/${prodDbId}`, { headers: authHeaders });
-        } catch (err) {
-          console.warn('Failed to delete product on backend:', err);
-        }
-      }
-      setProductsList(prev => prev.filter(p => (p._id && prodToDelete._id ? p._id !== prodToDelete._id : (p.sku ? p.sku !== prodToDelete.sku : p.name !== prodToDelete.name))));
-      setShowEditProductModal(false);
-      setActionSuccessToast(`🗑️ Product "${prodToDelete.name}" removed from catalog.`);
-      setTimeout(() => setActionSuccessToast(''), 4000);
+    if (!window.confirm(`Are you sure you want to delete "${prodToDelete.name}" from your catalog?`)) return;
+
+    const prodDbId = prodToDelete._id || (prodToDelete.id && String(prodToDelete.id).length === 24 ? prodToDelete.id : null);
+    if (!prodDbId) {
+      showActionError('This product is not linked to a saved server record. Refresh the catalog and try again.');
+      return;
     }
+
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.delete(`/api/products/${prodDbId}`, { headers: authHeaders });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm product deletion.');
+      }
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not delete the product. Nothing was changed.'
+      );
+      return;
+    }
+
+    setProductsList(prev => prev.filter(p => (p._id && prodToDelete._id ? p._id !== prodToDelete._id : (p.sku ? p.sku !== prodToDelete.sku : p.name !== prodToDelete.name))));
+    setShowEditProductModal(false);
+    setActionSuccessToast(`Product "${prodToDelete.name}" removed from catalog.`);
+    setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
   // ==================== COUPON & STOREWIDE DISCOUNT HANDLERS ====================
@@ -3913,9 +2995,7 @@ export const MerchantDashboard = () => {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await axios.get('/api/coupons', { headers: authHeaders });
-      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
-        setCouponsList(res.data.data);
-      }
+      setCouponsList(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch (err) {
       console.warn('Could not fetch coupons:', err.message);
     }
@@ -3924,7 +3004,12 @@ export const MerchantDashboard = () => {
   const handleCreateCoupon = async (e) => {
     e.preventDefault();
     if (!newCouponForm.code || !newCouponForm.code.trim()) {
-      alert('Please enter a coupon code');
+      showActionError('Please enter a coupon code.');
+      return;
+    }
+    const numericDiscount = Number(newCouponForm.discountValue);
+    if (!Number.isFinite(numericDiscount) || numericDiscount <= 0) {
+      showActionError('Enter a discount value greater than zero.');
       return;
     }
     const cleanCode = newCouponForm.code.trim().toUpperCase();
@@ -3933,10 +3018,10 @@ export const MerchantDashboard = () => {
 
     const couponPayload = {
       code: cleanCode,
-      title: newCouponForm.title || `${cleanCode} Special Offer`,
+      title: newCouponForm.title || '',
       description: newCouponForm.description || '',
       discountType: newCouponForm.discountType || 'PERCENTAGE',
-      discountValue: Number(newCouponForm.discountValue) || 15,
+      discountValue: numericDiscount,
       minOrderValue: Number(newCouponForm.minOrderValue) || 0,
       maxDiscount: Number(newCouponForm.maxDiscount) || 0,
       isActive: Boolean(newCouponForm.isActive),
@@ -3944,187 +3029,130 @@ export const MerchantDashboard = () => {
 
     try {
       const res = await axios.post('/api/coupons', couponPayload, { headers: authHeaders });
-      if (res.data?.data) {
-        setCouponsList(prev => [res.data.data, ...prev.filter(c => c.code !== cleanCode)]);
-      } else {
-        setCouponsList(prev => [{ _id: `coup_${Date.now()}`, ...couponPayload, usageCount: 0, createdAt: new Date().toISOString() }, ...prev]);
+      if (!res.data?.success || !res.data?.data) {
+        throw new Error(res.data?.message || 'The server did not confirm coupon creation.');
       }
+      setCouponsList(prev => [res.data.data, ...prev.filter(c => c.code !== cleanCode)]);
+      setShowAddCouponModal(false);
+      setNewCouponForm({
+        code: '',
+        title: '',
+        description: '',
+        discountType: 'PERCENTAGE',
+        discountValue: '',
+        minOrderValue: '',
+        maxDiscount: '',
+        isActive: true,
+      });
+      setActionSuccessToast(`Coupon "${cleanCode}" created and active.`);
+      setTimeout(() => setActionSuccessToast(''), 4500);
     } catch (err) {
-      setCouponsList(prev => [{ _id: `coup_${Date.now()}`, ...couponPayload, usageCount: 0, createdAt: new Date().toISOString() }, ...prev]);
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not create the coupon.'
+      );
     }
-
-    setShowAddCouponModal(false);
-    setNewCouponForm({
-      code: '',
-      title: '',
-      description: '',
-      discountType: 'PERCENTAGE',
-      discountValue: '15',
-      minOrderValue: '399',
-      maxDiscount: '150',
-      isActive: true,
-    });
-    setActionSuccessToast(`🎉 Coupon "${cleanCode}" created & activated successfully! Customers can now apply it at checkout.`);
-    setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
   const handleToggleCouponStatus = async (coupon) => {
+    if (!coupon._id) {
+      showActionError('This coupon is not linked to a saved server record. Refresh and try again.');
+      return;
+    }
     const nextStatus = !coupon.isActive;
     const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-    setCouponsList(prev => prev.map(c => (c._id === coupon._id || c.code === coupon.code) ? { ...c, isActive: nextStatus } : c));
-    setActionSuccessToast(`Coupon "${coupon.code}" is now ${nextStatus ? 'ACTIVE ✅' : 'PAUSED ⏸️'}`);
-    setTimeout(() => setActionSuccessToast(''), 3000);
-
-    if (coupon._id) {
-      try {
-        await axios.put(`/api/coupons/${coupon._id}`, { isActive: nextStatus }, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Could not update coupon on backend:', err.message);
+    try {
+      const res = await axios.put(`/api/coupons/${coupon._id}`, { isActive: nextStatus }, { headers: authHeaders });
+      if (!res.data?.success || !res.data?.data) {
+        throw new Error(res.data?.message || 'The server did not confirm the coupon update.');
       }
+      setCouponsList(prev => prev.map(c => (c._id === coupon._id || c.code === coupon.code) ? res.data.data : c));
+      setActionSuccessToast(`Coupon "${coupon.code}" is now ${nextStatus ? 'active' : 'paused'}.`);
+      setTimeout(() => setActionSuccessToast(''), 3000);
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not update the coupon.'
+      );
     }
   };
 
   const handleDeleteCoupon = async (coupon) => {
     if (!window.confirm(`Are you sure you want to delete coupon "${coupon.code}"?`)) return;
+    if (!coupon._id) {
+      showActionError('This coupon is not linked to a saved server record. Refresh and try again.');
+      return;
+    }
     const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-    setCouponsList(prev => prev.filter(c => c._id !== coupon._id && c.code !== coupon.code));
-    setActionSuccessToast(`🗑️ Coupon "${coupon.code}" deleted.`);
-    setTimeout(() => setActionSuccessToast(''), 3000);
-
-    if (coupon._id) {
-      try {
-        await axios.delete(`/api/coupons/${coupon._id}`, { headers: authHeaders });
-      } catch (err) {
-        console.warn('Could not delete coupon on backend:', err.message);
+    try {
+      const res = await axios.delete(`/api/coupons/${coupon._id}`, { headers: authHeaders });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The server did not confirm coupon deletion.');
       }
+      setCouponsList(prev => prev.filter(c => c._id !== coupon._id && c.code !== coupon.code));
+      setActionSuccessToast(`Coupon "${coupon.code}" deleted.`);
+      setTimeout(() => setActionSuccessToast(''), 3000);
+    } catch (err) {
+      showActionError(
+        err.response?.data?.message || err.message || 'Could not delete the coupon.'
+      );
     }
   };
 
-  const handleApplyBulkDiscount = async (e) => {
+  const handleApplyBulkDiscount = async (e, overrides = null) => {
     if (e && e.preventDefault) e.preventDefault();
-    const pct = Math.max(1, Math.min(90, Number(bulkDiscountForm.discountPercent) || 15));
-    const isAll = bulkDiscountForm.scope === 'ALL' || bulkDiscountForm.categoryName === 'ALL';
-    const targetCat = bulkDiscountForm.categoryName;
+    const form = overrides || bulkDiscountForm;
+    const pct = Number(form.discountPercent);
+    if (!Number.isFinite(pct) || pct < 1 || pct > 90) {
+      showActionError('Enter a discount percentage between 1 and 90 before applying it.');
+      return;
+    }
+    const isAll = form.scope === 'ALL' || form.categoryName === 'ALL';
+    const targetCat = form.categoryName;
+    if (!window.confirm(`This will overwrite selling prices for ${isAll ? 'all products' : 'the selected category'} by ${pct}%. It is not a reversible coupon. Continue?`)) {
+      return;
+    }
+    const targetCategory = categoriesList.find(
+      c => c._id === targetCat || c.id === targetCat || c.name === targetCat || c.slug === targetCat
+    );
 
-    setProductsList(prev => prev.map(p => {
-      if (!isAll && p.cat !== targetCat) return p;
-      const currentPriceNum = parseFloat(String(p.price).replace(/[^0-9.]/g, '')) || 299;
-      const compareAtNum = p.compareAtPrice ? (parseFloat(String(p.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(currentPriceNum * 1.3)) : Math.round(currentPriceNum * 1.3);
-      const discountedPrice = Math.max(1, Math.round(compareAtNum * (1 - pct / 100)));
-
-      const updatedJars = (p.jars || []).map(j => {
-        const jCompare = j.compareAtPrice ? (parseFloat(String(j.compareAtPrice).replace(/[^0-9.]/g, '')) || Math.round(j.price * 1.3)) : Math.round(j.price * 1.3);
-        return {
-          ...j,
-          compareAtPrice: jCompare,
-          price: Math.max(1, Math.round(jCompare * (1 - pct / 100)))
-        };
-      });
-
-      return {
-        ...p,
-        compareAtPrice: compareAtNum,
-        price: `₹${discountedPrice}`,
-        discountPercent: pct,
-        jars: updatedJars
-      };
-    }));
+    if (!isAll && !targetCategory) {
+      showActionError('Select a valid category before applying a category-scoped discount.');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-      await axios.post('/api/products/bulk-discount', {
+      const res = await axios.post('/api/products/bulk-discount', {
         discountPercent: pct,
         applyToAll: isAll,
-        categoryName: isAll ? null : targetCat,
+        categoryId: isAll ? null : (targetCategory._id || targetCategory.id),
+        categoryName: isAll ? null : targetCategory.name,
       }, { headers: authHeaders });
-    } catch (err) {
-      console.warn('Bulk discount backend update notice:', err.message);
-    }
 
-    setShowBulkDiscountModal(false);
-    setActionSuccessToast(`🎉 ${pct}% Discount applied to ${isAll ? 'ALL products' : `products in "${targetCat}"`}! Storefront cards will now display ${pct}% OFF badges and slashed MRP.`);
-    setTimeout(() => setActionSuccessToast(''), 5000);
-  };
-
-  const handleSaveManualOrder = (e) => {
-    e.preventDefault();
-    const newOrderNum = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newOrderObj = {
-      id: `#${newOrderNum}`,
-      orderNumber: newOrderNum,
-      date: '2026-10-07',
-      displayDate: '07 Oct 2026, Just Now',
-      customer: manualOrderForm.customer,
-      phone: manualOrderForm.phone,
-      email: `${manualOrderForm.customer.toLowerCase().replace(/\\s+/g, '')}@example.com`,
-      address: manualOrderForm.address,
-      items: [{ name: manualOrderForm.itemName, variant: 'Standard', qty: manualOrderForm.qty, price: manualOrderForm.total, image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80' }],
-      itemSummary: `${manualOrderForm.qty}x ${manualOrderForm.itemName}`,
-      total: manualOrderForm.total,
-      displayTotal: `₹${manualOrderForm.total}`,
-      pay: manualOrderForm.payMethod === 'COD' ? 'Pending (COD)' : 'Paid Online',
-      payMethod: manualOrderForm.payMethod,
-      payColor: manualOrderForm.payMethod === 'COD' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      status: 'NEW',
-      statusLabel: 'New / Awaiting Acceptance',
-      statusColor: 'bg-purple-50 text-purple-700 border-purple-200',
-      courier: '',
-      tracking: '',
-      timeline: [
-        { title: 'Order Created Manually by Merchant', time: 'Just Now', done: true },
-        { title: 'Merchant Acceptance', time: 'Awaiting Action', done: false },
-        { title: 'Packed & Boxed', time: 'Pending', done: false },
-        { title: 'Courier Dispatch', time: 'Pending', done: false },
-        { title: 'Delivered', time: 'Pending', done: false }
-      ]
-    };
-    setOrdersList(prev => [newOrderObj, ...prev]);
-    setShowManualOrderModal(false);
-    setActionSuccessToast(`🎉 Order #${newOrderNum} created for ${manualOrderForm.customer} (📞 ${manualOrderForm.phone})! Visible in Orders pipeline.`);
-    setTimeout(() => setActionSuccessToast(''), 4000);
-  };
-
-  const handleSaveStockAdjustment = (e) => {
-    e.preventDefault();
-    setInventoryList(prev => prev.map(inv => {
-      if (inv.sku === adjustStockForm.sku) {
-        const newOnHand = Math.max(0, inv.onHand + parseInt(adjustStockForm.qtyChange));
-        return {
-          ...inv,
-          onHand: newOnHand,
-          avail: Math.max(0, newOnHand - inv.reorder),
-          health: newOnHand > inv.reorder ? 'Healthy' : newOnHand > 0 ? 'Reorder' : 'Out of stock',
-          healthColor: newOnHand > inv.reorder ? 'bg-emerald-50 text-emerald-700' : newOnHand > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
-        };
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The discount could not be applied.');
       }
-      return inv;
-    }));
-    setShowAdjustStockModal(false);
-    setActionSuccessToast(`Inventory for SKU ${adjustStockForm.sku} adjusted by ${adjustStockForm.qtyChange > 0 ? '+' : ''}${adjustStockForm.qtyChange} units!`);
-    setTimeout(() => setActionSuccessToast(''), 4000);
+
+      await fetchProductsAndCategories();
+      setShowBulkDiscountModal(false);
+      setActionSuccessToast(
+        `${pct}% discount applied to ${res.data.data?.affectedCount ?? 0} product(s) in the database.`
+      );
+      setTimeout(() => setActionSuccessToast(''), 5000);
+    } catch (err) {
+      showActionError(err.response?.data?.message || err.message || 'The discount could not be applied.');
+    }
   };
 
   const handleSaveTourBooking = (e) => {
     e.preventDefault();
-    const newTour = {
-      customer: addTourForm.customer,
-      pkg: addTourForm.pkg,
-      pass: addTourForm.pass,
-      date: addTourForm.date,
-      loc: addTourForm.loc,
-      status: 'Confirmed',
-      statusColor: 'bg-emerald-50 text-emerald-700',
-      pay: 'Paid'
-    };
-    setTravelList(prev => [newTour, ...prev]);
-    setShowAddTourModal(false);
-    setActionSuccessToast(`Tour booking confirmed for ${addTourForm.customer} (${addTourForm.pkg})!`);
-    setTimeout(() => setActionSuccessToast(''), 4000);
+    showActionError(
+      'Bookings are created by customers through the storefront booking flow. This dashboard can update booking status, but cannot create a booking yet.'
+    );
   };
 
   // Navigation Items Renderer
@@ -4244,7 +3272,7 @@ export const MerchantDashboard = () => {
           {navItem('overview', 'Overview', LayoutDashboard)}
           {navItem('customer-view', 'Customer View (Storefront)', Store)}
 
-          {/* E-Commerce / Retail Modules (Achar / Product) */}
+          {/* E-Commerce / Retail Modules */}
           {isTabAllowedForBusinessType('products', businessTypeMode) && (
             <>
               {businessTypeMode === 'ALL' && (
@@ -4297,7 +3325,7 @@ export const MerchantDashboard = () => {
           )}
           {isTabAllowedForBusinessType('marketing', businessTypeMode) && (
             <>
-              {navItem('ai-insights', 'AI Business Analyzer', Sparkles)}
+              {navItem('ai-insights', 'Business Insights', Sparkles)}
               {navItem('marketing', 'Marketing & Ads', Megaphone)}
             </>
           )}
@@ -4419,7 +3447,7 @@ export const MerchantDashboard = () => {
               <button
                 type="button"
                 onClick={() => setShowNotifications(!showNotifications)}
-                title="Real-time Notifications"
+                title="Notifications"
                 className="relative p-2 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer"
               >
                 <Bell className="w-3.5 h-3.5" />
@@ -4464,6 +3492,14 @@ export const MerchantDashboard = () => {
                   </div>
 
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 text-xs">
+                    {notifications.length === 0 && (
+                      <div className="p-5 text-center space-y-1">
+                        <p className="font-bold text-slate-700">No notifications loaded</p>
+                        <p className="text-[11px] text-slate-500">
+                          This dashboard does not currently receive a server notification feed. Check the order, stock and integration tabs directly.
+                        </p>
+                      </div>
+                    )}
                     {notifications.map((notif) => (
                       <div
                         key={notif.id}
@@ -4510,7 +3546,7 @@ export const MerchantDashboard = () => {
 
                   <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-center">
                     <span className="text-[10px] text-slate-500 font-medium">
-                      ⚡ Real-time alerts synced with Meta Conversions API &amp; WhatsApp Cloud
+                      Notifications are only shown when the server supplies them. No CAPI or WhatsApp delivery is claimed here.
                     </span>
                   </div>
                 </div>
@@ -4528,11 +3564,11 @@ export const MerchantDashboard = () => {
               className="flex items-center gap-2 pl-2 border-l border-slate-200 text-left cursor-pointer group"
             >
               <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center group-hover:ring-2 ring-indigo-400 transition">
-                DA
+                {(user?.name || businessName || 'U').trim().charAt(0).toUpperCase()}
               </div>
               <div className="hidden sm:block text-left">
-                <div className="text-xs font-bold text-slate-800 leading-tight group-hover:text-indigo-600 transition">Rahul Sharma</div>
-                <div className="text-[10px] text-slate-400 leading-tight">Business Admin</div>
+                <div className="text-xs font-bold text-slate-800 leading-tight group-hover:text-indigo-600 transition">{user?.name || 'Merchant owner'}</div>
+                <div className="text-[10px] text-slate-400 leading-tight">{user?.role === 'MERCHANT_OWNER' ? 'Business Admin' : (user?.role || 'Team member')}</div>
               </div>
             </button>
           </div>
@@ -4541,6 +3577,16 @@ export const MerchantDashboard = () => {
         {/* 3. Screen Views Switcher */}
         <div className="p-6 space-y-6">
           {/* Global Action Success Toast Banner */}
+          {actionErrorToast && (
+            <div className="bg-rose-600 text-white px-4 py-3 rounded-2xl shadow-lg flex items-center justify-between text-xs font-semibold animate-in fade-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{actionErrorToast}</span>
+              </div>
+              <button onClick={() => setActionErrorToast('')} className="text-white/80 hover:text-white cursor-pointer">✕</button>
+            </div>
+          )}
+
           {actionSuccessToast && (
             <div className="bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-lg flex items-center justify-between text-xs font-semibold animate-in fade-in slide-in-from-top duration-300">
               <div className="flex items-center gap-2">
@@ -4648,8 +3694,8 @@ export const MerchantDashboard = () => {
                   </div>
                   <div className="mt-2">
                     <div className="text-2xl font-black text-slate-900">{crmLeads.length}</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 12% this month
+                    <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                      <Users className="w-3.5 h-3.5" /> Loaded CRM leads
                     </div>
                   </div>
                 </div>
@@ -4661,8 +3707,8 @@ export const MerchantDashboard = () => {
                   </div>
                   <div className="mt-2">
                     <div className="text-2xl font-black text-slate-900">{rangeTotalOrders}</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 8% this month
+                    <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                      <Package className="w-3.5 h-3.5" /> {rangeDeliveredCount} delivered in range
                     </div>
                   </div>
                 </div>
@@ -4674,8 +3720,11 @@ export const MerchantDashboard = () => {
                   </div>
                   <div className="mt-2">
                     <div className="text-2xl font-black text-slate-900">₹{rangeRevenue.toLocaleString('en-IN')}</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 15% vs last month
+                    <div className={`text-[11px] font-semibold flex items-center gap-1 mt-0.5 ${growthTone}`}>
+                      {growthRate !== null && (growthRate >= 0
+                        ? <ArrowUpRight className="w-3.5 h-3.5" />
+                        : <ArrowDownRight className="w-3.5 h-3.5" />)}
+                      {growthRate === null ? 'No prior-period revenue to compare' : `${growthRateLabel} vs prior cycle`}
                     </div>
                   </div>
                 </div>
@@ -4687,7 +3736,7 @@ export const MerchantDashboard = () => {
                   </div>
                   <div className="mt-2">
                     <div className="text-2xl font-black text-slate-900">{rangePendingCount}</div>
-                    <div className="text-[11px] font-semibold text-amber-600 mt-0.5">Due today</div>
+                    <div className="text-[11px] font-semibold text-amber-600 mt-0.5">NEW or CONFIRMED</div>
                   </div>
                 </div>
               </div>
@@ -4832,10 +3881,10 @@ export const MerchantDashboard = () => {
                     const qualifiedCount = crmLeads.filter(l => (l.status || '').toUpperCase() === 'QUALIFIED').length;
                     const wonCount = crmLeads.filter(l => (l.status || '').toUpperCase() === 'WON').length;
 
-                    const newPct = crmLeads.length > 0 ? Math.max(8, Math.round((newCount / totalLeads) * 100)) : 0;
-                    const contactedPct = crmLeads.length > 0 ? Math.max(8, Math.round((contactedCount / totalLeads) * 100)) : 0;
-                    const qualifiedPct = crmLeads.length > 0 ? Math.max(8, Math.round((qualifiedCount / totalLeads) * 100)) : 0;
-                    const wonPct = crmLeads.length > 0 ? Math.max(8, Math.round((wonCount / totalLeads) * 100)) : 0;
+                    const newPct = crmLeads.length > 0 ? Math.round((newCount / totalLeads) * 100) : 0;
+                    const contactedPct = crmLeads.length > 0 ? Math.round((contactedCount / totalLeads) * 100) : 0;
+                    const qualifiedPct = crmLeads.length > 0 ? Math.round((qualifiedCount / totalLeads) * 100) : 0;
+                    const wonPct = crmLeads.length > 0 ? Math.round((wonCount / totalLeads) * 100) : 0;
 
                     return (
                       <div className="space-y-3.5 text-xs">
@@ -4932,7 +3981,7 @@ export const MerchantDashboard = () => {
                                     : 'bg-amber-50 text-amber-700 border-amber-200'
                                 }`}
                               >
-                                {ord.pay || ord.paymentMethod || 'COD'}
+                                {ord.pay || ord.paymentMethod || 'Not recorded'}
                               </span>
                             </td>
                             <td className="py-3 px-5">
@@ -4964,8 +4013,8 @@ export const MerchantDashboard = () => {
                         id: `task-ord-${pendingOrd.id || pendingOrd.orderNumber}`,
                         letter: 'C',
                         letterColor: 'bg-blue-50 text-blue-700',
-                        title: `Call ${pendingOrd.customer || pendingOrd.customerName || 'Customer'}`,
-                        subtitle: `${pendingOrd.pay || pendingOrd.paymentMethod || 'COD'} Verification · Order #${pendingOrd.orderNumber || pendingOrd.id}`,
+                        title: `Call ${pendingOrd.customer || pendingOrd.customerName || 'Unnamed customer'}`,
+                        subtitle: `${pendingOrd.pay || pendingOrd.paymentMethod || 'Payment method not recorded'} verification · Order #${pendingOrd.orderNumber || pendingOrd.id}`,
                         action: () => {
                           setSelectedOrderForDetail(pendingOrd);
                           setActiveTab('orders');
@@ -4994,7 +4043,7 @@ export const MerchantDashboard = () => {
                         letter: 'L',
                         letterColor: 'bg-purple-50 text-purple-700',
                         title: `Follow-up with ${freshLead.name}`,
-                        subtitle: `New ${freshLead.source || 'Meta Ads'} lead · ${freshLead.phone || freshLead.email || 'Awaiting contact'}`,
+                        subtitle: `New ${freshLead.source || 'unknown source'} lead · ${freshLead.phone || freshLead.email || 'Awaiting contact'}`,
                         action: () => {
                           setSelectedLead(freshLead);
                           setActiveTab('leads');
@@ -5248,7 +4297,7 @@ export const MerchantDashboard = () => {
                               const src = getSourceBadge(lead.source, lead.platform);
                               const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '').slice(-10);
                               const waMessage = encodeURIComponent(
-                                `Hello ${lead.name}, regarding your enquiry at Desi Achar House. How can we help you with your order?`
+                                `Hello ${lead.name}, regarding your enquiry at ${businessName || 'our store'}. How can we help you with your order?`
                               );
                               const latestNote = lead.notes && lead.notes.length > 0 ? lead.notes[lead.notes.length - 1] : null;
 
@@ -5412,7 +4461,7 @@ export const MerchantDashboard = () => {
                               colLeads.map((lead) => {
                                 const cleanPhone = (lead.phone || '').replace(/[^0-9]/g, '').slice(-10);
                                 const waMessage = encodeURIComponent(
-                                  `Hello ${lead.name}, regarding your enquiry at Desi Achar House. How can we assist you?`
+                                  `Hello ${lead.name}, regarding your enquiry at ${businessName || 'our store'}. How can we assist you?`
                                 );
 
                                 return (
@@ -5567,7 +4616,7 @@ export const MerchantDashboard = () => {
                             <label className="text-slate-700 font-bold block mb-1">Campaign / Inquired Product</label>
                             <input
                               type="text"
-                              placeholder="e.g. Mango Achar 500g Jar Combo"
+                              placeholder="e.g. Product name and pack size"
                               value={newLeadForm.campaignName}
                               onChange={(e) => setNewLeadForm({ ...newLeadForm, campaignName: e.target.value })}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500"
@@ -5668,7 +4717,7 @@ export const MerchantDashboard = () => {
                           </a>
 
                           <a
-                            href={`https://wa.me/91${(selectedLead.phone || '').replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hello ${selectedLead.name}, this is Desi Achar House following up on your enquiry.`)}`}
+                            href={`https://wa.me/91${(selectedLead.phone || '').replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hello ${selectedLead.name}, this is ${businessName || 'our store'} following up on your enquiry.`)}`}
                             target="_blank"
                             rel="noreferrer"
                             className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 transition shadow-xs"
@@ -5710,7 +4759,7 @@ export const MerchantDashboard = () => {
                               <span>📸 Meta Lead Ad Details</span>
                               {selectedLead.platform && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white border border-indigo-200 text-indigo-700">
-                                  {selectedLead.platform === 'ig' ? 'Instagram' : 'Facebook'}
+                                  {selectedLead.platform === 'ig' ? 'Instagram' : selectedLead.platform === 'fb' ? 'Facebook' : 'Meta'}
                                 </span>
                               )}
                             </div>
@@ -5909,7 +4958,7 @@ export const MerchantDashboard = () => {
                           </td>
                           <td className="py-3 px-5 text-right">
                             <a
-                              href={`https://wa.me/${c.mobile.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${c.name}! Greetings from Desi Achar House. Enjoy a special 15% festival discount on your favorite pickles today.`)}`}
+                              href={`https://wa.me/${c.mobile.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${c.name}! Greetings from ${businessName || 'our store'}. How can we help you today?`)}`}
                               target="_blank"
                               rel="noreferrer"
                               className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer transition border border-emerald-200"
@@ -5985,7 +5034,7 @@ export const MerchantDashboard = () => {
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Total Jars Stocked</div>
+                  <div className="text-xs text-slate-500 font-medium">Total Units Stocked</div>
                   <div className="text-2xl font-black text-slate-900 mt-2">
                     {productsList.reduce((acc, p) => acc + (typeof p.stock === 'number' ? p.stock : parseInt(p.stock) || 0), 0)} Units
                   </div>
@@ -6098,7 +5147,7 @@ export const MerchantDashboard = () => {
                           <td className="py-3 px-5">
                             <div className="flex items-center gap-3">
                               <img
-                                src={p.img}
+                                src={p.img || NO_IMAGE_PLACEHOLDER}
                                 alt={p.name}
                                 className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-sm"
                               />
@@ -6109,7 +5158,7 @@ export const MerchantDashboard = () => {
                                   <div className="flex flex-wrap gap-1 mt-1">
                                     {p.jars.filter(j => j.enabled !== false).map((j, jI) => (
                                       <span key={j.id || jI} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-900 border border-amber-200 font-medium">
-                                        🏺 {j.name}: <strong className="font-bold">₹{j.price}</strong>
+                                        <Tag className="w-3 h-3" /> {j.name}: <strong className="font-bold">₹{j.price}</strong>
                                       </span>
                                     ))}
                                   </div>
@@ -6154,16 +5203,7 @@ export const MerchantDashboard = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const currentStock = typeof p.stock === 'number' ? p.stock : parseInt(p.stock) || 0;
-                                    const newStock = Math.max(0, currentStock + 10);
-                                    setProductsList(prev => prev.map((item, i) => i === idx ? {
-                                      ...item,
-                                      stock: newStock,
-                                      status: newStock > 10 ? 'In stock' : (newStock > 0 ? 'Low stock' : 'Out of stock'),
-                                      statusColor: newStock > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (newStock > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200')
-                                    } : item));
-                                    setActionSuccessToast(`+10 stock added to ${p.name} (Now: ${newStock})`);
-                                    setTimeout(() => setActionSuccessToast(''), 2500);
+                                    handleQuickAddStock(p);
                                   }}
                                   className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] font-bold text-slate-600 cursor-pointer transition border border-slate-200"
                                   title="Quick +10 Units"
@@ -6207,14 +5247,14 @@ export const MerchantDashboard = () => {
             </div>
           )}
 
-          {/* ==================== 4B. PICKLE CATEGORIES SHOWCASE (PAGE 2) ==================== */}
+          {/* ==================== 4B. PRODUCT CATEGORIES SHOWCASE (PAGE 2) ==================== */}
           {activeTab === 'categories' && (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                     <LayoutGrid className="w-4 h-4 text-indigo-600" />
-                    Pickle Categories &amp; Varieties
+                    Product Categories &amp; Varieties
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
                       Storefront Showcase
                     </span>
@@ -6244,9 +5284,9 @@ export const MerchantDashboard = () => {
               {/* 4 Stat Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Pickle Categories</div>
+                  <div className="text-xs text-slate-500 font-medium">Product Categories</div>
                   <div className="text-2xl font-black text-slate-900 mt-2">{categoriesList.length} Varieties</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Mango, Chilli, Lemon, Garlic &amp; more</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Categories currently in the catalog</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
@@ -6256,13 +5296,13 @@ export const MerchantDashboard = () => {
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Storefront Slider Status</div>
-                  <div className="text-2xl font-black text-emerald-600 mt-2">Active 🟢</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">High-res photos live</div>
+                  <div className="text-xs text-slate-500 font-medium">Storefront Imagery</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{productsList.filter(p => p.img || p.images?.length).length}/{productsList.length}</div>
+                  <div className="text-[11px] text-slate-500 font-medium mt-0.5">Products with an uploaded image</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Live Customer View</div>
+                  <div className="text-xs text-slate-500 font-medium">Customer View</div>
                   <div className="text-xs font-mono font-bold text-indigo-600 truncate mt-2">/store/{businessSlug}</div>
                   <a
                     href={`/store/${businessSlug}`}
@@ -6320,7 +5360,7 @@ export const MerchantDashboard = () => {
                         alt={cat.name}
                         onError={(e) => {
                           e.currentTarget.onerror = null;
-                          e.currentTarget.src = 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+                          e.currentTarget.style.display = 'none';
                         }}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                       />
@@ -6416,25 +5456,25 @@ export const MerchantDashboard = () => {
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Total Orders Saved</div>
+                  <div className="text-xs text-slate-500 font-medium">Coupon Redemptions</div>
                   <div className="text-2xl font-black text-emerald-600 mt-2">
                     {couponsList.reduce((acc, c) => acc + (c.usageCount || 0), 0)} Orders
                   </div>
-                  <div className="text-[11px] text-emerald-700 font-medium mt-0.5">Across all campaigns</div>
+                  <div className="text-[11px] text-emerald-700 font-medium mt-0.5">Recorded usage count</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Customer Savings</div>
+                  <div className="text-xs text-slate-500 font-medium">Recorded Savings (Flat Coupons)</div>
                   <div className="text-2xl font-black text-slate-900 mt-2">
-                    ₹{couponsList.reduce((acc, c) => acc + ((c.usageCount || 0) * (c.discountType === 'FLAT' ? c.discountValue : 65)), 0).toLocaleString()}
+                    ₹{couponsList.reduce((acc, c) => acc + (c.discountType === 'FLAT' ? (c.usageCount || 0) * (c.discountValue || 0) : 0), 0).toLocaleString()}
                   </div>
-                  <div className="text-[11px] text-indigo-600 font-medium mt-0.5">Direct conversion booster</div>
+                  <div className="text-[11px] text-indigo-600 font-medium mt-0.5">Percentage-coupon savings are not tracked</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Har Product Par Discount</div>
+                  <div className="text-xs text-slate-500 font-medium">Storewide Pricing Tool</div>
                   <div className="text-sm font-bold text-amber-700 truncate mt-2 flex items-center gap-1">
-                    <span>🔥</span> Up to 25% OFF Slashed MRP
+                    <span>🔥</span> Overwrite catalog selling prices
                   </div>
                   <button
                     type="button"
@@ -6454,10 +5494,10 @@ export const MerchantDashboard = () => {
                   </div>
                   <div>
                     <h3 className="font-extrabold text-slate-900 text-sm">
-                      Har Product Par Discount (Every Product Discount)
+                      Storewide Discount (Every Product)
                     </h3>
                     <p className="text-xs text-slate-600">
-                      Apply storewide or category-wise discounts in 1 click. Storefront automatically shows crossed-out MRP and discount badges on every card!
+                      Review a storewide or category discount before applying it. This overwrites selling prices and is not a reversible coupon.
                     </p>
                   </div>
                 </div>
@@ -6466,7 +5506,7 @@ export const MerchantDashboard = () => {
                     type="button"
                     onClick={() => {
                       setBulkDiscountForm({ discountPercent: 10, scope: 'ALL', categoryName: 'ALL' });
-                      handleApplyBulkDiscount();
+                      setShowBulkDiscountModal(true);
                     }}
                     className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
                   >
@@ -6476,7 +5516,7 @@ export const MerchantDashboard = () => {
                     type="button"
                     onClick={() => {
                       setBulkDiscountForm({ discountPercent: 15, scope: 'ALL', categoryName: 'ALL' });
-                      handleApplyBulkDiscount();
+                      setShowBulkDiscountModal(true);
                     }}
                     className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
                   >
@@ -6486,7 +5526,7 @@ export const MerchantDashboard = () => {
                     type="button"
                     onClick={() => {
                       setBulkDiscountForm({ discountPercent: 20, scope: 'ALL', categoryName: 'ALL' });
-                      handleApplyBulkDiscount();
+                      setShowBulkDiscountModal(true);
                     }}
                     className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold cursor-pointer shadow-xs transition"
                   >
@@ -6671,7 +5711,7 @@ export const MerchantDashboard = () => {
                     <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                       Order Processing &amp; Fulfillment Pipeline
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Live Tracking
+                        Order Tracking
                       </span>
                     </h2>
                     <p className="text-xs text-slate-500">
@@ -6683,9 +5723,13 @@ export const MerchantDashboard = () => {
                   <div className="flex flex-wrap items-center gap-2.5 text-xs">
                     <button
                       type="button"
-                      onClick={() => {
-                        fetchOrders();
-                        setActionSuccessToast('Orders refreshed from live database!');
+                      onClick={async () => {
+                        const refreshed = await fetchOrders();
+                        if (!refreshed) {
+                          showActionError('Could not refresh orders from the server. The existing list was not replaced.');
+                          return;
+                        }
+                        setActionSuccessToast('Orders refreshed from the server.');
                         setTimeout(() => setActionSuccessToast(''), 3000);
                       }}
                       className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer transition"
@@ -6735,16 +5779,10 @@ export const MerchantDashboard = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
                   <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Real-time Orders filtered by Calendar: <strong>{startDate} to {endDate}</strong></span>
+                    <span>Orders filtered by Calendar: <strong>{startDate} to {endDate}</strong></span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setShowManualOrderModal(true)}
-                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Manual Order
-                    </button>
                     <button
                       onClick={handleExportOrdersCsv}
                       className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer"
@@ -6755,7 +5793,7 @@ export const MerchantDashboard = () => {
                       onClick={() => setActiveTab('ai-insights')}
                       className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5" /> AI Order Growth Insights &rarr;
+                      <Sparkles className="w-3.5 h-3.5" /> Business Insights &rarr;
                     </button>
                   </div>
                 </div>
@@ -6778,7 +5816,9 @@ export const MerchantDashboard = () => {
                       `₹${rangeRevenue.toLocaleString('en-IN')}`
                     )}
                   </div>
-                  <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">+{growthRate}% growth vs prior period</div>
+                  <div className={`text-[11px] font-semibold mt-0.5 ${growthTone}`}>
+                    {growthRate === null ? 'No prior-period revenue to compare' : `${growthRateLabel} growth vs prior period`}
+                  </div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
@@ -6788,9 +5828,9 @@ export const MerchantDashboard = () => {
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Delivered &amp; Settled</div>
+                  <div className="text-xs text-slate-500 font-medium">Delivered Orders</div>
                   <div className="text-2xl font-black text-emerald-600 mt-2">{rangeDeliveredCount} Delivered</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">{rangeShippedCount} currently in transit</div>
+                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">{rangeShippedCount} currently shipped</div>
                 </div>
               </div>
 
@@ -6809,7 +5849,7 @@ export const MerchantDashboard = () => {
                         </span>
                       </div>
                       <p className="text-[11px] text-amber-800 mt-0.5">
-                        The same customer placed duplicate orders (e.g. Vikram Rathore #ORD-1087 &amp; #ORD-1088). Please verify with the customer via call or WhatsApp before dispatching to prevent accidental double shipment.
+                        Multiple orders share the same customer identity and are still open. Review them in the duplicate list before dispatching to prevent accidental double shipment.
                       </p>
                     </div>
                   </div>
@@ -6877,6 +5917,7 @@ export const MerchantDashboard = () => {
                     { key: 'FACEBOOK', label: `Facebook (${dateFilteredOrders.filter(o => o.source === 'FACEBOOK').length})`, icon: '🔵' },
                     { key: 'WHATSAPP', label: `WhatsApp (${dateFilteredOrders.filter(o => o.source === 'WHATSAPP').length})`, icon: '💬' },
                     { key: 'WEBSITE', label: `Storefront Web (${dateFilteredOrders.filter(o => o.source === 'WEBSITE').length})`, icon: '🌐' },
+                    { key: 'UNATTRIBUTED', label: `Unattributed (${dateFilteredOrders.filter(o => !o.source || o.source === 'UNATTRIBUTED').length})`, icon: '❔' },
                   ].map((srcTab) => (
                     <button
                       key={srcTab.key}
@@ -7040,16 +6081,11 @@ export const MerchantDashboard = () => {
                                       target="_blank"
                                       rel="noreferrer"
                                       className="text-indigo-600 font-bold hover:underline"
-                                      title="Live Courier Tracking Page"
+                                      title="Courier tracking page"
                                     >
                                       Track ↗
                                     </a>
                                   </div>
-                                  {ord.trackingNotified && (
-                                    <div className="text-[9px] text-emerald-700 font-bold flex items-center gap-0.5">
-                                      <span>✓ Auto-Notified WhatsApp</span>
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </td>
@@ -7111,7 +6147,7 @@ export const MerchantDashboard = () => {
                                       <button
                                         onClick={() => {
                                           setDispatchModalOrder(ord);
-                                          setTrackingNumber('DEL-' + Math.floor(100000 + Math.random() * 900000));
+                                          setTrackingNumber('');
                                         }}
                                         className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1 cursor-pointer"
                                       >
@@ -7145,9 +6181,9 @@ export const MerchantDashboard = () => {
                                       type="button"
                                       onClick={() => handleSendTrackingNotification(ord)}
                                       className="px-2.5 py-1.5 rounded-xl border border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs transition cursor-pointer flex items-center gap-1"
-                                      title="Send or resend live tracking link to customer WhatsApp"
+                                      title="Open a WhatsApp tracking message for the customer"
                                     >
-                                      <span>💬 {ord.trackingNotified ? 'Resend Track' : 'Send Track'}</span>
+                                      <span>💬 Send Track</span>
                                     </button>
                                   </>
                                 )}
@@ -7190,14 +6226,14 @@ export const MerchantDashboard = () => {
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black tracking-tight text-white">Omniva AI 2.0 Business Copilot &amp; Growth Engine</h2>
+                        <h2 className="text-xl font-black tracking-tight text-white">Omniva Business Copilot</h2>
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                          Online &amp; Synced
+                          Using loaded data
                         </span>
                       </div>
                       <p className="text-xs text-slate-300">
-                        Intelligent Business Engine: Real-time sales data, demand forecasting, 1-click marketing, and COD fraud protection
+                        Answers are generated from the orders, products and CRM records currently loaded for this tenant. No ad spend, margin or demand forecast is invented.
                       </p>
                     </div>
                   </div>
@@ -7244,62 +6280,65 @@ export const MerchantDashboard = () => {
                   <div className="text-2xl font-black text-slate-900">
                     ₹{rangeRevenue.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                    <ArrowUpRight className="w-3.5 h-3.5" /> +{growthRate}% vs prior cycle
+                  <div className={`text-xs font-semibold flex items-center gap-1 ${growthTone}`}>
+                    {growthRate !== null && (growthRate >= 0
+                      ? <ArrowUpRight className="w-3.5 h-3.5" />
+                      : <ArrowDownRight className="w-3.5 h-3.5" />)}
+                    {growthRate === null ? 'No prior-period revenue to compare' : `${growthRateLabel} vs prior cycle`}
                   </div>
                   <p className="text-[11px] text-slate-400 pt-1.5 border-t border-slate-100">
-                    Prior cycle: ₹{priorPeriodRevenue.toLocaleString('en-IN')}. Run-rate: ₹{Math.round(rangeRevenue / 7).toLocaleString('en-IN')}/day.
+                    Prior cycle: ₹{priorPeriodRevenue.toLocaleString('en-IN')}. Daily average: ₹{rangeNonCancelledOrders.length ? Math.round(rangeRevenue / Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / 86400000) + 1)).toLocaleString('en-IN') : '0'}/day.
                   </p>
                 </div>
 
-                {/* Metric 2: Store Health Score */}
+                {/* Metric 2: Average Order Value */}
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-2 hover:shadow-md transition">
                   <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-                    <span>AI Store Health</span>
+                    <span>Average Order Value</span>
                     <Sparkles className="w-4 h-4 text-indigo-600" />
                   </div>
-                  <div className="text-2xl font-black text-indigo-600 flex items-center gap-2">
-                    94 <span className="text-xs font-bold text-slate-400">/ 100</span>
+                  <div className="text-2xl font-black text-indigo-600">
+                    ₹{rangeAverageOrderValue.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Grade A+ (Excellent SLA)
+                  <div className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {rangeTotalOrders} orders in window
                   </div>
                   <p className="text-[11px] text-slate-400 pt-1.5 border-t border-slate-100">
-                    Avg accept time: 28 mins. Repeat buyer rate: 34.2%.
+                    Calculated from non-cancelled order revenue in the selected date range.
                   </p>
                 </div>
 
-                {/* Metric 3: Payment & COD Risk Mitigation */}
+                {/* Metric 3: Payment Split */}
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-2 hover:shadow-md transition">
                   <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-                    <span>COD vs Online Split</span>
+                    <span>COD vs Prepaid Split</span>
                     <CreditCard className="w-4 h-4 text-purple-600" />
                   </div>
                   <div className="text-2xl font-black text-slate-900">
-                    57% <span className="text-xs font-normal text-slate-400">COD</span> / 43% <span className="text-xs font-normal text-slate-400">UPI</span>
+                    {rangeCodPct}% <span className="text-xs font-normal text-slate-400">COD</span> / {rangePrepaidPct}% <span className="text-xs font-normal text-slate-400">Prepaid</span>
                   </div>
                   <div className="text-xs font-semibold text-indigo-600 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> 3.8% Low Return Risk
+                    <ShieldCheck className="w-3.5 h-3.5" /> {rangePaidOrdersCount} payment-classified orders
                   </div>
                   <p className="text-[11px] text-slate-400 pt-1.5 border-t border-slate-100">
-                    Pre-dispatch WhatsApp confirmation active for pending COD.
+                    Based on the payment method recorded on each order in this window.
                   </p>
                 </div>
 
-                {/* Metric 4: 30-Day Demand Projection */}
+                {/* Metric 4: Stock Alerts */}
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-2 hover:shadow-md transition">
                   <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-                    <span>30-Day Sales Forecast</span>
+                    <span>Low Stock Alerts</span>
                     <Boxes className="w-4 h-4 text-amber-500" />
                   </div>
                   <div className="text-2xl font-black text-amber-600">
-                    ~480 Jars
+                    {lowStockProducts.length} <span className="text-xs font-bold text-slate-400">products</span>
                   </div>
                   <div className="text-xs font-semibold text-amber-600 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> +18% Festive uplift expected
+                    <Clock className="w-3.5 h-3.5" /> {outOfStockProducts.length} out of stock
                   </div>
                   <p className="text-[11px] text-slate-400 pt-1.5 border-t border-slate-100">
-                    Estimated gross revenue ₹1.42L. 2 SKUs need kitchen batching.
+                    Current tracked stock below 10 units. No demand forecast is claimed.
                   </p>
                 </div>
               </div>
@@ -7315,7 +6354,7 @@ export const MerchantDashboard = () => {
                   }`}
                 >
                   <Bot className="w-4 h-4" />
-                  <span>🤖 AI Business Copilot (Live Chat)</span>
+                  <span>🤖 Business Copilot (Loaded Data)</span>
                 </button>
 
                 <button
@@ -7327,7 +6366,7 @@ export const MerchantDashboard = () => {
                   }`}
                 >
                   <TrendingUp className="w-4 h-4" />
-                  <span>📊 30-Day Demand Forecast (Stock Prediction)</span>
+                  <span>📊 Stock Watchlist (No Forecast)</span>
                 </button>
 
                 <button
@@ -7344,7 +6383,7 @@ export const MerchantDashboard = () => {
                   }`}
                 >
                   <MessageSquare className="w-4 h-4" />
-                  <span>✍️ AI WhatsApp &amp; Ad Copywriter (1-Click Marketing)</span>
+                  <span>✍️ WhatsApp &amp; Ad Copywriter (Templates)</span>
                 </button>
 
                 <button
@@ -7356,7 +6395,7 @@ export const MerchantDashboard = () => {
                   }`}
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>🛡️ COD Fraud &amp; RTO Radar (Parcel Protection)</span>
+                  <span>🛡️ COD Address Review &amp; RTO Radar</span>
                 </button>
               </div>
 
@@ -7367,10 +6406,10 @@ export const MerchantDashboard = () => {
                     <div>
                       <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                         <Bot className="w-5 h-5 text-indigo-600" />
-                        Omniva Store Copilot 2.0 (Real-time Business Advisor)
+                        Omniva Store Copilot (Loaded-Data Advisor)
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Ask any question regarding store profits, Meta Ads, best-selling products, or orders
+                        Ask about the orders, inventory and CRM records currently loaded for this tenant
                       </p>
                     </div>
 
@@ -7388,9 +6427,9 @@ export const MerchantDashboard = () => {
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        'Which pickle variety has the highest sales volume and margin?',
-                        'What is our Meta Ads (Instagram vs Facebook) ad spend and ROAS?',
-                        'How to reduce COD order RTO risk?',
+                        'Which products are below 10 units?',
+                        'Do we have Meta ad spend or ROAS data?',
+                        'How many COD orders need an address check?',
                         'How much stock should we prepare for festive demand?'
                       ].map((promptText, idx) => (
                         <button
@@ -7449,7 +6488,7 @@ export const MerchantDashboard = () => {
                         </div>
                         <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs text-indigo-700 font-semibold shadow-xs flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
-                          Omniva AI is analyzing real-time store analytics and order data...
+                          Reading the currently loaded orders, products and CRM data...
                         </div>
                       </div>
                     )}
@@ -7467,7 +6506,7 @@ export const MerchantDashboard = () => {
                       type="text"
                       value={aiUserPrompt}
                       onChange={(e) => setAiUserPrompt(e.target.value)}
-                      placeholder="Ask any question about your store (e.g. how to optimize ad spend?)..."
+                      placeholder="Ask about loaded orders, products or CRM data (e.g. which COD orders need an address check?)..."
                       className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                     />
                     <button
@@ -7482,162 +6521,94 @@ export const MerchantDashboard = () => {
                 </div>
               )}
 
-              {/* ================= SUB-TAB 2: 30-DAY DEMAND FORECASTING ================= */}
+              {/* ================= SUB-TAB 2: CURRENT STOCK RADAR ================= */}
               {aiActiveSubTab === 'forecast' && (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-indigo-600" />
-                        30-Day Pickle Demand Forecasting &amp; Kitchen Production Radar
+                        Current Stock Radar
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Kitchen batching forecast based on past 30 days sales and upcoming seasonal demand (+18%)
+                        Tracked inventory currently loaded from your product catalog. Demand forecasting is not
+                        available because historical line-item demand is not stored.
                       </p>
                     </div>
 
                     <button
-                      onClick={() => {
-                        setAiActionNotice('Kitchen Production Order Slip #KB-2026-10 generated and queued for packing team! 📋');
-                        setTimeout(() => setAiActionNotice(''), 4000);
-                      }}
+                      onClick={() => setActiveTab('products')}
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5 transition"
                     >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>⚡ Generate Kitchen Batch Slip</span>
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Open Product Catalog</span>
                     </button>
                   </div>
 
-                  {/* 3 Forecasting Summary Badges */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                      <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Tracked Products</div>
+                      <div className="text-lg font-black text-slate-950">{trackedProducts.length}</div>
+                      <p className="text-xs text-slate-500">Products with inventory tracking enabled.</p>
+                    </div>
+
                     <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Upcoming Peak Rush</div>
-                      <div className="text-lg font-black text-amber-950">Festive Season (Diwali Surge)</div>
-                      <p className="text-xs text-amber-700">Projected order velocity will jump +45% in the next 14 days.</p>
+                      <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Low Stock</div>
+                      <div className="text-lg font-black text-amber-950">{lowStockProducts.length} products</div>
+                      <p className="text-xs text-amber-700">Tracked stock below 10 units.</p>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Depletion Alert</div>
-                      <div className="text-lg font-black text-rose-950">2 SKUs at Critical Level</div>
-                      <p className="text-xs text-rose-700">Heritage Gift Box and Garlic Pickle will run out in &lt; 14 days.</p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Recommended Kitchen Batch</div>
-                      <div className="text-lg font-black text-emerald-950">+250 Kg Raw Mustard Curing</div>
-                      <p className="text-xs text-emerald-700">Start sun-curing batch today to meet November order delivery SLAs.</p>
+                      <div className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Out of Stock</div>
+                      <div className="text-lg font-black text-rose-950">{outOfStockProducts.length} products</div>
+                      <p className="text-xs text-rose-700">Tracked stock is zero or below.</p>
                     </div>
                   </div>
 
-                  {/* Predictive Inventory Depletion Table */}
                   <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]">
                         <tr>
-                          <th className="p-3.5">Pickle SKU &amp; Pack Size</th>
-                          <th className="p-3.5">In-Stock</th>
-                          <th className="p-3.5">Daily Run-Rate</th>
-                          <th className="p-3.5">30-Day Projected Demand</th>
-                          <th className="p-3.5">Days to Stockout</th>
-                          <th className="p-3.5">Urgency</th>
-                          <th className="p-3.5">AI Kitchen Recommendation</th>
+                          <th className="p-3.5">Product</th>
+                          <th className="p-3.5">SKU</th>
+                          <th className="p-3.5">Tracked Stock</th>
+                          <th className="p-3.5">Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                        <tr className="hover:bg-slate-50/80">
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">Royal Heritage Festive Pickle Combo Box 1.2kg</div>
-                            <div className="text-[10px] text-slate-400">Gift Box Set (Diwali Special)</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-rose-600">24 Units</td>
-                          <td className="p-3.5">4.2 / day</td>
-                          <td className="p-3.5 font-bold text-slate-900">126 Units</td>
-                          <td className="p-3.5 font-bold text-rose-600">5.7 Days</td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold">
-                              🔴 Urgent Restock
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-bold text-indigo-700">
-                            Produce +150 Jars (Batch #K-104)
-                          </td>
-                        </tr>
-
-                        <tr className="hover:bg-slate-50/80">
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">Traditional Rajasthani Mango Pickle 500g</div>
-                            <div className="text-[10px] text-slate-400">Best Seller SKU (500g Glass Jar)</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-slate-900">120 Units</td>
-                          <td className="p-3.5">8.5 / day</td>
-                          <td className="p-3.5 font-bold text-slate-900">255 Units</td>
-                          <td className="p-3.5 font-bold text-amber-600">14.1 Days</td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              🟡 Low Buffer
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-bold text-indigo-700">
-                            Prepare +200 Jars by Next Monday
-                          </td>
-                        </tr>
-
-                        <tr className="hover:bg-slate-50/80">
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">Spicy Garlic Pickle (Lahsun Achar) 400g</div>
-                            <div className="text-[10px] text-slate-400">High Margin Specialty (400g Jar)</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-slate-900">42 Units</td>
-                          <td className="p-3.5">3.1 / day</td>
-                          <td className="p-3.5 font-bold text-slate-900">93 Units</td>
-                          <td className="p-3.5 font-bold text-amber-600">13.5 Days</td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              🟡 Low Buffer
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-bold text-indigo-700">
-                            Produce +80 Jars
-                          </td>
-                        </tr>
-
-                        <tr className="hover:bg-slate-50/80">
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">Spicy Green Chilli Pickle (Hari Mirch) 250g</div>
-                            <div className="text-[10px] text-slate-400">Regular Repeats (250g Pouch)</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-slate-900">85 Units</td>
-                          <td className="p-3.5">4.0 / day</td>
-                          <td className="p-3.5 font-bold text-slate-900">120 Units</td>
-                          <td className="p-3.5 font-bold text-emerald-600">21.2 Days</td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                              🟢 Healthy Stock
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-slate-500">
-                            Standard Batch +60 Jars
-                          </td>
-                        </tr>
-
-                        <tr className="hover:bg-slate-50/80">
-                          <td className="p-3.5">
-                            <div className="font-bold text-slate-900">Sweet &amp; Tangy Nimbu (Lemon) Pickle 500g</div>
-                            <div className="text-[10px] text-slate-400">Matured Jar (500g)</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-slate-900">110 Units</td>
-                          <td className="p-3.5">2.2 / day</td>
-                          <td className="p-3.5 font-bold text-slate-900">66 Units</td>
-                          <td className="p-3.5 font-bold text-emerald-600">50.0 Days</td>
-                          <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                              🟢 Safe Stock
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-slate-400">
-                            No Immediate Action Needed
-                          </td>
-                        </tr>
+                        {stockTableProducts.map((product) => {
+                          const stock = Number(product.stock ?? 0);
+                          return (
+                            <tr key={product._id || product.id || product.sku || product.name} className="hover:bg-slate-50/80">
+                              <td className="p-3.5">
+                                <div className="font-bold text-slate-900">{product.name}</div>
+                                <div className="text-[10px] text-slate-400">{product.cat || 'Uncategorized'}</div>
+                              </td>
+                              <td className="p-3.5 font-mono text-[11px]">{product.sku || '—'}</td>
+                              <td className={`p-3.5 font-bold ${stock <= 0 ? 'text-rose-600' : stock < 10 ? 'text-amber-600' : 'text-slate-900'}`}>
+                                {stock}
+                              </td>
+                              <td className="p-3.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  stock <= 0
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : stock < 10
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}>
+                                  {stock <= 0 ? 'Out of stock' : stock < 10 ? 'Low stock' : 'Healthy stock'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {stockTableProducts.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="p-8 text-center text-slate-500">
+                              No tracked products loaded. Enable inventory tracking on a product to see stock here.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -7648,23 +6619,23 @@ export const MerchantDashboard = () => {
                       className="text-xs text-indigo-700 font-bold hover:underline inline-flex items-center gap-1.5 cursor-pointer"
                     >
                       <Package className="w-4 h-4" />
-                      <span>Open Products Catalog to Update Real-time Quantities &rarr;</span>
+                      <span>Open Products Catalog to Update Quantities &rarr;</span>
                     </button>
                     <span className="text-[11px] text-slate-400">
-                      Calculated dynamically using rolling 14-day weighted moving averages.
+                      Sorted by current tracked stock. No demand forecast is calculated.
                     </span>
                   </div>
                 </div>
               )}
 
-              {/* ================= SUB-TAB 3: 1-CLICK WHATSAPP & AD COPYWRITER ================= */}
+              {/* ================= SUB-TAB 3: WHATSAPP & AD COPYWRITER TEMPLATES ================= */}
               {aiActiveSubTab === 'copywriter' && (
                 <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
                     <div>
                       <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
                         <MessageSquare className="w-5 h-5 text-indigo-600" />
-                        1-Click AI WhatsApp &amp; Meta Ad Copywriter
+                        WhatsApp &amp; Meta Ad Copywriter
                       </h3>
                       <p className="text-xs text-slate-500">
                         Ready-to-use promotional copy for festive offers, COD order verification, and Instagram Reels
@@ -7672,7 +6643,7 @@ export const MerchantDashboard = () => {
                     </div>
 
                     <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                      🎯 Optimized for Pickle Sales
+                      🎯 Store-specific templates
                     </span>
                   </div>
 
@@ -7681,8 +6652,8 @@ export const MerchantDashboard = () => {
                     {[
                       { key: 'festival', icon: '🎁', label: 'Festive Flash Sale', sub: 'Festive Offer Broadcast' },
                       { key: 'cod-confirm', icon: '💬', label: 'COD Verification', sub: 'RTO Prevention Message' },
-                      { key: 'review', icon: '⭐️', label: '5-Star Review Request', sub: 'Post-Delivery Feedback' },
-                      { key: 'meta-reel', icon: '📸', label: 'Viral Reel Caption', sub: '15 Trending Hashtags' }
+                      { key: 'review', icon: '⭐️', label: 'Review Request', sub: 'Post-Delivery Feedback' },
+                      { key: 'meta-reel', icon: '📸', label: 'Reel Caption', sub: 'Storefront link & caption' }
                     ].map((tmpl) => (
                       <button
                         key={tmpl.key}
@@ -7718,15 +6689,15 @@ export const MerchantDashboard = () => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
-                            const variationAddon = "\n\n🔥 *Special Reminder:* Free home delivery on orders placed today!";
+                            const variationAddon = "\n\n[Add a verified offer here after checking your active coupons and delivery settings.]";
                             setEditableCopyText(prev => (prev || AI_COPY_TEMPLATES[selectedCopyCategory].text) + variationAddon);
-                            setAiActionNotice('✨ Added fresh AI urgency hook to the message!');
+                            setAiActionNotice('Added an offer placeholder. Fill in verified details before sending.');
                             setTimeout(() => setAiActionNotice(''), 3000);
                           }}
                           className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition flex items-center gap-1 shadow-2xs"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>AI Tweak Hook</span>
+                          <span>Add Offer Placeholder</span>
                         </button>
                       </div>
                     </div>
@@ -7789,178 +6760,122 @@ export const MerchantDashboard = () => {
                 </div>
               )}
 
-              {/* ================= SUB-TAB 4: COD FRAUD & RTO RISK SHIELD ================= */}
-              {aiActiveSubTab === 'rto-radar' && (
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                    <div>
-                      <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                        <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                        COD Fraud &amp; RTO (Return to Origin) Shield Radar
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Automated address and phone verification for Cash-on-Delivery orders to prevent courier return (RTO) charges
-                      </p>
+              {/* ================= SUB-TAB 4: COD ADDRESS / RISK REVIEW ================= */}
+              {aiActiveSubTab === 'rto-radar' && (() => {
+                const activeOrders = ordersList.filter(o => o.status !== 'CANCELLED');
+                const codOrders = activeOrders.filter(o => /cod|cash/i.test(String(o.pay || o.paymentMethod || '')));
+                const parseAmount = (value) => Number(String(value || '').replace(/[^0-9.]/g, '')) || 0;
+                const flaggedCodOrders = codOrders.filter(o => {
+                  const amount = parseAmount(o.total);
+                  const address = String(o.address || '').trim();
+                  return amount >= 1000 || address.length < 12;
+                });
+                const codValue = codOrders.reduce((sum, o) => sum + parseAmount(o.total), 0);
+
+                return (
+                  <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                      <div>
+                        <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-indigo-600" />
+                          COD Address &amp; Risk Review
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          This view uses live order data only. It flags high-value COD orders with short or missing addresses for manual confirmation; it does not predict fraud.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setAiRiskScanCompleted(true);
+                          setAiActionNotice(
+                            `Risk view refreshed from ${activeOrders.length} live order(s). ${flaggedCodOrders.length} COD order(s) need an address check.`
+                          );
+                          setTimeout(() => setAiActionNotice(''), 4000);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-2 transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Refresh Risk View</span>
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setAiRiskScanCompleted(true);
-                        setAiActionNotice('🛡️ Instant AI Risk Scan Complete! 2 high-risk COD orders flagged for manual verification.');
-                        setTimeout(() => setAiActionNotice(''), 4000);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-2 transition"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>⚡ Run Instant AI Risk Scan</span>
-                    </button>
-                  </div>
-
-                  {/* 3 Shield KPI Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">COD Orders in Window</div>
-                      <div className="text-xl font-black text-indigo-950">6 Orders (₹4,890)</div>
-                      <p className="text-xs text-indigo-700">57% of total store customer orders requested COD payment.</p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Flagged for Verification</div>
-                      <div className="text-xl font-black text-amber-950">2 Orders Flagged</div>
-                      <p className="text-xs text-amber-700">Missing address landmarks or repeat unverified numbers.</p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-1">
-                      <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Estimated Return Loss Saved</div>
-                      <div className="text-xl font-black text-emerald-950">₹780 Protected</div>
-                      <p className="text-xs text-emerald-700">Saved in courier two-way freight &amp; packaging damages.</p>
-                    </div>
-                  </div>
-
-                  {/* Active Orders Risk Evaluation */}
-                  <div className="space-y-3">
-                    <div className="text-xs font-bold text-slate-800 flex items-center justify-between">
-                      <span>Live Order Risk Telemetry:</span>
-                      <span className="text-[11px] font-normal text-slate-500">Scan Status: {aiRiskScanCompleted ? 'Deep Scan Complete ✅' : 'Standard Monitoring 🟢'}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-1">
+                        <div className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">Active COD Orders</div>
+                        <div className="text-xl font-black text-indigo-950">{codOrders.length}</div>
+                        <p className="text-xs text-indigo-700">Value: ₹{codValue.toLocaleString('en-IN')}</p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+                        <div className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Needs Address Check</div>
+                        <div className="text-xl font-black text-amber-950">{flaggedCodOrders.length}</div>
+                        <p className="text-xs text-amber-700">High value or address shorter than 12 characters.</p>
+                      </div>
+                      <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-1">
+                        <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Other Active COD Orders</div>
+                        <div className="text-xl font-black text-emerald-950">{Math.max(0, codOrders.length - flaggedCodOrders.length)}</div>
+                        <p className="text-xs text-emerald-700">No automatic fraud or RTO probability is claimed.</p>
+                      </div>
                     </div>
 
                     <div className="space-y-3">
-                      {/* Risk Item 1 */}
-                      <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50/40 flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold border border-rose-300">
-                              🔴 High Risk (78% RTO Probability)
-                            </span>
-                            <span className="font-extrabold text-slate-900 text-xs">#ORD-1085 • Manoj Tiwari</span>
-                            <span className="text-xs text-slate-500 font-mono">₹1,299 (Cash on Delivery)</span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            🚩 <strong>Why Flagged:</strong> High-ticket COD order (&gt; ₹1,000) + Incomplete address (missing landmark &amp; sector number in Tonk Road).
-                          </p>
-                          <div className="text-[11px] text-rose-700 font-semibold">
-                            💡 AI Recommendation: Do not dispatch until delivery address is confirmed on WhatsApp.
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              const verifyMsg = `Hello Manoj Tiwari! 🙏 Regarding your Desi Achar House COD Order #ORD-1085 (₹1,299). Please reply YES to verify your address for express dispatch.`;
-                              window.open(`https://wa.me/919829012345?text=${encodeURIComponent(verifyMsg)}`, '_blank');
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition flex items-center gap-1 shadow-2xs"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>Verify on WhatsApp</span>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setAiActionNotice('Order #ORD-1085 marked as manually verified by merchant! 🛡️');
-                              setTimeout(() => setAiActionNotice(''), 3000);
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition"
-                          >
-                            Mark Verified
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Risk Item 2 */}
-                      <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/40 flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300">
-                              🟡 Medium Risk (35% RTO Probability)
-                            </span>
-                            <span className="font-extrabold text-slate-900 text-xs">#ORD-1082 • Ritu Maheshwari</span>
-                            <span className="text-xs text-slate-500 font-mono">₹548 (Cash on Delivery)</span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            🚩 <strong>Why Flagged:</strong> First-time COD buyer in store history. Phone number verified.
-                          </p>
-                          <div className="text-[11px] text-amber-700 font-semibold">
-                            💡 AI Recommendation: Standard Delhivery tracking link SMS auto-trigger on dispatch.
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setAiActionNotice('Automated pre-dispatch ping queued for Ritu Maheshwari (ORD-1082) 💬');
-                              setTimeout(() => setAiActionNotice(''), 3000);
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition flex items-center gap-1"
-                          >
-                            <Send className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Send Auto-Ping</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Risk Item 3 */}
-                      <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 flex flex-wrap items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300">
-                              🟢 Safe (2% RTO Risk - Zero Fraud)
-                            </span>
-                            <span className="font-extrabold text-slate-900 text-xs">#ORD-1087 • Vikram Rathore</span>
-                            <span className="text-xs text-slate-500 font-mono">₹488 (Prepaid UPI)</span>
-                          </div>
-                          <p className="text-xs text-slate-600">
-                            ✅ <strong>Verified Safe:</strong> 100% Online UPI Prepaid + Complete Pin Code (302006) + Verified repeat customer.
-                          </p>
-                        </div>
-
-                        <span className="px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-bold">
-                          Ready for BlueDart Pickup 🚚
+                      <div className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                        <span>Live COD orders to review:</span>
+                        <span className="text-[11px] font-normal text-slate-500">
+                          {aiRiskScanCompleted ? 'Live data refreshed' : 'Showing current order list'}
                         </span>
                       </div>
+
+                      {flaggedCodOrders.length === 0 ? (
+                        <div className="p-6 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-500">
+                          No active COD order currently needs an address check.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {flaggedCodOrders.slice(0, 10).map((o) => {
+                            const phone = String(o.phone || '').replace(/[^0-9]/g, '').slice(-10);
+                            const verifyMsg = `Hello ${o.customer || 'customer'}! Please confirm your delivery address for order ${o.id || o.orderNumber} at ${businessName || 'our store'}. Reply YES if it is correct.`;
+                            return (
+                              <div key={o._id || o.id || o.orderNumber} className="p-4 rounded-2xl border border-amber-200 bg-amber-50/40 flex flex-wrap items-center justify-between gap-4">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300">
+                                      Address check
+                                    </span>
+                                    <span className="font-extrabold text-slate-900 text-xs">#{o.id || o.orderNumber} • {o.customer || 'Customer'}</span>
+                                    <span className="text-xs text-slate-500 font-mono">₹{o.total} (COD)</span>
+                                  </div>
+                                  <p className="text-xs text-slate-600 truncate">
+                                    {o.address ? o.address : 'No delivery address is stored on this order.'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {phone && (
+                                    <a
+                                      href={`https://wa.me/91${phone}?text=${encodeURIComponent(verifyMsg)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition flex items-center gap-1 shadow-2xs"
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5" />
+                                      <span>Verify on WhatsApp</span>
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() => setSelectedOrderForDetail(o)}
+                                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold cursor-pointer transition"
+                                  >
+                                    Open order
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Pro Tip Box */}
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <div className="text-xs font-black flex items-center gap-1.5 text-amber-300">
-                        <Sparkles className="w-4 h-4 text-amber-400" /> Omniva AI Growth Insights
-                      </div>
-                      <p className="text-xs text-slate-300">
-                        Converting just 20% of your COD orders to UPI Prepaid saves an average of ₹18,400 per month in courier return penalties.
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => setActiveTab('automations')}
-                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer transition whitespace-nowrap shrink-0 shadow-md"
-                    >
-                      Configure COD Pre-pay Discount &rarr;
-                    </button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -7991,7 +6906,7 @@ export const MerchantDashboard = () => {
                   const dupes = getDuplicateOrdersForOrder(selectedOrderForDetail, ordersList);
                   if (dupes.length === 0) return null;
                   const firstTwin = dupes[0];
-                  const waConfirmMessage = `Hello ${selectedOrderForDetail.customer}! 🙏\n\nOrder verification message from Desi Achar House. We noticed 2 matching orders placed from your phone number:\n• Order 1: ${selectedOrderForDetail.id} (${selectedOrderForDetail.itemSummary})\n• Order 2: ${firstTwin.id} (${firstTwin.itemSummary})\n\nCould you please confirm if you would like both orders shipped, or if one was placed by mistake? Thank you!`;
+                  const waConfirmMessage = `Hello ${selectedOrderForDetail.customer}! 🙏\n\nOrder verification message from ${businessName || 'our store'}. We noticed 2 matching orders placed from your phone number:\n• Order 1: ${selectedOrderForDetail.id} (${selectedOrderForDetail.itemSummary})\n• Order 2: ${firstTwin.id} (${firstTwin.itemSummary})\n\nCould you please confirm if you would like both orders shipped, or if one was placed by mistake? Thank you!`;
 
                   return (
                     <div className="bg-gradient-to-br from-amber-50 to-orange-50/70 border-2 border-amber-400 rounded-3xl p-4 space-y-3.5 shadow-sm">
@@ -8114,7 +7029,7 @@ export const MerchantDashboard = () => {
                       <Phone className="w-3.5 h-3.5 text-slate-600" /> Call Direct
                     </a>
                     <a
-                      href={`https://wa.me/${selectedOrderForDetail.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${selectedOrderForDetail.customer}! Regarding your Desi Achar House order ${selectedOrderForDetail.id}...`)}`}
+                      href={`https://wa.me/${selectedOrderForDetail.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${selectedOrderForDetail.customer}! Regarding your ${businessName || 'store'} order ${selectedOrderForDetail.id}...`)}`}
                       target="_blank"
                       rel="noreferrer"
                       className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5"
@@ -8124,7 +7039,7 @@ export const MerchantDashboard = () => {
                   </div>
                 </div>
 
-                {/* Courier Dispatch & Live Tracking Section (if shipped or has tracking) */}
+                {/* Courier dispatch and tracking section (if shipped or has tracking) */}
                 {(selectedOrderForDetail.status === 'SHIPPED' || selectedOrderForDetail.tracking) && (
                   <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/50 to-emerald-50/40 rounded-2xl p-4 border border-blue-200/80 space-y-3 text-xs shadow-2xs">
                     <div className="flex items-center justify-between">
@@ -8134,30 +7049,30 @@ export const MerchantDashboard = () => {
                         </span>
                         <div>
                           <h4 className="font-extrabold text-blue-950 text-xs flex items-center gap-1.5">
-                            <span>Courier Dispatch & Live Tracking</span>
+                            <span>Courier Dispatch & Tracking</span>
                             <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                              {selectedOrderForDetail.courier || 'Delhivery Express'}
+                              {selectedOrderForDetail.courier || 'Courier not recorded'}
                             </span>
                           </h4>
                           <p className="text-[11px] text-blue-700/90 font-mono mt-0.5">
-                            AWB Tracking #{selectedOrderForDetail.tracking || 'DEL-8492014'}
+                            AWB Tracking #{selectedOrderForDetail.tracking || 'Not assigned'}
                           </p>
                         </div>
                       </div>
                       <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[10px] flex items-center gap-1">
-                        <span>✓</span> {selectedOrderForDetail.trackingNotified ? 'Auto WhatsApp Sent' : 'Ready to Send'}
+                        <span>✓</span> {selectedOrderForDetail.tracking ? 'Tracking number recorded' : 'No tracking number'}
                       </span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 pt-1">
-                      {/* Live Tracking Link */}
+                      {/* Courier tracking link */}
                       <a
                         href={selectedOrderForDetail.trackingUrl || getCourierTrackingUrl(selectedOrderForDetail.courier, selectedOrderForDetail.tracking, selectedOrderForDetail.id, selectedOrderForDetail.phone)}
                         target="_blank"
                         rel="noreferrer"
                         className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition"
                       >
-                        <span>Live Parcel Track ↗</span>
+                        <span>Open Tracking Page ↗</span>
                       </a>
 
                       {/* Resend WhatsApp Tracking Alert */}
@@ -8205,7 +7120,7 @@ export const MerchantDashboard = () => {
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-indigo-100/60">
                     <div>
                       <span className="text-slate-500 font-medium">Channel / Placement: </span>
-                      <strong className="text-slate-800 font-bold block">{selectedOrderForDetail.channelName || 'Direct Organic'}</strong>
+                      <strong className="text-slate-800 font-bold block">{selectedOrderForDetail.channelName || 'Not recorded'}</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 font-medium">Campaign: </span>
@@ -8281,7 +7196,7 @@ export const MerchantDashboard = () => {
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                   <button
                     onClick={() => {
-                      alert(`Printing invoice and packing slip for ${selectedOrderForDetail.id}`);
+                      setActionErrorToast('Invoice PDF generation is not configured. No document was printed.');
                     }}
                     className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-1.5"
                   >
@@ -8317,7 +7232,7 @@ export const MerchantDashboard = () => {
                           const ord = selectedOrderForDetail;
                           setSelectedOrderForDetail(null);
                           setDispatchModalOrder(ord);
-                          setTrackingNumber('DEL-' + Math.floor(100000 + Math.random() * 900000));
+                          setTrackingNumber('');
                         }}
                         className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md flex items-center gap-1.5"
                       >
@@ -8361,6 +7276,7 @@ export const MerchantDashboard = () => {
                       onChange={(e) => setCourierName(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
                     >
+                      <option value="">Select courier</option>
                       <option value="Delhivery Express">Delhivery Express</option>
                       <option value="BlueDart Air Express">BlueDart Air Express</option>
                       <option value="XpressBees Surface">XpressBees Surface</option>
@@ -8372,16 +7288,7 @@ export const MerchantDashboard = () => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="font-bold text-slate-800 block">Waybill / Tracking Number (AWB):</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const prefix = courierName.toLowerCase().includes('delhivery') ? 'DEL' : (courierName.toLowerCase().includes('bluedart') ? 'BD' : (courierName.toLowerCase().includes('speed post') ? 'SP' : 'TRK'));
-                          setTrackingNumber(`${prefix}-${Math.floor(1000000 + Math.random() * 9000000)}`);
-                        }}
-                        className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
-                      >
-                        ⚡ Auto-Generate AWB
-                      </button>
+                      <span className="text-[10px] text-slate-400 font-medium">Use the AWB issued by your courier</span>
                     </div>
                     <input
                       type="text"
@@ -8392,14 +7299,16 @@ export const MerchantDashboard = () => {
                     />
                   </div>
 
-                  {/* Live Tracking URL preview */}
+                  {/* Tracking URL preview */}
                   <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-700">🔗 Customer Live Tracking Link:</span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Real-time</span>
+                      <span className="font-bold text-slate-700">🔗 Customer tracking link:</span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Courier link</span>
                     </div>
                     <div className="font-mono text-[10px] text-indigo-600 truncate">
-                      {getCourierTrackingUrl(courierName, trackingNumber || 'DEL-8492014', dispatchModalOrder.orderNumber || dispatchModalOrder.id, dispatchModalOrder.phone)}
+                      {trackingNumber.trim()
+                        ? getCourierTrackingUrl(courierName, trackingNumber.trim(), dispatchModalOrder.orderNumber || dispatchModalOrder.id, dispatchModalOrder.phone)
+                        : 'Enter the courier AWB to preview the tracking link'}
                     </div>
                   </div>
 
@@ -8412,9 +7321,9 @@ export const MerchantDashboard = () => {
                       className="w-4 h-4 text-indigo-600 rounded mt-0.5 cursor-pointer"
                     />
                     <div className="text-xs">
-                      <span className="font-extrabold text-indigo-950 block">⚡ Auto-Send WhatsApp Live Tracking Message</span>
+                      <span className="font-extrabold text-indigo-950 block">Open WhatsApp with the tracking message</span>
                       <span className="text-[11px] text-indigo-800">
-                        Customer mobile ({dispatchModalOrder.phone}) will automatically receive tracking ID and live tracking link.
+                        After the server saves the shipment, a WhatsApp chat with the customer's number ({dispatchModalOrder.phone}) will open with the tracking message. Opening the chat is not proof of delivery.
                       </span>
                     </div>
                   </label>
@@ -8425,7 +7334,9 @@ export const MerchantDashboard = () => {
                       <span>💬 Message Preview (Customer WhatsApp Notification):</span>
                     </div>
                     <div className="text-slate-300 text-[11px] whitespace-pre-line leading-relaxed font-mono">
-                      {generateTrackingMessage(dispatchModalOrder, courierName, trackingNumber || 'DEL-8492014')}
+                      {trackingNumber.trim()
+                        ? generateTrackingMessage(dispatchModalOrder, courierName, trackingNumber.trim())
+                        : 'Tracking message will be generated after you enter a real AWB.'}
                     </div>
                   </div>
                 </div>
@@ -8515,13 +7426,13 @@ export const MerchantDashboard = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3 text-white font-bold text-sm">
-                    {editingCategory.name} (Live Customer Storefront Preview)
+                    {editingCategory.name} (Customer Storefront Preview)
                   </div>
                 </div>
 
                 {/* Device Gallery Upload + Preset Picker */}
                 <div className="space-y-2">
-                  <label className="font-bold text-slate-800 block">Choose Photo from Device Gallery or Pickle Presets:</label>
+                  <label className="font-bold text-slate-800 block">Choose a photo from your device:</label>
                   
                   {/* Device Upload */}
                   <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
@@ -8541,23 +7452,6 @@ export const MerchantDashboard = () => {
                     />
                   </label>
 
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    {photoPresets.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setCategoryPhotoUrl(preset.url)}
-                        className={`p-2 rounded-xl border text-left flex items-center gap-2 transition cursor-pointer ${
-                          categoryPhotoUrl === preset.url
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-900 font-bold'
-                            : 'border-slate-200 hover:border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="w-8 h-8 rounded-lg object-cover shrink-0" />
-                        <span className="truncate">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Custom URL Input */}
@@ -8610,7 +7504,7 @@ export const MerchantDashboard = () => {
                   </button>
                   <button
                     onClick={() => {
-                      setNewServiceForm(prev => ({ ...prev, date: '2026-10-15', dayNumber: 15 }));
+                      setNewServiceForm(prev => ({ ...prev, date: todayStr, dayNumber: new Date().getDate() }));
                       setShowAddServiceBookingModal(true);
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
@@ -8663,39 +7557,28 @@ export const MerchantDashboard = () => {
                     </h3>
                     <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
                       <button
-                        onClick={() => {
-                          setCalendarMonth('September 2026');
-                          setActionSuccessToast('Viewing September 2026 calendar');
-                          setTimeout(() => setActionSuccessToast(''), 3000);
-                        }}
-                        className={`px-2.5 py-1 text-xs rounded-md transition cursor-pointer ${
-                          calendarMonth === 'September 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
-                        }`}
+                        onClick={() => shiftCalendarMonth(-1)}
+                        className="px-2.5 py-1 text-xs rounded-md transition cursor-pointer text-slate-600 hover:bg-slate-200/60"
                         title="Previous Month"
                       >
                         &lt;
                       </button>
                       <button
                         onClick={() => {
-                          setCalendarMonth('October 2026');
-                          setActionSuccessToast('Viewing current month: October 2026');
+                          const now = new Date();
+                          setCalendarMonthDate(new Date(now.getFullYear(), now.getMonth(), 1));
+                          setActionSuccessToast(`Viewing current month: ${currentMonthLabel}`);
                           setTimeout(() => setActionSuccessToast(''), 3000);
                         }}
                         className={`px-3 py-1 text-xs font-semibold rounded-md transition cursor-pointer ${
-                          calendarMonth === 'October 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-200/60'
+                          calendarMonth === currentMonthLabel ? 'bg-indigo-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-200/60'
                         }`}
                       >
                         Today
                       </button>
                       <button
-                        onClick={() => {
-                          setCalendarMonth('November 2026');
-                          setActionSuccessToast('Viewing November 2026 calendar');
-                          setTimeout(() => setActionSuccessToast(''), 3000);
-                        }}
-                        className={`px-2.5 py-1 text-xs rounded-md transition cursor-pointer ${
-                          calendarMonth === 'November 2026' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-200/60'
-                        }`}
+                        onClick={() => shiftCalendarMonth(1)}
+                        className="px-2.5 py-1 text-xs rounded-md transition cursor-pointer text-slate-600 hover:bg-slate-200/60"
                         title="Next Month"
                       >
                         &gt;
@@ -8729,7 +7612,7 @@ export const MerchantDashboard = () => {
 
                     <button
                       onClick={() => {
-                        setNewServiceForm(prev => ({ ...prev, date: '2026-10-15', dayNumber: 15 }));
+                        setNewServiceForm(prev => ({ ...prev, date: todayStr, dayNumber: new Date().getDate() }));
                         setShowAddServiceBookingModal(true);
                       }}
                       className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm cursor-pointer transition flex items-center gap-1"
@@ -8754,83 +7637,83 @@ export const MerchantDashboard = () => {
                       <div>Sun</div>
                     </div>
 
-                    {/* Accurate October 2026 Grid (Starts on Thu Oct 1) */}
+                    {/* Current month grid, Monday first. Bookings are matched by full date. */}
                     <div className="grid grid-cols-7 gap-2 text-xs pt-2">
-                      {/* Previous month days: Mon 28, Tue 29, Wed 30 */}
-                      {[28, 29, 30].map((d) => (
-                        <div
-                          key={`prev-${d}`}
-                          className="min-h-[82px] p-2 rounded-xl border bg-slate-50/40 border-slate-100 text-slate-300 select-none"
-                        >
-                          <div className="font-medium text-right text-[11px]">{d}</div>
-                        </div>
-                      ))}
+                      {(() => {
+                        const year = calendarMonthDate.getFullYear();
+                        const month = calendarMonthDate.getMonth();
+                        const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
+                        const daysInMonth = new Date(year, month + 1, 0).getDate();
+                        return Array.from({ length: 42 }, (_, index) => {
+                          const dayNumber = index - firstWeekday + 1;
+                          const cellDate = new Date(year, month, dayNumber);
+                          const inMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
+                          const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
+                          const isToday = inMonth && dateStr === todayStr;
+                          const dayBookings = inMonth
+                            ? serviceBookingsList.filter((b) => b.date === dateStr)
+                            : [];
+                          const dateLabel = cellDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
-                      {/* Current Month October (Days 1 to 31) */}
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
-                        const dayBookings = serviceBookingsList.filter(b => b.dayNumber === day);
-                        const isToday = day === 7;
-                        return (
-                          <div
-                            key={`oct-${day}`}
-                            onClick={() => {
-                              setNewServiceForm(prev => ({
-                                ...prev,
-                                date: `2026-10-${day < 10 ? '0' + day : day}`,
-                                dayNumber: day
-                              }));
-                              setShowAddServiceBookingModal(true);
-                            }}
-                            className={`min-h-[82px] p-2 rounded-xl border transition flex flex-col justify-between cursor-pointer group hover:shadow-sm ${
-                              isToday
-                                ? 'bg-indigo-50/30 border-indigo-300 ring-1 ring-indigo-200'
-                                : 'bg-white border-slate-200/80 hover:border-indigo-400 hover:bg-slate-50/50'
-                            }`}
-                            title={`Click to add booking on Oct ${day}, 2026`}
-                          >
-                            <div className="flex items-center justify-between">
-                              {isToday ? (
-                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-indigo-600 text-white">
-                                  Today
+                          if (!inMonth) {
+                            return (
+                              <div
+                                key={dateStr}
+                                className="min-h-[82px] p-2 rounded-xl border bg-slate-50/40 border-slate-100 text-slate-300 select-none"
+                              >
+                                <div className="font-medium text-right text-[11px]">{cellDate.getDate()}</div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={dateStr}
+                              onClick={() => {
+                                setNewServiceForm(prev => ({ ...prev, date: dateStr, dayNumber }));
+                                setShowAddServiceBookingModal(true);
+                              }}
+                              className={`min-h-[82px] p-2 rounded-xl border transition flex flex-col justify-between cursor-pointer group hover:shadow-sm ${
+                                isToday
+                                  ? 'bg-indigo-50/30 border-indigo-300 ring-1 ring-indigo-200'
+                                  : 'bg-white border-slate-200/80 hover:border-indigo-400 hover:bg-slate-50/50'
+                              }`}
+                              title={`Click to add booking on ${dateLabel}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                {isToday ? (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded-full bg-indigo-600 text-white">
+                                    Today
+                                  </span>
+                                ) : (
+                                  <span className="opacity-0 group-hover:opacity-100 text-[10px] text-indigo-500 font-bold transition">
+                                    +
+                                  </span>
+                                )}
+                                <span className={`font-bold text-right text-xs ${isToday ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                  {dayNumber}
                                 </span>
-                              ) : (
-                                <span className="opacity-0 group-hover:opacity-100 text-[10px] text-indigo-500 font-bold transition">
-                                  +
-                                </span>
-                              )}
-                              <span className={`font-bold text-right text-xs ${isToday ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                {day}
-                              </span>
-                            </div>
+                              </div>
 
-                            <div className="space-y-1 mt-1">
-                              {dayBookings.map((b) => (
-                                <div
-                                  key={b.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedServiceBooking(b);
-                                  }}
-                                  className={`text-[10px] font-bold p-1 rounded-md border truncate shadow-2xs hover:scale-[1.02] transition cursor-pointer ${b.color}`}
-                                  title={`${b.client}: ${b.service} (${b.time}) - Click for details`}
-                                >
-                                  {b.service}
-                                </div>
-                              ))}
+                              <div className="space-y-1 mt-1">
+                                {dayBookings.map((b) => (
+                                  <div
+                                    key={b.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedServiceBooking(b);
+                                    }}
+                                    className={`text-[10px] font-bold p-1 rounded-md border truncate shadow-2xs hover:scale-[1.02] transition cursor-pointer ${b.color}`}
+                                    title={`${b.client}: ${b.service} (${b.time}) - Click for details`}
+                                  >
+                                    {b.service}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Next month days to complete 5 full weeks: Sun 1 Nov */}
-                      {[1].map((d) => (
-                        <div
-                          key={`next-${d}`}
-                          className="min-h-[82px] p-2 rounded-xl border bg-slate-50/40 border-slate-100 text-slate-300 select-none"
-                        >
-                          <div className="font-medium text-right text-[11px]">{d}</div>
-                        </div>
-                      ))}
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 )}
@@ -8944,7 +7827,7 @@ export const MerchantDashboard = () => {
                 <p className="text-xs text-slate-500">Manage tour packages, passengers, departures and payments</p>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setActionSuccessToast('Browsing 12 curated Rajasthan tour & heritage packages')}
+                    onClick={() => showActionError('The tour package catalog is not loaded in this dashboard. Manage packages from the storefront catalog before creating bookings.')}
                     className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-medium text-xs text-slate-600 cursor-pointer"
                   >
                     Tour packages
@@ -9340,13 +8223,7 @@ export const MerchantDashboard = () => {
                           <td className="py-3.5 px-4">
                             <button
                               type="button"
-                              onClick={() => {
-                                const updated = staffList.map(s => s.id === st.id ? { ...s, status: s.status === 'Active' ? 'Paused' : 'Active' } : s);
-                                setStaffList(updated);
-                                setTeamMembers(updated);
-                                setActionSuccessToast(`Status changed to ${st.status === 'Active' ? 'Paused' : 'Active'} for ${st.name}`);
-                                setTimeout(() => setActionSuccessToast(''), 3000);
-                              }}
+                              onClick={() => handleToggleStaffStatus(st)}
                               className={`text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition ${
                                 st.status === 'Active'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -9387,16 +8264,7 @@ export const MerchantDashboard = () => {
                               {st.id !== 'staff_admin' && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Are you sure you want to remove staff account for ${st.name}?`)) {
-                                      const updated = staffList.filter(s => s.id !== st.id);
-                                      setStaffList(updated);
-                                      setTeamMembers(updated);
-                                      if (simulatedStaffId === st.id) setSimulatedStaffId(null);
-                                      setActionSuccessToast(`Staff member ${st.name} removed successfully.`);
-                                      setTimeout(() => setActionSuccessToast(''), 3000);
-                                    }
-                                  }}
+                                  onClick={() => handleRemoveStaff(st)}
                                   className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                                   title="Remove Staff"
                                 >
@@ -9432,7 +8300,7 @@ export const MerchantDashboard = () => {
                       <span>🎯</span> Packing Staff (Confirmed Only)
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Kitchen and packing staff see <strong>Confirmed orders only</strong> so unverified or unpaid orders are never packed prematurely.
+                      Kitchen and packing staff only see orders with <strong>Confirmed</strong> status in this view.
                     </p>
                   </div>
 
@@ -9441,7 +8309,7 @@ export const MerchantDashboard = () => {
                       <span>⏳</span> Calling Desk (Pending Only)
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Calling staff see <strong>New / Pending orders only</strong>. As soon as an order is verified, it transitions to Confirmed and moves to the packing queue.
+                      Calling staff only see <strong>New / Pending</strong> orders in this view. Confirmed orders move to the packing queue.
                     </p>
                   </div>
 
@@ -9472,8 +8340,12 @@ export const MerchantDashboard = () => {
             const processingOrders = ordersList.filter(o => o.status === 'PROCESSING' || o.status === 'SHIPPED').length;
             const pendingOrders = ordersList.filter(o => o.status === 'NEW' || o.status === 'CONFIRMED').length;
             const cancelledOrders = ordersList.filter(o => o.status === 'CANCELLED').length;
-            const refundsValue = ordersList.filter(o => o.status === 'CANCELLED').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-            const collectedPayments = ordersList.filter(o => ((o.pay === 'ONLINE' || o.payMethod === 'ONLINE') || (o.status === 'DELIVERED')) && o.status !== 'CANCELLED').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+            const cancelledValue = ordersList.filter(o => o.status === 'CANCELLED').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+            const paidOrders = ordersList.filter(o => o.paymentStatus === 'PAID' && o.status !== 'CANCELLED');
+            const paidOrderValue = paidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+            const trendData = dailyChartData.slice(-10);
+            const trendMax = Math.max(...trendData.map(d => d.revenue), 1);
+            const hasTrendData = trendData.some(d => d.revenue > 0 || d.count > 0);
 
             const safeTotal = totalOrders || 1;
             const deliveredPct = Math.round((deliveredOrders / safeTotal) * 100);
@@ -9482,7 +8354,8 @@ export const MerchantDashboard = () => {
             const cancelledPct = Math.round((cancelledOrders / safeTotal) * 100);
 
             const totalBookings = serviceBookingsList?.length || 0;
-            const convRate = crmLeads.length > 0 ? ((totalOrders / crmLeads.length) * 100).toFixed(1) : '4.8';
+            const wonLeads = crmLeads.filter(l => (l.status || '').toUpperCase() === 'WON').length;
+            const convRate = crmLeads.length > 0 ? ((wonLeads / crmLeads.length) * 100).toFixed(1) : null;
 
             return (
               <div className="space-y-6">
@@ -9490,7 +8363,7 @@ export const MerchantDashboard = () => {
                   <p className="text-xs text-slate-500">Review sales, bookings, inventory and campaign outcomes</p>
                   <div className="flex items-center gap-2">
                     <span className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-600">
-                      All Recorded History
+                      Loaded order records
                     </span>
                     <button
                       type="button"
@@ -9500,8 +8373,8 @@ export const MerchantDashboard = () => {
                           `"Total Orders","${totalOrders}"`,
                           `"Gross Order Value","₹${grossOrderValue}"`,
                           `"Net Sales","₹${netSales}"`,
-                          `"Collected Payments","₹${collectedPayments}"`,
-                          `"Refunds","₹${refundsValue}"`,
+                          `"Paid Order Value","₹${paidOrderValue}"`,
+                          `"Cancelled Order Value (not refunds)","₹${cancelledValue}"`,
                           `"Delivered Orders","${deliveredOrders}"`,
                           `"Processing Orders","${processingOrders}"`,
                           `"Pending Orders","${pendingOrders}"`,
@@ -9529,12 +8402,12 @@ export const MerchantDashboard = () => {
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                     <div className="text-xs text-slate-500 font-medium">Net sales</div>
                     <div className="text-2xl font-black text-slate-900 mt-2">₹{netSales.toLocaleString('en-IN')}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">Recorded orders (excl. cancelled)</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Loaded records, excluding cancelled</div>
                   </div>
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                     <div className="text-xs text-slate-500 font-medium">Orders</div>
                     <div className="text-2xl font-black text-slate-900 mt-2">{totalOrders}</div>
-                    <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Live store &amp; Meta ads orders</div>
+                    <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Orders in the loaded dataset</div>
                   </div>
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                     <div className="text-xs text-slate-500 font-medium">Bookings / Service</div>
@@ -9543,23 +8416,33 @@ export const MerchantDashboard = () => {
                   </div>
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                     <div className="text-xs text-slate-500 font-medium">Lead Conversion</div>
-                    <div className="text-2xl font-black text-slate-900 mt-2">{convRate}%</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">{crmLeads.length} total leads tracked</div>
+                    <div className="text-2xl font-black text-slate-900 mt-2">{convRate === null ? '—' : `${convRate}%`}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">{crmLeads.length > 0 ? `${wonLeads} won of ${crmLeads.length} leads` : 'No CRM leads loaded'}</div>
                   </div>
                 </div>
 
                 {/* Row 2: Sales Trend & Order Status Distribution */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                    <h3 className="font-bold text-slate-900 text-sm">Sales trend</h3>
-                    <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
-                      {[30, 42, 38, 55, 48, 62, 58, 75, 70, 95].map((val, idx) => (
-                        <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                          <div style={{ height: `${val}%` }} className="w-full bg-indigo-600 rounded-t-lg transition" />
-                          <span className="text-[9px] text-slate-400">W{idx + 1}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <h3 className="font-bold text-slate-900 text-sm">Sales trend (last 10 days in range)</h3>
+                    {hasTrendData ? (
+                      <div className="h-44 w-full flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-100">
+                        {trendData.map((day) => (
+                          <div key={day.dateStr} className="flex-1 flex flex-col items-center gap-2 min-w-0">
+                            <div
+                              style={{ height: `${(day.revenue / trendMax) * 100}%` }}
+                              className="w-full bg-indigo-600 rounded-t-lg transition"
+                              title={`${day.dayLabel}: ₹${day.revenue.toLocaleString('en-IN')} from ${day.count} order(s)`}
+                            />
+                            <span className="text-[9px] text-slate-400 truncate w-full text-center">{day.dayLabel}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="h-44 flex items-center justify-center text-xs text-slate-400">
+                        No non-cancelled orders recorded in the selected date range.
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
@@ -9594,7 +8477,7 @@ export const MerchantDashboard = () => {
                       </div>
                       <div>
                         <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                          <span>Cancelled / refunded</span>
+                          <span>Cancelled</span>
                           <span className="font-bold text-slate-900">{cancelledOrders} ({cancelledPct}%)</span>
                         </div>
                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -9609,7 +8492,7 @@ export const MerchantDashboard = () => {
                 <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                   <div className="p-4 px-6 border-b border-slate-200/80">
                     <h3 className="font-bold text-slate-900 text-sm">Performance summary</h3>
-                    <p className="text-[11px] text-slate-400">Separate order value, collected payments, refunds, expenses and attributed revenue</p>
+                    <p className="text-[11px] text-slate-400">Values below cover the orders currently loaded in this dashboard. Cancellations are not a refund ledger.</p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
@@ -9625,8 +8508,8 @@ export const MerchantDashboard = () => {
                         {[
                           { metric: 'Gross Order value', curr: `₹${grossOrderValue.toLocaleString('en-IN')}`, count: `${totalOrders} orders`, def: 'Total value of all placed orders' },
                           { metric: 'Net Sales', curr: `₹${netSales.toLocaleString('en-IN')}`, count: `${totalOrders - cancelledOrders} orders`, def: 'Order value excluding cancellations' },
-                          { metric: 'Collected payments', curr: `₹${collectedPayments.toLocaleString('en-IN')}`, count: 'Prepaid + Delivered', def: 'Verified cash & online collections' },
-                          { metric: 'Refunds / Cancelled', curr: `₹${refundsValue.toLocaleString('en-IN')}`, count: `${cancelledOrders} orders`, def: 'Cancelled orders amount' },
+                          { metric: 'Paid order value', curr: `₹${paidOrderValue.toLocaleString('en-IN')}`, count: `${paidOrders.length} paid orders`, def: 'Orders explicitly marked paymentStatus = PAID' },
+                          { metric: 'Cancelled order value', curr: `₹${cancelledValue.toLocaleString('en-IN')}`, count: `${cancelledOrders} orders`, def: 'Value of cancelled orders; not a refund record' },
                           { metric: 'CRM Leads Ingested', curr: `${crmLeads.length} leads`, count: `${crmLeads.filter(l => l.status === 'WON').length} converted`, def: 'Meta Ads & organic leads' }
                         ].map((row, idx) => (
                           <tr key={idx} className="hover:bg-slate-50 transition">
@@ -9692,7 +8575,7 @@ export const MerchantDashboard = () => {
                     </h2>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Direct public storefront where customers browse pickles, add to cart, and place COD orders.
+                    Direct public storefront where customers browse products, add to cart, and place orders.
                   </p>
                 </div>
 
@@ -9722,15 +8605,17 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              {/* Key Storefront Info & Live Tracking Metrics */}
+              {/* Storefront status and configuration */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Storefront Status</div>
                   <div className="flex items-center gap-2 mt-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="font-extrabold text-slate-900 text-sm">Online &amp; Accepting Orders</span>
+                    <span className={`w-2.5 h-2.5 rounded-full ${tenant?.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                    <span className="font-extrabold text-slate-900 text-sm">{tenant?.status === 'ACTIVE' ? 'Active account' : tenant?.status ? `Account ${tenant.status}` : 'Status unavailable'}</span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">Cash on Delivery (COD) Enabled</div>
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    {productsList.length > 0 ? `${productsList.length} products listed` : 'No products listed'}
+                  </div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
@@ -9738,17 +8623,21 @@ export const MerchantDashboard = () => {
                   <div className="font-mono text-xs font-bold text-indigo-600 truncate mt-1.5">
                     /store/{businessSlug}
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">SEO indexed &amp; Meta ad ready</div>
+                  <div className="text-[11px] text-slate-500 mt-1">Public storefront path</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
                   <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Meta Pixel &amp; CAPI</div>
                   <div className="flex items-center gap-1.5 mt-1.5">
-                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
-                      Tracking Active
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      tenant?.settings?.metaPixelId || tenant?.integrations?.meta?.pixelId
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`}>
+                      {tenant?.settings?.metaPixelId || tenant?.integrations?.meta?.pixelId ? 'Configured' : 'Not configured'}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">ViewContent, AddToCart, Purchase</div>
+                  <div className="text-[11px] text-slate-500 mt-1">Browser Pixel + Conversions API when configured</div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
@@ -9756,7 +8645,7 @@ export const MerchantDashboard = () => {
                   <div className="font-extrabold text-slate-900 text-sm mt-1.5">
                     {productsList.length} Products Listed
                   </div>
-                  <div className="text-[11px] text-slate-500 mt-1">Live stock synchronization</div>
+                  <div className="text-[11px] text-slate-500 mt-1">Catalog loaded from the server</div>
                 </div>
               </div>
 
@@ -9765,9 +8654,9 @@ export const MerchantDashboard = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <Eye className="w-4 h-4 text-slate-500" />
-                    <span className="font-bold text-sm text-slate-800">Live Customer Viewport Preview</span>
+                    <span className="font-bold text-sm text-slate-800">Storefront Preview</span>
                     <span className="text-[11px] text-slate-400">
-                      (See exactly what your customers see when clicking your Meta Ads)
+                      (Preview of the public storefront layout)
                     </span>
                   </div>
 
@@ -9817,7 +8706,7 @@ export const MerchantDashboard = () => {
                     </div>
                     <div className="text-xs text-slate-500 font-medium mt-3 flex items-center gap-1.5">
                       <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                      Mobile preview reflects Instagram &amp; Facebook Ad in-app browser view
+                      Mobile viewport preview of the public storefront
                     </div>
                   </div>
                 ) : (
@@ -9830,8 +8719,8 @@ export const MerchantDashboard = () => {
                         <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
                       </div>
                       <div className="flex-1 bg-slate-100 rounded-lg px-3 py-1 text-[11px] font-mono text-slate-600 flex items-center justify-between border border-slate-200">
-                        <span className="truncate">{typeof window !== 'undefined' ? window.location.origin : 'https://omniva.io'}/store/{businessSlug}</span>
-                        <span className="text-emerald-600 font-semibold text-[10px]">🔒 SSL Secured</span>
+                        <span className="truncate">{typeof window !== 'undefined' ? window.location.origin : ''}/store/{businessSlug}</span>
+                        <span className="text-slate-500 font-semibold text-[10px]">Storefront link</span>
                       </div>
                     </div>
                     <div className="h-[750px] w-full bg-white">
@@ -9931,7 +8820,7 @@ export const MerchantDashboard = () => {
                             onChange={(e) => setBizType(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:outline-none focus:border-indigo-500 font-medium"
                           >
-                            <option>Product selling (Pickles, Food & FMCG)</option>
+                            <option>Product selling (physical goods)</option>
                             <option>Photography & Events</option>
                             <option>Travel Agency</option>
                             <option>Lead Generation CRM</option>
@@ -10002,7 +8891,7 @@ export const MerchantDashboard = () => {
                     <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-6">
                       <div className="border-b border-slate-100 pb-3">
                         <h3 className="font-bold text-slate-900 text-sm">Branding & Store Theme</h3>
-                        <p className="text-[11px] text-slate-400">Customize how your store appears to customers and on invoices</p>
+                        <p className="text-[11px] text-slate-400">Customize your storefront tagline and primary color</p>
                       </div>
 
                       <div className="space-y-4 text-xs">
@@ -10012,7 +8901,7 @@ export const MerchantDashboard = () => {
                             type="text"
                             value={brandTagline}
                             onChange={(e) => setBrandTagline(e.target.value)}
-                            placeholder="e.g. Authentic Handcrafted Pickles of Rajasthan"
+                            placeholder="e.g. Your store tagline"
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium"
                           />
                         </div>
@@ -10041,23 +8930,12 @@ export const MerchantDashboard = () => {
                           </div>
                         </div>
 
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                          <span className="font-bold text-slate-800 text-xs block">Invoice Footer Note</span>
-                          <textarea
-                            rows={2}
-                            defaultValue="Thank you for supporting traditional Indian artisans. FSSAI License: 12224026000123."
-                            className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none"
-                          />
-                        </div>
                       </div>
 
                       <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                         <button
                           type="button"
-                          onClick={() => {
-                            setActionSuccessToast('Branding settings updated successfully!');
-                            setTimeout(() => setActionSuccessToast(''), 4000);
-                          }}
+                          onClick={handleSaveSettings}
                           className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Branding
@@ -10087,18 +8965,10 @@ export const MerchantDashboard = () => {
                       <div className="space-y-4 text-xs">
                         <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50">
                           <div>
-                            <div className="font-bold text-slate-800 text-xs">Show public storefront</div>
-                            <div className="text-[11px] text-slate-400">Allow customers to browse catalog and place orders directly</div>
+                            <div className="font-bold text-slate-800 text-xs">Public storefront status</div>
+                            <div className="text-[11px] text-slate-400">Controlled by the platform account status, not by this form</div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowStorePage(!showStorePage)}
-                            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              showStorePage ? 'bg-indigo-600' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${showStorePage ? 'left-5' : 'left-0.5'}`} />
-                          </button>
+                          <span className="text-xs font-bold text-slate-700">{tenant?.status || 'Unknown'}</span>
                         </div>
 
                         <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50">
@@ -10136,7 +9006,11 @@ export const MerchantDashboard = () => {
                               onChange={(e) => setShippingFee(e.target.value)}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium"
                             />
-                            <p className="text-[10px] text-slate-400 mt-1">Free delivery automatically applied on orders above ₹499.</p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              {Number(tenant?.settings?.freeShippingThreshold) > 0
+                                ? `Free delivery applies at or above ₹${Number(tenant.settings.freeShippingThreshold).toLocaleString('en-IN')}.`
+                                : 'No free-delivery threshold is configured.'}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -10144,10 +9018,7 @@ export const MerchantDashboard = () => {
                       <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                         <button
                           type="button"
-                          onClick={() => {
-                            setActionSuccessToast('Storefront settings updated successfully!');
-                            setTimeout(() => setActionSuccessToast(''), 4000);
-                          }}
+                          onClick={handleSaveSettings}
                           className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
                           Save Store Settings
@@ -10182,34 +9053,20 @@ export const MerchantDashboard = () => {
                           <p className="text-[10px] text-slate-400 mt-1">UPI QR code and payment link will receive funds directly to this bank VPA.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                          <div>
-                            <label className="text-slate-700 font-bold block mb-1">Razorpay Key ID</label>
-                            <input
-                              type="text"
-                              value={razorpayKeyId}
-                              onChange={(e) => setRazorpayKeyId(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-slate-700 font-bold block mb-1">Razorpay Key Secret</label>
-                            <input
-                              type="password"
-                              value={razorpayKeySecret}
-                              onChange={(e) => setRazorpayKeySecret(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono"
-                            />
+                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
+                          <div className="font-bold text-slate-800">Razorpay keys are managed in Integrations</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            This form does not collect or verify gateway credentials. Open Integrations to save Razorpay keys.
                           </div>
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-between">
                           <div>
-                            <div className="font-bold text-slate-800">Auto-confirm paid orders</div>
-                            <div className="text-[11px] text-slate-400">Automatically mark online orders as 'Confirmed' upon successful webhook event</div>
+                            <div className="font-bold text-slate-800">Paid orders are confirmed by the payment webhook</div>
+                            <div className="text-[11px] text-slate-400">The server applies this after a verified Razorpay event</div>
                           </div>
                           <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" /> Enabled
+                            <CheckCircle2 className="w-4 h-4" /> Server behavior
                           </span>
                         </div>
                       </div>
@@ -10217,13 +9074,10 @@ export const MerchantDashboard = () => {
                       <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
                         <button
                           type="button"
-                          onClick={() => {
-                            setActionSuccessToast('Payment credentials updated and verified!');
-                            setTimeout(() => setActionSuccessToast(''), 4000);
-                          }}
+                          onClick={handleSaveSettings}
                           className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                         >
-                          Save Payment Settings
+                          Save UPI Setting
                         </button>
                       </div>
                     </div>
@@ -10234,69 +9088,20 @@ export const MerchantDashboard = () => {
                     <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-6">
                       <div className="border-b border-slate-100 pb-3">
                         <h3 className="font-bold text-slate-900 text-sm">Notifications & Alerts</h3>
-                        <p className="text-[11px] text-slate-400">Manage WhatsApp, SMS, and Email alerts for orders and leads</p>
+                        <p className="text-[11px] text-slate-400">Automatic WhatsApp, SMS and email delivery is not configured</p>
                       </div>
 
-                      <div className="space-y-3 text-xs">
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50">
-                          <div>
-                            <div className="font-bold text-slate-800 text-xs">WhatsApp Order Confirmations & Tracking</div>
-                            <div className="text-[11px] text-slate-400">Send instant WhatsApp message with order tracking link to customers</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setWhatsappAlerts(!whatsappAlerts)}
-                            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              whatsappAlerts ? 'bg-indigo-600' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${whatsappAlerts ? 'left-5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50">
-                          <div>
-                            <div className="font-bold text-slate-800 text-xs">Send Order Status SMS Notifications</div>
-                            <div className="text-[11px] text-slate-400">Dispatch SMS when parcel is handed over to courier</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSendOrderNotifications(!sendOrderNotifications)}
-                            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              sendOrderNotifications ? 'bg-indigo-600' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${sendOrderNotifications ? 'left-5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50">
-                          <div>
-                            <div className="font-bold text-slate-800 text-xs">Email Invoices to Customers</div>
-                            <div className="text-[11px] text-slate-400">Attach PDF tax invoice upon order fulfillment</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setEnableMarketingByDefault(!enableMarketingByDefault)}
-                            className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
-                              enableMarketingByDefault ? 'bg-indigo-600' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${enableMarketingByDefault ? 'left-5' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
+                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900 space-y-2">
+                        <p className="font-bold">No automatic notifications are sent by this setting.</p>
+                        <p>
+                          Order confirmations, tracking links and review requests are opened manually from the Orders page. SMS and PDF invoice email are not implemented.
+                        </p>
                         <button
                           type="button"
-                          onClick={() => {
-                            setActionSuccessToast('Notification preferences saved successfully!');
-                            setTimeout(() => setActionSuccessToast(''), 4000);
-                          }}
-                          className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
+                          onClick={() => setActiveTab('orders')}
+                          className="font-bold text-amber-950 underline cursor-pointer"
                         >
-                          Save Notifications
+                          Go to Orders to open a customer message
                         </button>
                       </div>
                     </div>
@@ -10414,14 +9219,11 @@ export const MerchantDashboard = () => {
                         <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200">
                           <div>
                             <div className="font-bold text-slate-800">Export All Customer Records</div>
-                            <div className="text-[11px] text-slate-400">Download complete lead and customer database as secure CSV</div>
+                            <div className="text-[11px] text-slate-400">Download the loaded lead and customer records as CSV</div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setActionSuccessToast('Customer records exported as secure CSV!');
-                              setTimeout(() => setActionSuccessToast(''), 3000);
-                            }}
+                            onClick={handleExportCustomersCsv}
                             className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold text-xs text-slate-700 flex items-center gap-1.5 cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" /> Export CSV
@@ -10797,16 +9599,7 @@ export const MerchantDashboard = () => {
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
                       <button
                         type="button"
-                        onClick={() => {
-                          const updated = staffList.map(s => s.id === selectedStaffForEdit.id ? selectedStaffForEdit : s);
-                          setStaffList(updated);
-                          setTeamMembers(updated);
-                          setSimulatedStaffId(selectedStaffForEdit.id);
-                          setActiveTab('orders');
-                          setShowEditStaffModal(false);
-                          setActionSuccessToast(`Permissions saved! Now viewing Orders as ${selectedStaffForEdit.name} (${selectedStaffForEdit.orderScope})`);
-                          setTimeout(() => setActionSuccessToast(''), 4000);
-                        }}
+                        onClick={() => handleSaveStaffPermissions(selectedStaffForEdit, { testView: true })}
                         className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold text-xs border border-purple-200 cursor-pointer transition flex items-center gap-1.5"
                       >
                         <Eye className="w-3.5 h-3.5" /> Save &amp; Test This View in Orders
@@ -10822,14 +9615,7 @@ export const MerchantDashboard = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            const updated = staffList.map(s => s.id === selectedStaffForEdit.id ? selectedStaffForEdit : s);
-                            setStaffList(updated);
-                            setTeamMembers(updated);
-                            setShowEditStaffModal(false);
-                            setActionSuccessToast(`Permissions updated successfully for ${selectedStaffForEdit.name}!`);
-                            setTimeout(() => setActionSuccessToast(''), 4000);
-                          }}
+                          onClick={() => handleSaveStaffPermissions(selectedStaffForEdit)}
                           className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 cursor-pointer transition flex items-center gap-1.5"
                         >
                           <Check className="w-3.5 h-3.5" /> Save Permissions
@@ -10864,7 +9650,14 @@ export const MerchantDashboard = () => {
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();
-                        if (!newStaffForm.name || !newStaffForm.email) return;
+                        if (!newStaffForm.name.trim() || !newStaffForm.email.trim()) {
+                          showActionError('Enter the staff member name and email address.');
+                          return;
+                        }
+                        if (!newStaffForm.password || newStaffForm.password.length < 8) {
+                          showActionError('Set an initial password of at least 8 characters for the new staff account.');
+                          return;
+                        }
 
                         let apiRole = 'ORDER_MANAGER';
                         if (newStaffForm.orderScope === 'PENDING_ONLY') apiRole = 'SUPPORT_STAFF';
@@ -10873,42 +9666,26 @@ export const MerchantDashboard = () => {
 
                         try {
                           const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
-                          if (token) {
-                            await axios.post('/api/auth/staff', {
-                              name: newStaffForm.name,
-                              email: newStaffForm.email,
-                              password: newStaffForm.password || 'StaffPass123!',
-                              role: apiRole,
-                              phone: newStaffForm.phone || '+91 98000 00000'
-                            }, {
-                              headers: { Authorization: `Bearer ${token}` }
-                            });
+                          const res = await axios.post('/api/auth/staff', {
+                            name: newStaffForm.name.trim(),
+                            email: newStaffForm.email.trim(),
+                            password: newStaffForm.password,
+                            role: apiRole,
+                            phone: newStaffForm.phone?.trim() || ''
+                          }, {
+                            headers: token ? { Authorization: `Bearer ${token}` } : {}
+                          });
+                          if (!res.data?.success) {
+                            throw new Error(res.data?.message || 'The staff account was not created.');
                           }
                         } catch (err) {
-                          console.warn('Backend staff sync note:', err.response?.data?.message || err.message);
+                          showActionError(
+                            err.response?.data?.message || err.message || 'Could not create the staff account.'
+                          );
+                          return;
                         }
 
-                        const newMember = {
-                          id: 'staff_' + Date.now(),
-                          name: newStaffForm.name,
-                          email: newStaffForm.email,
-                          phone: newStaffForm.phone || '+91 98000 00000',
-                          role: newStaffForm.role,
-                          status: 'Active',
-                          orderScope: newStaffForm.orderScope,
-                          allowedOrderStatuses: newStaffForm.allowedOrderStatuses,
-                          modules: newStaffForm.modules,
-                          canAcceptOrders: newStaffForm.canAcceptOrders,
-                          canPackOrders: newStaffForm.canPackOrders,
-                          canDispatchOrders: newStaffForm.canDispatchOrders,
-                          canCancelOrders: newStaffForm.canCancelOrders,
-                          canViewRevenue: newStaffForm.canViewRevenue,
-                          lastActive: 'Just Added'
-                        };
-
-                        const updated = [...staffList, newMember];
-                        setStaffList(updated);
-                        setTeamMembers(updated);
+                        await fetchStaff();
                         setShowAddStaffModal(false);
                         setShowAddTeamModal(false);
                         setNewStaffForm({
@@ -10926,9 +9703,8 @@ export const MerchantDashboard = () => {
                           canCancelOrders: false,
                           canViewRevenue: false
                         });
-                        setActionSuccessToast(`Staff member ${newMember.name} added successfully with ${newMember.orderScope} visibility!`);
+                        setActionSuccessToast(`Staff member ${newStaffForm.name.trim()} created.`);
                         setTimeout(() => setActionSuccessToast(''), 4000);
-                        fetchStaff();
                       }}
                       className="space-y-3.5 text-xs"
                     >
@@ -11005,7 +9781,7 @@ export const MerchantDashboard = () => {
                             required
                             value={newStaffForm.email}
                             onChange={(e) => setNewStaffForm({ ...newStaffForm, email: e.target.value })}
-                            placeholder="e.g. ramesh@desiachar.example"
+                            placeholder="e.g. staff@yourbusiness.example"
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
                           />
                         </div>
@@ -11146,7 +9922,7 @@ export const MerchantDashboard = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Kashmiri Garlic Pickle 500g"
+                  placeholder="e.g. Product name and pack size"
                   value={newProductForm.name}
                   onChange={(e) => setNewProductForm({ ...newProductForm, name: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
@@ -11177,7 +9953,7 @@ export const MerchantDashboard = () => {
                   {showCustomCatInput ? (
                     <input
                       type="text"
-                      placeholder="Type new category (e.g. Amla Achar)"
+                      placeholder="Type a new category name"
                       value={newProductForm.newCatInput || ''}
                       onChange={(e) => setNewProductForm({ ...newProductForm, newCatInput: e.target.value })}
                       className="w-full bg-slate-50 border border-indigo-400 ring-1 ring-indigo-200 rounded-xl p-2.5 text-slate-900 font-semibold"
@@ -11274,20 +10050,20 @@ export const MerchantDashboard = () => {
                 );
               })()}
 
-              {/* Jar Sizes & Packaging Variants Manager */}
+              {/* Variant & Option Manager */}
               <div className="space-y-2.5 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-slate-800 font-bold block text-xs flex items-center gap-1.5">
-                      <span>🏺</span>
-                      <span>Available Jar Packaging & Custom Pricing</span>
+                      <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Available Variants &amp; Custom Pricing</span>
                     </label>
                     <p className="text-[11px] text-slate-400">
-                      Select which jar sizes are available and adjust price/stock for each.
+                      Select which variants are available and adjust price/stock for each.
                     </p>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    {newProductForm.jars?.filter(j => j.enabled).length || 0} Jars Active
+                    {newProductForm.jars?.filter(j => j.enabled).length || 0} Variants Active
                   </span>
                 </div>
 
@@ -11337,7 +10113,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-900 font-bold text-xs"
-                              title="Jar Price in ₹"
+                              title="Variant price in ₹"
                             />
                           </div>
 
@@ -11356,7 +10132,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="w-16 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-900 font-semibold text-xs"
-                              title="Jar Stock Units"
+                              title="Variant stock units"
                             />
                           </div>
 
@@ -11370,7 +10146,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="text-rose-500 hover:text-rose-700 p-1 text-xs cursor-pointer font-bold"
-                              title="Remove custom jar"
+                              title="Remove custom variant"
                             >
                               ✕
                             </button>
@@ -11380,15 +10156,15 @@ export const MerchantDashboard = () => {
                     </div>
                   ))}
 
-                  {/* Add Custom Jar Size Sub-Form */}
+                  {/* Add Custom Variant Sub-Form */}
                   <div className="pt-2 border-t border-slate-200">
                     <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                      <span>+ Add Custom Jar Size:</span>
+                      <span>+ Add Custom Variant:</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="text"
-                        placeholder="e.g. 750g Pet Jar"
+                        placeholder="e.g. Large / 750g / Red"
                         value={newJarName}
                         onChange={(e) => setNewJarName(e.target.value)}
                         className="flex-1 min-w-[130px] bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs text-slate-800"
@@ -11411,14 +10187,24 @@ export const MerchantDashboard = () => {
                         type="button"
                         onClick={() => {
                           if (!newJarName.trim()) {
-                            alert('Please enter jar name (e.g. 750g Glass Jar)');
+                            alert('Please enter a variant name (e.g. Large / 750g).');
+                            return;
+                          }
+                          const variantPrice = Number(newJarPrice);
+                          if (!Number.isFinite(variantPrice) || variantPrice <= 0) {
+                            alert('Enter a real variant price greater than zero.');
+                            return;
+                          }
+                          const variantStock = Number.parseInt(newJarStock, 10);
+                          if (!Number.isFinite(variantStock) || variantStock < 0) {
+                            alert('Enter the real variant stock quantity (zero or more).');
                             return;
                           }
                           const newJarObj = {
                             id: `custom-${Date.now()}`,
                             name: newJarName.trim(),
-                            price: parseFloat(newJarPrice) || 299,
-                            stock: parseInt(newJarStock) || 20,
+                            price: variantPrice,
+                            stock: variantStock,
                             enabled: true,
                             isCustom: true
                           };
@@ -11428,18 +10214,18 @@ export const MerchantDashboard = () => {
                           }));
                           setNewJarName('');
                           setNewJarPrice('');
-                          setNewJarStock('25');
+                          setNewJarStock('');
                         }}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 cursor-pointer"
                       >
-                        + Add Jar
+                        + Add Variant
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Product Photo Selection: Device Gallery + Achar Presets */}
+              {/* Product Photo Selection */}
               <div className="space-y-2 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <label className="text-slate-700 font-bold block">Product Photo</label>
@@ -11466,31 +10252,6 @@ export const MerchantDashboard = () => {
                   />
                 </label>
 
-                {/* 2. Or Choose from Authentic Achar Gallery */}
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                    <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Or tap an Authentic Achar photo:</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {photoPresets.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setNewProductForm({ ...newProductForm, img: preset.url })}
-                        className={`p-1.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer text-[10px] transition ${
-                          newProductForm.img === preset.url
-                            ? 'border-indigo-600 bg-indigo-50 font-bold text-indigo-900 ring-1 ring-indigo-300'
-                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/60 text-slate-700'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="w-7 h-7 rounded-lg object-cover shrink-0" />
-                        <span className="truncate">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Optional Web Link Input */}
                 <div>
                   <input
@@ -11515,7 +10276,7 @@ export const MerchantDashboard = () => {
                   </div>
                 ) : (
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
-                    No photo selected yet (Upload from gallery or tap an achar photo above)
+                    No photo selected yet. Upload a real product image.
                   </div>
                 )}
               </div>
@@ -11559,7 +10320,7 @@ export const MerchantDashboard = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Traditional Rajasthani Mango Pickle 500g"
+                  placeholder="e.g. Product name and variant"
                   value={editProductForm.name}
                   onChange={(e) => setEditProductForm({ ...editProductForm, name: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold"
@@ -11705,20 +10466,20 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              {/* Jar Sizes & Packaging Variants Manager */}
+              {/* Variant & Option Manager */}
               <div className="space-y-2.5 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-slate-800 font-bold block text-xs flex items-center gap-1.5">
-                      <span>🏺</span>
-                      <span>Available Jar Packaging & Custom Pricing</span>
+                      <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Available Variants &amp; Custom Pricing</span>
                     </label>
                     <p className="text-[11px] text-slate-400">
-                      Customize which jar sizes are available in store and set custom rates &amp; stock.
+                      Customize which variants are available in store and set custom rates &amp; stock.
                     </p>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    {editProductForm.jars?.filter(j => j.enabled).length || 0} Jars Active
+                    {editProductForm.jars?.filter(j => j.enabled).length || 0} Variants Active
                   </span>
                 </div>
 
@@ -11768,7 +10529,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-900 font-bold text-xs"
-                              title="Jar Price in ₹"
+                              title="Variant price in ₹"
                             />
                           </div>
 
@@ -11787,7 +10548,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="w-16 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-900 font-semibold text-xs"
-                              title="Jar Stock Units"
+                              title="Variant stock units"
                             />
                           </div>
 
@@ -11801,7 +10562,7 @@ export const MerchantDashboard = () => {
                                 }));
                               }}
                               className="text-rose-500 hover:text-rose-700 p-1 text-xs cursor-pointer font-bold"
-                              title="Remove custom jar"
+                              title="Remove custom variant"
                             >
                               ✕
                             </button>
@@ -11811,15 +10572,15 @@ export const MerchantDashboard = () => {
                     </div>
                   ))}
 
-                  {/* Add Custom Jar Size Sub-Form */}
+                  {/* Add Custom Variant Sub-Form */}
                   <div className="pt-2 border-t border-slate-200">
                     <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                      <span>+ Add Custom Jar Size:</span>
+                      <span>+ Add Custom Variant:</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="text"
-                        placeholder="e.g. 750g Pet Jar"
+                        placeholder="e.g. Large / 750g / Red"
                         value={editNewJarName}
                         onChange={(e) => setEditNewJarName(e.target.value)}
                         className="flex-1 min-w-[130px] bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs text-slate-800"
@@ -11842,14 +10603,24 @@ export const MerchantDashboard = () => {
                         type="button"
                         onClick={() => {
                           if (!editNewJarName.trim()) {
-                            alert('Please enter jar name (e.g. 750g Glass Jar)');
+                            alert('Please enter a variant name (e.g. Large / 750g).');
+                            return;
+                          }
+                          const variantPrice = Number(editNewJarPrice);
+                          if (!Number.isFinite(variantPrice) || variantPrice <= 0) {
+                            alert('Enter a real variant price greater than zero.');
+                            return;
+                          }
+                          const variantStock = Number.parseInt(editNewJarStock, 10);
+                          if (!Number.isFinite(variantStock) || variantStock < 0) {
+                            alert('Enter the real variant stock quantity (zero or more).');
                             return;
                           }
                           const newJarObj = {
                             id: `custom-${Date.now()}`,
                             name: editNewJarName.trim(),
-                            price: parseFloat(editNewJarPrice) || 299,
-                            stock: parseInt(editNewJarStock) || 20,
+                            price: variantPrice,
+                            stock: variantStock,
                             enabled: true,
                             isCustom: true
                           };
@@ -11859,11 +10630,11 @@ export const MerchantDashboard = () => {
                           }));
                           setEditNewJarName('');
                           setEditNewJarPrice('');
-                          setEditNewJarStock('25');
+                          setEditNewJarStock('');
                         }}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 cursor-pointer"
                       >
-                        + Add Jar
+                        + Add Variant
                       </button>
                     </div>
                   </div>
@@ -11896,31 +10667,6 @@ export const MerchantDashboard = () => {
                     onChange={handleEditProductImageUpload}
                   />
                 </label>
-
-                {/* 2. Authentic Achar Presets */}
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                    <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Or choose an Authentic Achar photo:</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {photoPresets.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setEditProductForm({ ...editProductForm, img: preset.url })}
-                        className={`p-1.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer text-[10px] transition ${
-                          editProductForm.img === preset.url
-                            ? 'border-indigo-600 bg-indigo-50 font-bold text-indigo-900 ring-1 ring-indigo-300'
-                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/60 text-slate-700'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="w-7 h-7 rounded-lg object-cover shrink-0" />
-                        <span className="truncate">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 {/* Web Link Input */}
                 <div>
@@ -12028,7 +10774,7 @@ export const MerchantDashboard = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Festive Special 20% OFF on all jars"
+                  placeholder="e.g. Festive Special 20% OFF"
                   value={newCouponForm.title}
                   onChange={(e) => setNewCouponForm({ ...newCouponForm, title: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold"
@@ -12079,7 +10825,7 @@ export const MerchantDashboard = () => {
                 <label className="text-slate-700 font-bold block mb-1">Description / Conditions</label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Valid on all handcrafted mango and mixed pickles above ₹399."
+                  placeholder="e.g. Valid on all products above ₹399."
                   value={newCouponForm.description}
                   onChange={(e) => setNewCouponForm({ ...newCouponForm, description: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
@@ -12127,10 +10873,10 @@ export const MerchantDashboard = () => {
               <div>
                 <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
                   <Percent className="w-5 h-5 text-amber-500" />
-                  <span>Har Product Par Discount (Storewide Discount Tool)</span>
+                  <span>Storewide Discount Tool</span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Update selling prices and display % OFF badges on every product in your store
+                  Review and overwrite selling prices for all products or one category
                 </p>
               </div>
               <button onClick={() => setShowBulkDiscountModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
@@ -12139,10 +10885,10 @@ export const MerchantDashboard = () => {
             <form onSubmit={handleApplyBulkDiscount} className="space-y-4 text-xs">
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1.5 text-amber-900">
                 <div className="font-bold flex items-center gap-1.5 text-xs">
-                  <span>⚡</span> Instant Catalog Slashed Pricing
+                  <span>⚠️</span> Destructive price update
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Applying this discount sets each product’s Selling Price from its Original MRP, and turns on a green <strong>“XX% OFF”</strong> badge and crossed-out price (~~₹399~~) on every product card!
+                  This uses each product’s compare-at price when one is set, otherwise its current selling price, and overwrites the selling price immediately. It also enables crossed-out compare-at pricing on product cards. This is not a reversible coupon.
                 </p>
               </div>
 
@@ -12184,7 +10930,7 @@ export const MerchantDashboard = () => {
                   onChange={(e) => setBulkDiscountForm({ ...bulkDiscountForm, categoryName: e.target.value, scope: e.target.value === 'ALL' ? 'ALL' : 'CATEGORY' })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-semibold cursor-pointer"
                 >
-                  <option value="ALL">All Products (Entire 20-Product Catalog)</option>
+                  <option value="ALL">All Products ({productsList.length} in catalog)</option>
                   {categoriesList.map(c => (
                     <option key={c.id || c.name} value={c.name}>Only "{c.name}" Category</option>
                   ))}
@@ -12203,7 +10949,7 @@ export const MerchantDashboard = () => {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-500 text-xs shadow-md transition cursor-pointer"
                 >
-                  Apply {bulkDiscountForm.discountPercent}% Discount Now
+                  Apply {bulkDiscountForm.discountPercent}% to Prices
                 </button>
               </div>
             </form>
@@ -12217,8 +10963,8 @@ export const MerchantDashboard = () => {
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="font-bold text-slate-900 text-base">Add New Pickle Category</h3>
-                <p className="text-xs text-slate-400">Creates showcase section with appetizing images on storefront</p>
+                <h3 className="font-bold text-slate-900 text-base">Add New Product Category</h3>
+                <p className="text-xs text-slate-400">Creates a showcase section on the storefront</p>
               </div>
               <button onClick={() => setShowAddCategoryModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
             </div>
@@ -12228,7 +10974,7 @@ export const MerchantDashboard = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Ker Sangri Heritage Achar"
+                  placeholder="e.g. Product category"
                   value={newCategoryForm.name}
                   onChange={(e) => setNewCategoryForm({
                     ...newCategoryForm,
@@ -12247,7 +10993,7 @@ export const MerchantDashboard = () => {
                     type="text"
                     value={newCategoryForm.slug}
                     onChange={(e) => setNewCategoryForm({ ...newCategoryForm, slug: e.target.value })}
-                    placeholder="ker-sangri-achar"
+                    placeholder="category-slug"
                     className="bg-transparent text-slate-900 font-bold focus:outline-none flex-1 ml-1"
                   />
                 </div>
@@ -12259,12 +11005,12 @@ export const MerchantDashboard = () => {
                   rows={2}
                   value={newCategoryForm.description}
                   onChange={(e) => setNewCategoryForm({ ...newCategoryForm, description: e.target.value })}
-                  placeholder="e.g. Traditional desert beans & berries slow-cured with authentic Marwadi spices in pure sarson tel."
+                  placeholder="Describe this category for customers"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
                 />
               </div>
 
-              {/* Category Photo: Device Gallery + Achar Presets */}
+              {/* Category Photo Selection */}
               <div className="space-y-2 border-t border-slate-100 pt-3">
                 <div className="flex items-center justify-between">
                   <label className="text-slate-700 font-bold block">Category Photo</label>
@@ -12291,31 +11037,6 @@ export const MerchantDashboard = () => {
                   />
                 </label>
 
-                {/* 2. Or Choose from Authentic Achar Gallery */}
-                <div>
-                  <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                    <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Or select an authentic Achar category image:</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {photoPresets.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setNewCategoryForm({ ...newCategoryForm, image: preset.url })}
-                        className={`p-1.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition ${
-                          newCategoryForm.image === preset.url
-                            ? 'border-indigo-600 bg-indigo-50/70 font-bold text-indigo-900 ring-1 ring-indigo-300'
-                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/60 text-slate-700'
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="w-7 h-7 rounded-lg object-cover shrink-0" />
-                        <span className="truncate text-[10px]">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Optional Image URL Input */}
                 <input
                   type="text"
@@ -12335,7 +11056,7 @@ export const MerchantDashboard = () => {
                   </div>
                 ) : (
                   <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
-                    No image selected yet (Upload from gallery or tap an achar photo above)
+                    No image selected yet. Upload a real category image.
                   </div>
                 )}
               </div>
@@ -12353,201 +11074,6 @@ export const MerchantDashboard = () => {
                   className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >
                   Create Category
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Manual Order Modal */}
-      {showManualOrderModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Create Manual Phone / Walk-in Order</h3>
-                <p className="text-xs text-slate-400">Directly adds to your live order fulfillment queue</p>
-              </div>
-              <button onClick={() => setShowManualOrderModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
-            </div>
-            <form onSubmit={handleSaveManualOrder} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Customer Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Sunita Devi"
-                    value={manualOrderForm.customer}
-                    onChange={(e) => setManualOrderForm({ ...manualOrderForm, customer: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Phone Number *</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+91 98290 12345"
-                    value={manualOrderForm.phone}
-                    onChange={(e) => setManualOrderForm({ ...manualOrderForm, phone: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-slate-600 font-semibold block mb-1">Delivery Address *</label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="Complete shipping address with pincode"
-                  value={manualOrderForm.address}
-                  onChange={(e) => setManualOrderForm({ ...manualOrderForm, address: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                />
-              </div>
-              <div>
-                <label className="text-slate-600 font-semibold block mb-1">Select Product *</label>
-                <select
-                  value={manualOrderForm.itemName}
-                  onChange={(e) => {
-                    const selProd = productsList.find(p => p.name === e.target.value);
-                    const price = selProd ? parseInt(selProd.price.replace(/[^\d]/g, '')) || 299 : 299;
-                    setManualOrderForm({
-                      ...manualOrderForm,
-                      itemName: e.target.value,
-                      total: price * manualOrderForm.qty
-                    });
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                >
-                  {productsList.map((p, idx) => (
-                    <option key={idx} value={p.name}>{p.name} ({p.price})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="50"
-                    value={manualOrderForm.qty}
-                    onChange={(e) => {
-                      const qty = parseInt(e.target.value) || 1;
-                      const selProd = productsList.find(p => p.name === manualOrderForm.itemName);
-                      const basePrice = selProd ? parseInt(selProd.price.replace(/[^\d]/g, '')) || 299 : 299;
-                      setManualOrderForm({ ...manualOrderForm, qty, total: basePrice * qty });
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Total (₹)</label>
-                  <input
-                    type="number"
-                    value={manualOrderForm.total}
-                    onChange={(e) => setManualOrderForm({ ...manualOrderForm, total: parseInt(e.target.value) || 0 })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-600 font-semibold block mb-1">Payment Method</label>
-                  <select
-                    value={manualOrderForm.payMethod}
-                    onChange={(e) => setManualOrderForm({ ...manualOrderForm, payMethod: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                  >
-                    <option value="COD">Cash on Delivery (COD)</option>
-                    <option value="ONLINE">Paid Online (UPI / Card)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowManualOrderModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
-                >
-                  Create & Accept Order
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Adjust Stock Modal */}
-      {showAdjustStockModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="font-bold text-slate-900 text-base">Adjust Inventory Stock</h3>
-                <p className="text-xs text-slate-400">Update warehouse batch quantities</p>
-              </div>
-              <button onClick={() => setShowAdjustStockModal(false)} className="text-slate-400 hover:text-slate-800 text-lg cursor-pointer">✕</button>
-            </div>
-            <form onSubmit={handleSaveStockAdjustment} className="space-y-4 text-xs">
-              <div>
-                <label className="text-slate-600 font-semibold block mb-1">Product / SKU *</label>
-                <select
-                  value={adjustStockForm.sku}
-                  onChange={(e) => setAdjustStockForm({ ...adjustStockForm, sku: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                >
-                  {inventoryList.map((item, idx) => (
-                    <option key={idx} value={item.sku}>{item.name} ({item.sku}) · On-hand: {item.onHand}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-slate-600 font-semibold block mb-1">Quantity Adjustment (+/- units) *</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="+20 or -5"
-                  value={adjustStockForm.qtyChange}
-                  onChange={(e) => setAdjustStockForm({ ...adjustStockForm, qtyChange: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                />
-                <div className="text-[11px] text-slate-400 mt-1">Positive number adds stock, negative removes stock</div>
-              </div>
-              <div>
-                <label className="text-slate-600 font-semibold block mb-1">Adjustment Reason *</label>
-                <select
-                  value={adjustStockForm.reason}
-                  onChange={(e) => setAdjustStockForm({ ...adjustStockForm, reason: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                >
-                  <option value="Fresh kitchen batch prepared">Fresh kitchen batch prepared</option>
-                  <option value="Stock take audit adjustment">Stock take audit adjustment</option>
-                  <option value="Supplier receipt replenishment">Supplier receipt replenishment</option>
-                  <option value="Damaged / expired discard">Damaged / expired discard</option>
-                  <option value="Sample tasting / promotional">Sample tasting / promotional</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowAdjustStockModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
-                >
-                  Save Stock Adjustment
                 </button>
               </div>
             </form>
@@ -12581,18 +11107,14 @@ export const MerchantDashboard = () => {
                 </div>
                 <div>
                   <label className="text-slate-600 font-semibold block mb-1">Package Name *</label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter the published package name"
                     value={addTourForm.pkg}
                     onChange={(e) => setAddTourForm({ ...addTourForm, pkg: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
-                  >
-                    <option value="RJ Desert Explorer">RJ Desert Explorer (Jaisalmer)</option>
-                    <option value="Jaipur Heritage Tour">Jaipur Heritage Tour</option>
-                    <option value="Udaipur Weekend Escape">Udaipur Weekend Escape</option>
-                    <option value="Ranthambore Safari">Ranthambore Safari</option>
-                    <option value="Mount Abu Retreat">Mount Abu Retreat</option>
-                    <option value="Bikaner Royal Heritage">Bikaner Royal Heritage</option>
-                  </select>
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -12613,8 +11135,7 @@ export const MerchantDashboard = () => {
                 <div>
                   <label className="text-slate-600 font-semibold block mb-1">Travel Date</label>
                   <input
-                    type="text"
-                    placeholder="25 Oct 2026"
+                    type="date"
                     value={addTourForm.date}
                     onChange={(e) => setAddTourForm({ ...addTourForm, date: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
@@ -12624,7 +11145,7 @@ export const MerchantDashboard = () => {
                   <label className="text-slate-600 font-semibold block mb-1">Destination / Base</label>
                   <input
                     type="text"
-                    placeholder="Jaisalmer"
+                    placeholder="e.g. Pickup city or starting point"
                     value={addTourForm.loc}
                     onChange={(e) => setAddTourForm({ ...addTourForm, loc: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
@@ -12658,7 +11179,7 @@ export const MerchantDashboard = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Add New Customer</h3>
-                <p className="text-xs text-slate-400">Add a verified buyer to your directory for LTV tracking &amp; repeat sales</p>
+                <p className="text-xs text-slate-400">Add a customer contact to your CRM directory</p>
               </div>
               <button
                 onClick={() => setShowAddCustomerModal(false)}
@@ -13001,8 +11522,8 @@ export const MerchantDashboard = () => {
                   type="button"
                   onClick={() => {
                     setShowAvailabilityModal(false);
-                    setActionSuccessToast('Studio availability settings saved successfully!');
-                    setTimeout(() => setActionSuccessToast(''), 4000);
+                    setActionSuccessToast('Availability updated for this browser session only. Server-side availability persistence is not configured yet.');
+                    setTimeout(() => setActionSuccessToast(''), 4500);
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 cursor-pointer shadow-sm"
                 >

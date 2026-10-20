@@ -1,6 +1,6 @@
 // backend/src/middlewares/moduleGate.js
 // Enforces server-side module entitlements on a per-tenant basis.
-// A merchant cannot access any API endpoints for modules that Super Admin has disabled.
+// Fails CLOSED: an unknown or missing entitlement denies access.
 
 const moduleGate = (requiredModule) => {
   return (req, res, next) => {
@@ -19,19 +19,29 @@ const moduleGate = (requiredModule) => {
       });
     }
 
-    const enabledModules = tenant.enabledModules || {};
+    const rawModules = tenant.enabledModules;
+    const enabledModules =
+      rawModules && typeof rawModules.toObject === 'function'
+        ? rawModules.toObject()
+        : rawModules;
 
-    // Check if the specific module is enabled
-    // Support aliases: e.g. 'orders' and 'inventory' map to 'products' if not individually specified
+    if (!enabledModules || typeof enabledModules !== 'object') {
+      return res.status(403).json({
+        success: false,
+        code: 'MODULE_MAP_MISSING',
+        module: requiredModule,
+        message: 'No module entitlements are configured for this business. Contact platform administration.',
+      });
+    }
+
     let isAllowed = false;
     if (requiredModule in enabledModules) {
       isAllowed = Boolean(enabledModules[requiredModule]);
     } else if (requiredModule === 'orders' || requiredModule === 'inventory') {
+      // Alias: inventory & orders belong to the products module
       isAllowed = Boolean(enabledModules.products);
-    } else {
-      // Default to allowed for unlisted standard utility endpoints
-      isAllowed = true;
     }
+    // Anything not explicitly granted is denied.
 
     if (!isAllowed) {
       return res.status(403).json({

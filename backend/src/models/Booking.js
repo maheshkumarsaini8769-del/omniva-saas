@@ -68,12 +68,12 @@ const bookingSchema = new mongoose.Schema(
     },
     eventDate: {
       type: Date,
-      required: [true, 'Event shoot date or tour departure date is required'],
+      required: [true, 'Booking date is required'],
       index: true,
     },
     timeSlot: {
       type: String,
-      default: 'Full Day',
+      default: '',
     },
     location: {
       type: String,
@@ -85,6 +85,17 @@ const bookingSchema = new mongoose.Schema(
       min: 0,
     },
     advancePaid: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    advanceTokenPercent: {
+      type: Number,
+      default: 20,
+      min: 0,
+      max: 100,
+    },
+    expectedAdvance: {
       type: Number,
       default: 0,
       min: 0,

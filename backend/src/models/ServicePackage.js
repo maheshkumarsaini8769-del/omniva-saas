@@ -21,7 +21,7 @@ const servicePackageSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      default: 'Photography',
+      default: '',
       trim: true,
     },
     description: {
@@ -30,7 +30,7 @@ const servicePackageSchema = new mongoose.Schema(
     },
     duration: {
       type: String,
-      default: 'Full Day', // e.g. "4 Hours", "Full Day", "3 Days / 2 Nights"
+      default: '', // e.g. "4 Hours", "Full Day", "3 Days / 2 Nights"
     },
     price: {
       type: Number,
@@ -39,7 +39,7 @@ const servicePackageSchema = new mongoose.Schema(
     },
     advanceTokenPercent: {
       type: Number,
-      default: 20, // 20% advance token by default
+      default: 0, // No advance unless the merchant configures one
       min: 0,
       max: 100,
     },

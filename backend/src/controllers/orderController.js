@@ -2,13 +2,7 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const { triggerAutomation } = require('../services/automationEngine');
-const {
-  INITIAL_DEMO_ORDERS,
-  getStoredOrders,
-  addStoredOrder,
-  updateStoredOrderStatus,
-} = require('../utils/sharedOrderStore');
-
+const { buildAppUrl } = require('../utils/appUrl');
 // @desc    Get all orders for merchant with optional status & date filtering
 // @route   GET /api/orders
 // @access  Private (Merchant Admin/Staff)
@@ -17,43 +11,9 @@ const getOrders = async (req, res) => {
     const { orderStatus, paymentStatus, search, startDate, endDate, page = 1, limit = 100 } = req.query;
 
     if (mongoose.connection.readyState !== 1) {
-      let orders = [...getStoredOrders()];
-
-      if (orderStatus && orderStatus !== 'ALL') {
-        orders = orders.filter((o) => o.orderStatus === orderStatus);
-      }
-      if (paymentStatus && paymentStatus !== 'ALL') {
-        orders = orders.filter((o) => o.paymentStatus === paymentStatus);
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        orders = orders.filter(
-          (o) =>
-            (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
-            (o.customerName && o.customerName.toLowerCase().includes(q)) ||
-            (o.customerPhone && o.customerPhone.includes(q))
-        );
-      }
-      if (startDate || endDate) {
-        const start = startDate ? new Date(startDate).getTime() : 0;
-        const end = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : Infinity;
-        orders = orders.filter((o) => {
-          const t = new Date(o.createdAt).getTime();
-          return t >= start && t <= end;
-        });
-      }
-
-      const total = orders.length;
-      const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-      const paginatedOrders = orders.slice(skip, skip + parseInt(limit, 10));
-
-      return res.json({
-        success: true,
-        count: paginatedOrders.length,
-        total,
-        currentPage: parseInt(page, 10),
-        totalPages: Math.ceil(total / parseInt(limit, 10)) || 1,
-        data: paginatedOrders,
+      return res.status(503).json({
+        success: false,
+        message: 'Order data is temporarily unavailable. Please try again shortly.',
       });
     }
 
@@ -90,18 +50,8 @@ const getOrders = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit, 10));
 
-    // If database has 0 orders for this tenant, fallback to stored demo & live orders
-    if (orders.length === 0) {
-      const stored = getStoredOrders();
-      return res.json({
-        success: true,
-        count: stored.length,
-        total: stored.length,
-        currentPage: 1,
-        totalPages: 1,
-        data: stored,
-      });
-    }
+    // If the database has no orders for this tenant, return an empty list.
+    // Never substitute demo or another tenant's orders.
 
     res.json({
       success: true,
@@ -112,15 +62,10 @@ const getOrders = async (req, res) => {
       data: orders,
     });
   } catch (error) {
-    console.warn('[getOrders Fallback]:', error.message);
-    const stored = getStoredOrders();
-    return res.json({
-      success: true,
-      count: stored.length,
-      total: stored.length,
-      currentPage: 1,
-      totalPages: 1,
-      data: stored,
+    console.error('[getOrders]', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not load orders. No fallback data was substituted.',
     });
   }
 };
@@ -130,21 +75,33 @@ const getOrders = async (req, res) => {
 // @access  Private (Merchant Admin/Staff)
 const getOrderById = async (req, res) => {
   try {
-    let order = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        order = await Order.findOne({ _id: req.params.id, businessId: req.businessId });
-      } catch (e) {}
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Order data is temporarily unavailable. Please try again shortly.',
+      });
     }
-    if (!order) {
-      order = getStoredOrders().find((o) => o._id === req.params.id || o.orderNumber === req.params.id);
+
+    const identifier = String(req.params.id || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'An order id or order number is required' });
     }
+
+    const lookup = mongoose.isValidObjectId(identifier)
+      ? { $or: [{ _id: identifier }, { orderNumber: identifier }] }
+      : { orderNumber: identifier };
+    const order = await Order.findOne({ ...lookup, businessId: req.businessId });
+
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
-    res.json({ success: true, data: order });
+    return res.json({ success: true, data: order });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('[getOrderById]', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not load the order. No fallback data was substituted.',
+    });
   }
 };
 
@@ -156,22 +113,15 @@ const updateOrderStatus = async (req, res) => {
     const { orderStatus, paymentStatus, courierPartner, trackingNumber, note, duplicateResolved } = req.body;
     const updater = req.user ? `${req.user.name} (${req.user.role})` : 'Merchant Admin';
 
-    let order = null;
-    if (mongoose.connection.readyState === 1) {
-      try {
-        order = await Order.findOne({ _id: req.params.id, businessId: req.businessId });
-      } catch (e) {}
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Order updates are temporarily unavailable. No change was saved.',
+      });
     }
 
+    const order = await Order.findOne({ _id: req.params.id, businessId: req.businessId });
     if (!order) {
-      const stored = updateStoredOrderStatus(req.params.id, orderStatus, updater);
-      if (stored) {
-        if (paymentStatus) stored.paymentStatus = paymentStatus;
-        if (courierPartner) stored.courierPartner = courierPartner;
-        if (trackingNumber) stored.trackingNumber = trackingNumber;
-        if (duplicateResolved !== undefined) stored.duplicateResolved = Boolean(duplicateResolved);
-        return res.json({ success: true, data: stored });
-      }
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
@@ -182,24 +132,51 @@ const updateOrderStatus = async (req, res) => {
     }
 
     if (orderStatus && orderStatus !== order.orderStatus) {
-      // If order is cancelled, restore stock to products/variants
-      if (orderStatus === 'CANCELLED' && order.orderStatus !== 'CANCELLED' && order.items && order.items.length) {
-        for (const item of order.items) {
-          if (!item.productId) continue;
-          try {
-            if (item.variantId && mongoose.Types.ObjectId.isValid(item.variantId)) {
-              await Product.updateOne(
-                { _id: item.productId, 'variants._id': item.variantId },
-                { $inc: { 'variants.$.stockQuantity': item.quantity } }
-              );
-            } else if (item.productId && mongoose.Types.ObjectId.isValid(item.productId)) {
-              await Product.updateOne(
-                { _id: item.productId },
-                { $inc: { stockQuantity: item.quantity } }
-              );
+      // Claim the cancellation atomically. Two concurrent cancellation requests
+      // must not both restore the same stock.
+      if (orderStatus === 'CANCELLED' && order.orderStatus !== 'CANCELLED') {
+        const claim = await Order.findOneAndUpdate(
+          {
+            _id: order._id,
+            businessId: order.businessId,
+            orderStatus: { $ne: 'CANCELLED' },
+            stockRestored: { $ne: true },
+          },
+          { $set: { stockRestored: true } },
+          { new: true }
+        );
+        if (!claim) {
+          return res.status(409).json({
+            success: false,
+            message: 'This order is already being cancelled or was cancelled already',
+          });
+        }
+        order.stockRestored = true;
+
+        // Restore stock only for orders that actually decremented inventory
+        // when they were created. Legacy or manual orders may not have taken it.
+        if (order.stockDecremented && order.items && order.items.length) {
+          for (const item of order.items) {
+            if (!item.productId) continue;
+            try {
+              if (!mongoose.Types.ObjectId.isValid(item.productId)) continue;
+              // Only restore stock when the product actually tracks quantity.
+              const prod = await Product.findById(item.productId).select('trackQuantity');
+              if (!prod || prod.trackQuantity === false) continue;
+              if (item.variantId && mongoose.Types.ObjectId.isValid(item.variantId)) {
+                await Product.updateOne(
+                  { _id: item.productId, 'variants._id': item.variantId },
+                  { $inc: { 'variants.$.stockQuantity': item.quantity } }
+                );
+              } else if (item.productId && mongoose.Types.ObjectId.isValid(item.productId)) {
+                await Product.updateOne(
+                  { _id: item.productId },
+                  { $inc: { stockQuantity: item.quantity } }
+                );
+              }
+            } catch (stockErr) {
+              console.warn('[Order Cancel Stock Restoration Warning]:', stockErr.message);
             }
-          } catch (stockErr) {
-            console.warn('[Order Cancel Stock Restoration Warning]:', stockErr.message);
           }
         }
       }
@@ -228,11 +205,17 @@ const updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
-    updateStoredOrderStatus(req.params.id, orderStatus, updater);
 
     // Trigger automations for status transition
     if (orderStatus && orderStatus !== previousStatus) {
-      const trackingUrl = `${process.env.APP_URL || 'https://omniva-saas.vercel.app'}/orders/track?orderNumber=${order.orderNumber}&phone=${order.customerPhone}`;
+      const trackingUrl = buildAppUrl(
+        req,
+        `/orders/track?${new URLSearchParams({
+          orderNumber: order.orderNumber || '',
+          phone: order.customerPhone || '',
+          ...(req.tenant?.slug ? { slug: req.tenant.slug } : {}),
+        }).toString()}`
+      );
       const payloadData = {
         orderNumber: order.orderNumber,
         customerName: order.customerName,
@@ -240,8 +223,8 @@ const updateOrderStatus = async (req, res) => {
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
-        courierName: order.courierPartner || courierPartner || 'Standard Courier',
-        trackingNumber: order.trackingNumber || trackingNumber || 'N/A',
+        courierName: order.courierPartner || courierPartner || 'Courier not specified',
+        trackingNumber: order.trackingNumber || trackingNumber || 'Not available',
         trackingUrl,
       };
 
@@ -279,29 +262,9 @@ const getOrderStats = async (req, res) => {
     const { startDate, endDate } = req.query;
 
     if (mongoose.connection.readyState !== 1) {
-      const stored = getStoredOrders();
-      const statusMap = {
-        NEW: stored.filter((o) => o.orderStatus === 'NEW').length,
-        CONFIRMED: stored.filter((o) => o.orderStatus === 'CONFIRMED').length,
-        PROCESSING: stored.filter((o) => o.orderStatus === 'PROCESSING').length,
-        SHIPPED: stored.filter((o) => o.orderStatus === 'SHIPPED').length,
-        DELIVERED: stored.filter((o) => o.orderStatus === 'DELIVERED').length,
-        CANCELLED: stored.filter((o) => o.orderStatus === 'CANCELLED').length,
-      };
-      const validOrders = stored.filter((o) => o.orderStatus !== 'CANCELLED');
-      const totalRevenue = validOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      const codRevenue = validOrders.filter((o) => o.paymentMethod === 'COD').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      const onlineRevenue = validOrders.filter((o) => o.paymentMethod === 'ONLINE').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-      const paidRevenue = validOrders.filter((o) => o.paymentStatus === 'PAID').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-
-      return res.json({
-        success: true,
-        data: {
-          totalOrders: stored.length,
-          statusCounts: statusMap,
-          revenue: { totalRevenue, codRevenue, onlineRevenue, paidRevenue },
-          filterApplied: { startDate: startDate || null, endDate: endDate || null },
-        },
+      return res.status(503).json({
+        success: false,
+        message: 'Order statistics are temporarily unavailable. Please try again shortly.',
       });
     }
 
@@ -404,16 +367,19 @@ const getAiOrderInsights = async (req, res) => {
       Order.find(comparisonFilter).lean(),
     ]);
 
-    const currentRevenue = currentOrders
-      .filter(o => o.orderStatus !== 'CANCELLED')
-      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const prevRevenue = prevOrders
-      .filter(o => o.orderStatus !== 'CANCELLED')
-      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const validCurrentOrders = currentOrders.filter(o => o.orderStatus !== 'CANCELLED');
+    const validPrevOrders = prevOrders.filter(o => o.orderStatus !== 'CANCELLED');
+    const currentRevenue = validCurrentOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const prevRevenue = validPrevOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
-    const growthPercent = prevRevenue > 0
-      ? (((currentRevenue - prevRevenue) / prevRevenue) * 100).toFixed(1)
-      : currentRevenue > 0 ? '+100.0' : '0.0';
+    // A percentage is undefined when the comparison window has no revenue.
+    // Do not invent +100% growth in that case.
+    const growthPercentValue = prevRevenue > 0
+      ? Number((((currentRevenue - prevRevenue) / prevRevenue) * 100).toFixed(1))
+      : null;
+    const growthLabel = growthPercentValue === null
+      ? 'Not comparable (no revenue in the prior window)'
+      : `${growthPercentValue >= 0 ? '+' : ''}${growthPercentValue}%`;
 
     const pendingOrders = currentOrders.filter(o => o.orderStatus === 'NEW' || o.orderStatus === 'CONFIRMED');
     const processingOrders = currentOrders.filter(o => o.orderStatus === 'PROCESSING');
@@ -421,10 +387,10 @@ const getAiOrderInsights = async (req, res) => {
     const deliveredOrders = currentOrders.filter(o => o.orderStatus === 'DELIVERED');
     const cancelledOrders = currentOrders.filter(o => o.orderStatus === 'CANCELLED');
 
-    const codCount = currentOrders.filter(o => o.paymentMethod === 'COD').length;
-    const codRatio = currentOrders.length > 0 ? Math.round((codCount / currentOrders.length) * 100) : 0;
+    const codCount = validCurrentOrders.filter(o => o.paymentMethod === 'COD').length;
+    const codRatio = validCurrentOrders.length > 0 ? Math.round((codCount / validCurrentOrders.length) * 100) : 0;
 
-    // AI generated recommendations
+    // Rule-based recommendations derived only from the loaded orders.
     const recommendations = [];
 
     if (pendingOrders.length > 0) {
@@ -447,13 +413,13 @@ const getAiOrderInsights = async (req, res) => {
       });
     }
 
-    if (parseFloat(growthPercent) >= 10) {
+    if (growthPercentValue !== null && growthPercentValue >= 10) {
       recommendations.push({
         type: 'GROWTH',
         severity: 'POSITIVE',
-        title: `Strong Momentum: +${growthPercent}% Revenue Growth`,
-        message: `Your selected date window generated ₹${currentRevenue.toLocaleString('en-IN')}, beating previous cycle by ₹${Math.max(0, currentRevenue - prevRevenue).toLocaleString('en-IN')}.`,
-        action: 'SCALE_ADS',
+        title: `Revenue Growth: +${growthPercentValue}%`,
+        message: `The selected date window generated ₹${currentRevenue.toLocaleString('en-IN')}, compared with ₹${prevRevenue.toLocaleString('en-IN')} in the prior equivalent window.`,
+        action: 'REVIEW_REVENUE_GROWTH',
       });
     }
 
@@ -467,13 +433,34 @@ const getAiOrderInsights = async (req, res) => {
       });
     }
 
-    recommendations.push({
-      type: 'CATALOG_INSIGHT',
-      severity: 'POSITIVE',
-      title: 'Top Category: Handcrafted Pickles Driving 82% GMV',
-      message: 'Mango & Mixed Pickle combo packs have the highest conversion rate from Meta Ad traffic.',
-      action: 'PROMOTE_COMBOS',
+    const productRevenue = new Map();
+    validCurrentOrders.forEach((order) => {
+      (Array.isArray(order.items) ? order.items : []).forEach((item) => {
+        if (!item?.name) return;
+        const quantity = Math.max(0, Number(item.quantity) || 0);
+        const lineRevenue = Number.isFinite(Number(item.subtotal))
+          ? Number(item.subtotal)
+          : (Number(item.price) || 0) * quantity;
+        const current = productRevenue.get(item.name) || { revenue: 0, quantity: 0 };
+        productRevenue.set(item.name, {
+          revenue: current.revenue + lineRevenue,
+          quantity: current.quantity + quantity,
+        });
+      });
     });
+    const topProduct = [...productRevenue.entries()]
+      .sort((a, b) => b[1].revenue - a[1].revenue)[0];
+
+    if (topProduct) {
+      const [productName, productStats] = topProduct;
+      recommendations.push({
+        type: 'CATALOG_INSIGHT',
+        severity: 'INFO',
+        title: `Top Product: ${productName}`,
+        message: `This product contributed ₹${Math.round(productStats.revenue).toLocaleString('en-IN')} across ${productStats.quantity} unit(s) in the selected window.`,
+        action: 'REVIEW_TOP_PRODUCT',
+      });
+    }
 
     res.json({
       success: true,
@@ -486,7 +473,7 @@ const getAiOrderInsights = async (req, res) => {
         metrics: {
           currentRevenue,
           prevRevenue,
-          growthPercent: `${parseFloat(growthPercent) >= 0 ? '+' : ''}${growthPercent}%`,
+          growthPercent: growthLabel,
           totalOrders: currentOrders.length,
           pendingOrdersCount: pendingOrders.length,
           processingOrdersCount: processingOrders.length,
@@ -494,7 +481,7 @@ const getAiOrderInsights = async (req, res) => {
           deliveredOrdersCount: deliveredOrders.length,
           cancelledOrdersCount: cancelledOrders.length,
           codRatio: `${codRatio}%`,
-          avgOrderValue: currentOrders.length > 0 ? Math.round(currentRevenue / currentOrders.length) : 0,
+          avgOrderValue: validCurrentOrders.length > 0 ? Math.round(currentRevenue / validCurrentOrders.length) : 0,
         },
         recommendations,
       },
@@ -511,6 +498,13 @@ const getExecutiveOverview = async (req, res) => {
   try {
     const businessId = req.businessId;
     const { period = '30d', startDate, endDate } = req.query;
+
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Executive analytics are temporarily unavailable. Please try again shortly.',
+      });
+    }
 
     const now = new Date();
     let start, end;
@@ -548,78 +542,29 @@ const getExecutiveOverview = async (req, res) => {
 
     let currentOrders = [];
     let prevOrders = [];
-    let todayOrdersCount = 4;
+    let todayOrdersCount = 0;
     let allProducts = [];
 
-    if (mongoose.connection.readyState === 1) {
-      [
-        currentOrders,
-        prevOrders,
-        todayOrdersCount,
-        allProducts
-      ] = await Promise.all([
-        Order.find({
-          businessId,
-          createdAt: { $gte: start, $lte: end }
-        }).sort({ createdAt: -1 }).lean(),
-        Order.find({
-          businessId,
-          createdAt: { $gte: prevStart, $lte: prevEnd }
-        }).lean(),
-        Order.countDocuments({
-          businessId,
-          createdAt: { $gte: todayStart, $lte: todayEnd }
-        }),
-        Product.find({ businessId }).lean()
-      ]);
-    } else {
-      allProducts = [
-        { _id: 'p1', name: 'Traditional Mango Pickle (Aam Ka Achar)', stock: 35 },
-        { _id: 'p2', name: 'Spicy Green Chilli Pickle (Hari Mirch)', stock: 28 },
-        { _id: 'p3', name: 'Banarasi Stuffed Red Chilli (Lal Mirch)', stock: 15 },
-        { _id: 'p4', name: 'Special Garlic Pickle (Lahsun Ka Achar)', stock: 40 },
-        { _id: 'p5', name: 'Sweet & Tangy Lemon Pickle (Khatta Meetha Nimbu)', stock: 8 },
-        { _id: 'p6', name: 'Grand Festive 3-Pickle Gift Pack', stock: 12 }
-      ];
-      currentOrders = [
-        {
-          _id: 'ord_demo_101',
-          orderNumber: 'ORD-2026-9041',
-          createdAt: new Date(),
-          customerName: 'Ananya Sharma',
-          customerPhone: '9876543210',
-          totalAmount: 1148,
-          paymentMethod: 'PREPAID',
-          paymentStatus: 'PAID',
-          orderStatus: 'CONFIRMED',
-          items: [{ name: 'Traditional Mango Pickle', quantity: 2, price: 349 }]
-        },
-        {
-          _id: 'ord_demo_102',
-          orderNumber: 'ORD-2026-9042',
-          createdAt: new Date(Date.now() - 3600000 * 2),
-          customerName: 'Rajesh Verma',
-          customerPhone: '9812345678',
-          totalAmount: 899,
-          paymentMethod: 'COD',
-          paymentStatus: 'PENDING',
-          orderStatus: 'PROCESSING',
-          items: [{ name: 'Banarasi Stuffed Red Chilli', quantity: 1, price: 399 }]
-        },
-        {
-          _id: 'ord_demo_103',
-          orderNumber: 'ORD-2026-9043',
-          createdAt: new Date(Date.now() - 3600000 * 5),
-          customerName: 'Pooja Iyer',
-          customerPhone: '9798765432',
-          totalAmount: 1499,
-          paymentMethod: 'PREPAID',
-          paymentStatus: 'PAID',
-          orderStatus: 'DELIVERED',
-          items: [{ name: 'Grand Festive 3-Pickle Gift Pack', quantity: 1, price: 999 }]
-        }
-      ];
-    }
+    [
+      currentOrders,
+      prevOrders,
+      todayOrdersCount,
+      allProducts
+    ] = await Promise.all([
+      Order.find({
+        businessId,
+        createdAt: { $gte: start, $lte: end }
+      }).sort({ createdAt: -1 }).lean(),
+      Order.find({
+        businessId,
+        createdAt: { $gte: prevStart, $lte: prevEnd }
+      }).lean(),
+      Order.countDocuments({
+        businessId,
+        createdAt: { $gte: todayStart, $lte: todayEnd }
+      }),
+      Product.find({ businessId }).lean()
+    ]);
 
     // Financial & Order Breakdown - CURRENT PERIOD
     let grossSales = 0;
@@ -686,7 +631,7 @@ const getExecutiveOverview = async (req, res) => {
             if (!productSalesMap[key]) {
               productSalesMap[key] = {
                 id: key,
-                name: item.name || 'Pickle Item',
+                name: item.name || 'Unnamed item',
                 variant: item.variantName || '',
                 image: item.image || '',
                 quantitySold: 0,
@@ -715,7 +660,7 @@ const getExecutiveOverview = async (req, res) => {
 
     // Growth percentage helpers
     const calcGrowth = (curr, prev) => {
-      if (prev === 0) return curr > 0 ? 100 : 0;
+      if (prev === 0) return null;
       return parseFloat((((curr - prev) / prev) * 100).toFixed(1));
     };
 
@@ -783,13 +728,11 @@ const getExecutiveOverview = async (req, res) => {
       : 0;
     const fulfillmentTarget = 90.0;
 
-    // 2. Revenue Velocity (against dynamic duration target)
-    const daysInPeriod = Math.max(1, Math.round(durationMs / (1000 * 60 * 60 * 24)));
-    const dailyBenchmarkTarget = 2500;
-    const dynamicRevenueTarget = daysInPeriod * dailyBenchmarkTarget;
-    const revenueVelocityPct = dynamicRevenueTarget > 0
-      ? parseFloat(((netSalesBooked / dynamicRevenueTarget) * 100).toFixed(1))
-      : 0;
+    // 2. Revenue compared with the prior equivalent period. No arbitrary
+    // benchmark is invented when the prior period has no revenue.
+    const revenueComparisonPct = prevNetSales > 0
+      ? parseFloat(((netSalesBooked / prevNetSales) * 100).toFixed(1))
+      : null;
 
     // 3. Payment Realization Rate
     const paymentRealizationRate = netSalesBooked > 0
@@ -800,8 +743,13 @@ const getExecutiveOverview = async (req, res) => {
     // 4. Catalog Stock Health Index
     const stockHealthIndex = totalProductsCount > 0
       ? parseFloat(((healthyStockCount / totalProductsCount) * 100).toFixed(1))
-      : 100;
+      : 0;
     const stockHealthTarget = 95.0;
+
+    const daysInPeriod = Math.max(1, Math.round(durationMs / (1000 * 60 * 60 * 24)));
+    const hasFulfillmentData = nonCancelledCount > 0;
+    const hasPaymentData = netSalesBooked > 0;
+    const hasStockData = totalProductsCount > 0;
 
     const speedometers = [
       {
@@ -816,26 +764,26 @@ const getExecutiveOverview = async (req, res) => {
         formula: '((Shipped + Delivered Orders) / Non-Cancelled Orders) × 100',
         actualDisplay: `${fulfillmentRate}% (${shippedCount + deliveredCount}/${nonCancelledCount})`,
         targetDisplay: `Target: ${fulfillmentTarget}%`,
-        status: fulfillmentRate >= fulfillmentTarget ? 'OPTIMAL' : fulfillmentRate >= 60 ? 'CRUISING' : 'ATTENTION',
-        statusLabel: fulfillmentRate >= fulfillmentTarget ? 'Peak Velocity' : fulfillmentRate >= 60 ? 'Standard Pace' : 'Action Needed',
-        colorZone: fulfillmentRate >= fulfillmentTarget ? 'emerald' : fulfillmentRate >= 60 ? 'amber' : 'rose',
+        status: !hasFulfillmentData ? 'NO_DATA' : fulfillmentRate >= fulfillmentTarget ? 'OPTIMAL' : fulfillmentRate >= 60 ? 'CRUISING' : 'ATTENTION',
+        statusLabel: !hasFulfillmentData ? 'No non-cancelled orders in this period' : fulfillmentRate >= fulfillmentTarget ? 'Peak Velocity' : fulfillmentRate >= 60 ? 'Standard Pace' : 'Action Needed',
+        colorZone: !hasFulfillmentData ? 'slate' : fulfillmentRate >= fulfillmentTarget ? 'emerald' : fulfillmentRate >= 60 ? 'amber' : 'rose',
       },
       {
         id: 'revenue-velocity',
-        title: 'Revenue Run-Rate Velocity',
+        title: 'Revenue vs Prior Period',
         category: 'Financial Performance',
         unit: '₹',
-        value: Math.min(120, revenueVelocityPct),
-        percentage: revenueVelocityPct,
+        value: revenueComparisonPct === null ? 0 : Math.min(120, revenueComparisonPct),
+        percentage: revenueComparisonPct,
         target: 100,
         min: 0,
         max: 120,
-        formula: '(Actual Net Sales / Period Target Sales) × 100',
+        formula: '(Current Net Sales / Prior-Period Net Sales) × 100',
         actualDisplay: `₹${netSalesBooked.toLocaleString('en-IN')}`,
-        targetDisplay: `Target: ₹${dynamicRevenueTarget.toLocaleString('en-IN')}`,
-        status: revenueVelocityPct >= 100 ? 'OPTIMAL' : revenueVelocityPct >= 70 ? 'CRUISING' : 'ATTENTION',
-        statusLabel: revenueVelocityPct >= 100 ? 'Above Goal' : revenueVelocityPct >= 70 ? 'On Track' : 'Behind Pace',
-        colorZone: revenueVelocityPct >= 100 ? 'emerald' : revenueVelocityPct >= 70 ? 'indigo' : 'amber',
+        targetDisplay: `Prior period: ₹${prevNetSales.toLocaleString('en-IN')}`,
+        status: revenueComparisonPct === null ? 'NO_DATA' : revenueComparisonPct >= 100 ? 'OPTIMAL' : revenueComparisonPct >= 70 ? 'CRUISING' : 'ATTENTION',
+        statusLabel: revenueComparisonPct === null ? 'No prior-period revenue to compare' : revenueComparisonPct >= 100 ? 'Above Prior Period' : revenueComparisonPct >= 70 ? 'Near Prior Period' : 'Behind Prior Period',
+        colorZone: revenueComparisonPct === null ? 'slate' : revenueComparisonPct >= 100 ? 'emerald' : revenueComparisonPct >= 70 ? 'indigo' : 'amber',
       },
       {
         id: 'payment-realization',
@@ -849,9 +797,9 @@ const getExecutiveOverview = async (req, res) => {
         formula: '(Realized Paid Cash / Booked Net Sales) × 100',
         actualDisplay: `${paymentRealizationRate}% (₹${realizedCompletedCash.toLocaleString('en-IN')})`,
         targetDisplay: `Target: ${paymentRealizationTarget}%`,
-        status: paymentRealizationRate >= paymentRealizationTarget ? 'OPTIMAL' : paymentRealizationRate >= 50 ? 'CRUISING' : 'ATTENTION',
-        statusLabel: paymentRealizationRate >= paymentRealizationTarget ? 'High Realization' : paymentRealizationRate >= 50 ? 'Standard Flow' : 'Pending COD Lag',
-        colorZone: paymentRealizationRate >= paymentRealizationTarget ? 'emerald' : paymentRealizationRate >= 50 ? 'purple' : 'rose',
+        status: !hasPaymentData ? 'NO_DATA' : paymentRealizationRate >= paymentRealizationTarget ? 'OPTIMAL' : paymentRealizationRate >= 50 ? 'CRUISING' : 'ATTENTION',
+        statusLabel: !hasPaymentData ? 'No booked net sales to compare' : paymentRealizationRate >= paymentRealizationTarget ? 'High Realization' : paymentRealizationRate >= 50 ? 'Standard Flow' : 'Pending COD Lag',
+        colorZone: !hasPaymentData ? 'slate' : paymentRealizationRate >= paymentRealizationTarget ? 'emerald' : paymentRealizationRate >= 50 ? 'purple' : 'rose',
       },
       {
         id: 'stock-health',
@@ -863,11 +811,11 @@ const getExecutiveOverview = async (req, res) => {
         min: 0,
         max: 100,
         formula: '(Healthy Stock Products / Total Catalog Products) × 100',
-        actualDisplay: `${stockHealthIndex}% (${healthyStockCount}/${totalProductsCount} SKUs)`,
+        actualDisplay: hasStockData ? `${stockHealthIndex}% (${healthyStockCount}/${totalProductsCount} SKUs)` : 'No products in catalog',
         targetDisplay: `Target: ${stockHealthTarget}%`,
-        status: stockHealthIndex >= stockHealthTarget ? 'OPTIMAL' : stockHealthIndex >= 75 ? 'CRUISING' : 'ATTENTION',
-        statusLabel: stockHealthIndex >= stockHealthTarget ? 'Optimal Stock' : stockHealthIndex >= 75 ? 'Low Stock Alerts' : 'Critical Depletion',
-        colorZone: stockHealthIndex >= stockHealthTarget ? 'emerald' : stockHealthIndex >= 75 ? 'amber' : 'rose',
+        status: !hasStockData ? 'NO_DATA' : stockHealthIndex >= stockHealthTarget ? 'OPTIMAL' : stockHealthIndex >= 75 ? 'CRUISING' : 'ATTENTION',
+        statusLabel: !hasStockData ? 'No catalog data' : stockHealthIndex >= stockHealthTarget ? 'Optimal Stock' : stockHealthIndex >= 75 ? 'Low Stock Alerts' : 'Critical Depletion',
+        colorZone: !hasStockData ? 'slate' : stockHealthIndex >= stockHealthTarget ? 'emerald' : stockHealthIndex >= 75 ? 'amber' : 'rose',
       },
     ];
 
@@ -909,7 +857,7 @@ const getExecutiveOverview = async (req, res) => {
       customerPhone: o.customerPhone,
       customerEmail: o.customerEmail,
       itemsCount: o.items?.length || 0,
-      itemsSummary: o.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'Pickles',
+      itemsSummary: o.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No line items',
       totalAmount: o.totalAmount,
       paymentMethod: o.paymentMethod,
       paymentStatus: o.paymentStatus,

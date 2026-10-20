@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 import axios from 'axios';
 
@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }) => {
     checkMe();
   }, [token, logout]);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     const res = await axios.post('/api/auth/login', { email, password });
     if (res.data.success) {
       const { token, user, tenant } = res.data;
@@ -77,9 +77,9 @@ export const AuthProvider = ({ children }) => {
       return res.data;
     }
     throw new Error(res.data.message || 'Login failed');
-  };
+  }, []);
 
-  const registerMerchant = async (formData) => {
+  const registerMerchant = useCallback(async (formData) => {
     const res = await axios.post('/api/auth/register-merchant', formData);
     if (res.data.success) {
       const { token, user, tenant } = res.data;
@@ -94,24 +94,24 @@ export const AuthProvider = ({ children }) => {
       return res.data;
     }
     throw new Error(res.data.message || 'Registration failed');
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    tenant,
+    token,
+    loading,
+    login,
+    registerMerchant,
+    logout,
+    isAuthenticated: !!token && !!user,
+    isSuperAdmin: user?.role === 'SUPER_ADMIN',
+    isMerchantOwner: user?.role === 'MERCHANT_OWNER',
+    isStaff: ['ORDER_MANAGER', 'INVENTORY_STAFF', 'MARKETING_STAFF', 'SUPPORT_STAFF'].includes(user?.role),
+  }), [user, tenant, token, loading, login, registerMerchant, logout]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        tenant,
-        token,
-        loading,
-        login,
-        registerMerchant,
-        logout,
-        isAuthenticated: !!token && !!user,
-        isSuperAdmin: user?.role === 'SUPER_ADMIN',
-        isMerchantOwner: user?.role === 'MERCHANT_OWNER',
-        isStaff: ['ORDER_MANAGER', 'INVENTORY_STAFF', 'MARKETING_STAFF', 'SUPPORT_STAFF'].includes(user?.role),
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

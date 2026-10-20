@@ -1,5 +1,10 @@
 const http = require('http');
+const MOCK_GRAPH_PORT = 5096;
+process.env.META_GRAPH_BASE_URL = `http://127.0.0.1:${MOCK_GRAPH_PORT}`;
 const { startServer } = require('../src/server.js');
+const Tenant = require('../src/models/Tenant');
+const MetaIntegration = require('../src/models/MetaIntegration');
+const { encryptToken } = require('../src/utils/cryptoUtils');
 const TEST_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 
 const request = (options, data) => {
@@ -81,10 +86,49 @@ async function runPhase3Tests() {
   );
   const tokenB = loginB.data.token;
 
-  // 4. Ingest Meta Lead Ad Webhook (POST)
+  // 4. Configure a local Graph API stub and a real page integration for the
+  // webhook. This exercises the real ingestion path without fabricating lead
+  // data inside the application.
   const testLeadId = 'META_' + Date.now();
   const testLeadName = 'Pooja Meta ' + Date.now().toString().slice(-4);
   const testLeadPhone = '98' + Math.floor(10000000 + Math.random() * 90000000);
+  const pageId = 'phase3_page_' + Date.now();
+  global.__phase3LeadPayload = {
+    id: testLeadId,
+    created_time: new Date().toISOString(),
+    campaign_name: 'Instagram Reel Ad - Organic Achar Launch',
+    ad_name: 'Video Reel Creative 15s',
+    form_id: '99887766',
+    form_name: 'Achar Launch Lead Form',
+    platform: 'ig',
+    field_data: [
+      { name: 'full_name', values: [testLeadName] },
+      { name: 'phone_number', values: [testLeadPhone] },
+      { name: 'email', values: ['pooja.agarwal@example.com'] },
+    ],
+  };
+  const mockGraphServer = http.createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(global.__phase3LeadPayload));
+  });
+  await new Promise((resolve) => mockGraphServer.listen(MOCK_GRAPH_PORT, '127.0.0.1', resolve));
+
+  const tenantA = await Tenant.findOne({ slug: slugA, status: 'ACTIVE' });
+  if (!tenantA) throw new Error('Merchant A tenant not found');
+  let integration = await MetaIntegration.findOne({ businessId: tenantA._id });
+  const createdIntegration = !integration;
+  if (!integration) {
+    integration = new MetaIntegration({ businessId: tenantA._id, status: 'CONNECTED', pages: [] });
+  }
+  integration.status = 'CONNECTED';
+  integration.pages.push({
+    pageId,
+    pageName: 'Phase 3 Test Page',
+    encryptedPageAccessToken: encryptToken('phase3-mock-page-token'),
+    isSubscribed: true,
+    isSelected: true,
+  });
+  await integration.save();
 
   const webhookPostRes = await request(
     {
@@ -97,6 +141,7 @@ async function runPhase3Tests() {
     {
       entry: [
         {
+          id: pageId,
           changes: [
             {
               field: 'leadgen',
@@ -123,8 +168,7 @@ async function runPhase3Tests() {
     webhookPostRes.data.message
   );
 
-  // Allow async webhook ingestion worker to persist
-  await new Promise(r => setTimeout(r, 1200));
+  // Webhook processing is synchronous now; no background wait is required.
 
   // 5. Verify Ingested Lead in Merchant A's CRM
   const leadsA = await request({
@@ -234,18 +278,55 @@ async function runPhase3Tests() {
     regCRM.status === 200 ? '✅ PASS' : '❌ FAIL'
   );
 
-  if (
+  // Verify fail-closed behavior: an unmapped page must not silently succeed.
+  const unmappedRes = await request(
+    {
+      hostname: '127.0.0.1',
+      port: 5000,
+      path: '/api/webhooks/meta',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    },
+    {
+      entry: [
+        {
+          id: 'unmapped_page_' + Date.now(),
+          changes: [{ field: 'leadgen', value: { leadgen_id: 'unmapped_' + Date.now() } }],
+        },
+      ],
+    }
+  );
+  console.log(
+    'Test 10 [FAIL-CLOSED]: Unmapped Meta page rejected -> Status:',
+    unmappedRes.status,
+    '(Expected 500 so Meta retries)'
+  );
+
+  // Remove the test page/integration we created.
+  await MetaIntegration.updateOne(
+    { businessId: tenantA._id },
+    { $pull: { pages: { pageId } } }
+  );
+  if (createdIntegration) {
+    await MetaIntegration.deleteOne({ businessId: tenantA._id });
+  }
+
+  const testsPassed =
     verifyRes.raw === 'challenge_token_8877' &&
     badTokenRes.status === 403 &&
     webhookPostRes.status === 200 &&
     ingestedLead?.source === 'META_ADS' &&
     leadsB.data.totalCount === 0 &&
     updateSettingsRes.status === 200 &&
-    capiTestRes.data.success === true &&
+    capiTestRes.data.success === false &&
+    capiTestRes.data.result?.mode === 'NOT_CONFIGURED' &&
+    unmappedRes.status === 500 &&
     regMe.status === 200 &&
-    regCRM.status === 200
-  ) {
-    console.log('\n🌟 ALL 9 ULTRA-DEEP META ADS & CAPI TESTS PASSED 100%! 🌟');
+    regCRM.status === 200;
+
+  mockGraphServer.close();
+  if (testsPassed) {
+    console.log('\n🌟 ALL 10 ULTRA-DEEP META ADS & CAPI TESTS PASSED 100%! 🌟');
     process.exit(0);
   } else {
     console.error('Phase 3 tests failed!');

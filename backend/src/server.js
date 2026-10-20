@@ -2,11 +2,15 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+const { validateEnv } = require('./config/env');
+validateEnv();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const connectDB = require('./config/db');
+const { generalRateLimiter } = require('./middlewares/rateLimitMiddleware');
 const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const crmRoutes = require('./routes/crmRoutes');
@@ -26,14 +30,24 @@ const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
 
+// Only trust proxy headers when the deployment is actually behind a trusted proxy.
+// Rate limiting uses req.ip, so this must not be enabled blindly.
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
 // Security and utility middlewares
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+// A wildcard origin is invalid with credentials and is rejected by browsers.
+// If CLIENT_URL is unset (same-origin deployment), disable cross-origin access.
+const configuredClientUrl = (process.env.CLIENT_URL || '').trim();
+const corsOrigin = configuredClientUrl && configuredClientUrl !== '*' ? configuredClientUrl : false;
 app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
-  credentials: true,
+  origin: corsOrigin,
+  credentials: Boolean(corsOrigin),
 }));
 app.use(
   express.json({
@@ -45,6 +59,9 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(sanitizeInput);
+
+// Global API rate limit. Auth and checkout add tighter limits on top of this.
+app.use('/api', generalRateLimiter.middleware());
 
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
@@ -92,7 +109,7 @@ if (fs.existsSync(frontendDist)) {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Connect to MongoDB and start server
 const startServer = async () => {

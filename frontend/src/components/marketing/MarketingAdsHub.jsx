@@ -45,6 +45,7 @@ export const MarketingAdsHub = ({
   const [activeSubTab, setActiveSubTab] = useState('meta-orders'); // 'meta-orders' | 'campaigns' | 'creative-studio' | 'utm-builder' | 'calculator' | 'meta-setup'
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState('');
   const [platformFilter, setPlatformFilter] = useState('ALL_META');
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMessage, setToastMessage] = useState('');
@@ -53,23 +54,30 @@ export const MarketingAdsHub = ({
   // Creative Studio State
   const [adCreative, setAdCreative] = useState({
     format: 'INSTAGRAM_REEL', // 'INSTAGRAM_REEL' | 'FACEBOOK_FEED' | 'WHATSAPP_CHAT'
-    headline: 'Authentic Rajasthani Kair Sangri & Mango Pickles',
-    primaryText: 'Handcrafted in cold-pressed mustard oil with age-old family recipes. No artificial preservatives. Get FLAT 15% OFF today!',
-    badgeText: 'FLAT 15% OFF',
-    couponCode: 'DESI15',
+    headline: tenantInfo?.businessName
+      ? `Discover ${tenantInfo.businessName}`
+      : 'Discover Our Latest Collection',
+    primaryText: 'Share your latest products, offers, and updates with your audience.',
+    badgeText: 'WELCOME OFFER',
+    couponCode: 'YOURCODE',
     ctaText: 'Shop Now',
-    productName: 'Kair Sangri Traditional Pickle (1kg Jar)',
-    productPrice: '₹449',
-    originalPrice: '₹599',
+    productName: 'Your Featured Product',
+    productPrice: '',
+    originalPrice: '',
   });
 
   // UTM Generator State
   const [utmForm, setUtmForm] = useState({
-    baseUrl: typeof window !== 'undefined' ? `${window.location.origin}/store/desi-achar-house` : 'https://omniva-saas.vercel.app/store/desi-achar-house',
+    baseUrl:
+      typeof window !== 'undefined'
+        ? tenantInfo?.slug
+          ? `${window.location.origin}/store/${tenantInfo.slug}`
+          : window.location.origin
+        : '',
     source: 'instagram',
     medium: 'reels',
-    campaign: 'festive_combo_sale',
-    content: 'video_creative_01',
+    campaign: 'campaign_name',
+    content: 'creative_01',
   });
   const [generatedUtmUrl, setGeneratedUtmUrl] = useState('');
   const [copiedUtm, setCopiedUtm] = useState(false);
@@ -91,6 +99,7 @@ export const MarketingAdsHub = ({
   const fetchAnalytics = async () => {
     try {
       setLoadingAnalytics(true);
+      setAnalyticsError('');
       const token = getToken();
       const res = await fetch('/api/meta/analytics', {
         headers: {
@@ -98,14 +107,14 @@ export const MarketingAdsHub = ({
           Authorization: `Bearer ${token}`,
         },
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAnalyticsData(data.data);
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.message || `Unable to load Meta analytics (status ${res.status}).`);
       }
+      setAnalyticsData(data.data);
     } catch (err) {
-      console.warn('Fallback loading marketing analytics:', err);
+      setAnalyticsData(null);
+      setAnalyticsError(err.message || 'Unable to load Meta analytics from the server.');
     } finally {
       setLoadingAnalytics(false);
     }
@@ -117,15 +126,20 @@ export const MarketingAdsHub = ({
 
   // Update generated UTM URL
   useEffect(() => {
+    const rawBaseUrl = utmForm.baseUrl.trim();
+    if (!rawBaseUrl) {
+      setGeneratedUtmUrl('');
+      return;
+    }
     try {
-      const url = new URL(utmForm.baseUrl.trim() || 'https://omniva-saas.vercel.app');
+      const url = new URL(rawBaseUrl);
       if (utmForm.source) url.searchParams.set('utm_source', utmForm.source.trim());
       if (utmForm.medium) url.searchParams.set('utm_medium', utmForm.medium.trim());
       if (utmForm.campaign) url.searchParams.set('utm_campaign', utmForm.campaign.trim());
       if (utmForm.content) url.searchParams.set('utm_content', utmForm.content.trim());
       setGeneratedUtmUrl(url.toString());
     } catch {
-      setGeneratedUtmUrl(`${utmForm.baseUrl}?utm_source=${utmForm.source}&utm_medium=${utmForm.medium}&utm_campaign=${utmForm.campaign}`);
+      setGeneratedUtmUrl('');
     }
   }, [utmForm]);
 
@@ -174,13 +188,13 @@ export const MarketingAdsHub = ({
   const getSourceBadge = (source) => {
     switch (source) {
       case 'INSTAGRAM':
-        return { label: 'Instagram Ads', icon: '📸', color: 'bg-pink-50 text-pink-700 border-pink-200' };
+        return { label: 'Instagram', icon: '📸', color: 'bg-pink-50 text-pink-700 border-pink-200' };
       case 'FACEBOOK':
-        return { label: 'Facebook Ads', icon: '🔵', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+        return { label: 'Facebook', icon: '🔵', color: 'bg-blue-50 text-blue-700 border-blue-200' };
       case 'WHATSAPP':
         return { label: 'WhatsApp Direct', icon: '💬', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
       default:
-        return { label: 'Organic Storefront', icon: '🌐', color: 'bg-slate-50 text-slate-700 border-slate-200' };
+        return { label: 'Unattributed', icon: '🌐', color: 'bg-slate-50 text-slate-700 border-slate-200' };
     }
   };
 
@@ -193,8 +207,8 @@ export const MarketingAdsHub = ({
     const rows = ordersList.map(o => [
       `"${o.id || ''}"`,
       `"${o.displayDate || ''}"`,
-      `"${o.source || 'WEBSITE'}"`,
-      `"${o.campaign || 'Storefront Organic'}"`,
+      `"${o.source || 'UNATTRIBUTED'}"`,
+      `"${o.campaign || ''}"`,
       `"${o.customer || ''}"`,
       `"${o.phone || ''}"`,
       `"${o.total || 0}"`,
@@ -222,6 +236,13 @@ export const MarketingAdsHub = ({
         </div>
       )}
 
+      {analyticsError && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{analyticsError}</span>
+        </div>
+      )}
+
       {/* Main Header Banner */}
       <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-950 border border-slate-800 rounded-3xl p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
         <div className="relative z-10 flex items-center gap-4">
@@ -233,13 +254,28 @@ export const MarketingAdsHub = ({
               <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">
                 Meta Ads &amp; Attribution Command Center
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Pixel &amp; CAPI Active
+              <span
+                className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                  analyticsData?.capiHealth?.configured
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-200 border-amber-500/30'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    analyticsData?.capiHealth?.configured ? 'bg-emerald-400' : 'bg-amber-400'
+                  }`}
+                ></span>
+                {analyticsData
+                  ? analyticsData.capiHealth?.configured
+                    ? 'Pixel & CAPI Configured'
+                    : 'Pixel & CAPI Not Configured'
+                  : 'Setup Status Unavailable'}
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              Track multi-touch Instagram Reels, Stories &amp; Facebook Feed conversions with verified purchase revenue, real-time ROAS intelligence, and one-click ad studio.
+              Review first-party Instagram, Facebook, and WhatsApp order attribution, campaign revenue,
+              and CAPI configuration. Ad spend and impression data are only shown when a real source is connected.
             </p>
           </div>
         </div>
@@ -284,7 +320,7 @@ export const MarketingAdsHub = ({
             ₹{totalMetaRev.toLocaleString('en-IN')}
           </div>
           <div className="text-[11px] text-pink-700 font-bold mt-1 flex items-center justify-between">
-            <span>ROAS: <strong>{analyticsData?.summary?.blendedRoas || '3.6x'}</strong></span>
+            <span>ROAS: <strong>{analyticsData?.summary?.blendedRoas || 'Not available'}</strong></span>
             <span className="text-slate-400 font-normal">
               {ordersList.length > 0 ? Math.round((allMetaOrders.length / ordersList.length) * 100) : 0}% of store
             </span>
@@ -298,7 +334,7 @@ export const MarketingAdsHub = ({
               <Target className="w-3.5 h-3.5 text-blue-600" /> Attributed Orders
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              Verified
+              Attributed
             </span>
           </div>
           <div className="text-2xl font-black text-slate-900 mt-2">
@@ -313,36 +349,50 @@ export const MarketingAdsHub = ({
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs hover:border-indigo-300 transition">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-indigo-600" /> Meta Paid AOV
+              <DollarSign className="w-3.5 h-3.5 text-indigo-600" /> Meta-source AOV
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              High Basket
+              Attributed
             </span>
           </div>
           <div className="text-2xl font-black text-indigo-950 mt-2">
-            ₹{allMetaOrders.length > 0 ? Math.round(totalMetaRev / allMetaOrders.length).toLocaleString('en-IN') : '1,280'}
+            ₹{allMetaOrders.length > 0 ? Math.round(totalMetaRev / allMetaOrders.length).toLocaleString('en-IN') : '—'}
           </div>
-          <div className="text-[11px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+          <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
-            <span>+18% higher than organic AOV</span>
+            <span>
+              {allMetaOrders.length > 0
+                ? `Based on ${allMetaOrders.length} attributed Meta orders`
+                : 'No attributed Meta orders yet'}
+            </span>
           </div>
         </div>
 
-        {/* Metric 4: Conversions API Health Score */}
+        {/* Metric 4: Conversions API configuration state */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs hover:border-emerald-300 transition">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Meta CAPI Health
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Meta CAPI Configuration
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Optimal
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                analyticsData?.capiHealth?.configured
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+            >
+              {analyticsData?.capiHealth?.configured ? 'Configured' : 'Not configured'}
             </span>
           </div>
-          <div className="text-2xl font-black text-emerald-700 mt-2">
-            {analyticsData?.capiHealth?.eventMatchQuality || '9.4 / 10'}
+          <div
+            className={`text-xl font-black mt-2 ${
+              analyticsData?.capiHealth?.configured ? 'text-emerald-700' : 'text-slate-500'
+            }`}
+          >
+            {analyticsData?.capiHealth?.configured ? 'Configured' : 'Not configured'}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Server Deduplication: <strong className="text-emerald-700">99.8%</strong>
+            Event match quality is not reported by the Meta API here.
           </div>
         </div>
       </div>
@@ -444,31 +494,31 @@ export const MarketingAdsHub = ({
                 <span>Omni-Channel Customer Volume Share</span>
               </span>
               <span className="text-slate-500 font-normal">
-                Meta Ads drives <strong>{ordersList.length > 0 ? Math.round((allMetaOrders.length / ordersList.length) * 100) : 0}%</strong> of total verified volume
+                Meta Ads drives <strong>{ordersList.length > 0 ? Math.round((allMetaOrders.length / ordersList.length) * 100) : 0}%</strong> of attributed order volume
               </span>
             </div>
 
             {/* Segmented Color Bar */}
             <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
               <div
-                style={{ width: `${ordersList.length > 0 ? (metaInstaOrders.length / ordersList.length) * 100 : 40}%` }}
+                style={{ width: `${ordersList.length > 0 ? (metaInstaOrders.length / ordersList.length) * 100 : 0}%` }}
                 className="bg-pink-500 h-full transition-all duration-500"
                 title={`Instagram: ${metaInstaOrders.length} orders`}
               />
               <div
-                style={{ width: `${ordersList.length > 0 ? (metaFbOrders.length / ordersList.length) * 100 : 35}%` }}
+                style={{ width: `${ordersList.length > 0 ? (metaFbOrders.length / ordersList.length) * 100 : 0}%` }}
                 className="bg-blue-600 h-full transition-all duration-500"
                 title={`Facebook: ${metaFbOrders.length} orders`}
               />
               <div
-                style={{ width: `${ordersList.length > 0 ? (metaWaOrders.length / ordersList.length) * 100 : 15}%` }}
+                style={{ width: `${ordersList.length > 0 ? (metaWaOrders.length / ordersList.length) * 100 : 0}%` }}
                 className="bg-emerald-500 h-full transition-all duration-500"
                 title={`WhatsApp: ${metaWaOrders.length} orders`}
               />
               <div
-                style={{ width: `${ordersList.length > 0 ? (metaWebOrders.length / ordersList.length) * 100 : 10}%` }}
+                style={{ width: `${ordersList.length > 0 ? (metaWebOrders.length / ordersList.length) * 100 : 0}%` }}
                 className="bg-indigo-400 h-full transition-all duration-500"
-                title={`Website Direct: ${metaWebOrders.length} orders`}
+                title={`Website / Unattributed: ${metaWebOrders.length} orders`}
               />
             </div>
 
@@ -476,12 +526,12 @@ export const MarketingAdsHub = ({
             <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-pink-500" />
-                <span className="text-slate-700 font-semibold">📸 Instagram Ads:</span>
+                <span className="text-slate-700 font-semibold">📸 Instagram traffic:</span>
                 <span className="font-bold text-pink-700">{metaInstaOrders.length} orders (₹{metaInstaRev.toLocaleString('en-IN')})</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-blue-600" />
-                <span className="text-slate-700 font-semibold">🔵 Facebook Ads:</span>
+                <span className="text-slate-700 font-semibold">🔵 Facebook traffic:</span>
                 <span className="font-bold text-blue-700">{metaFbOrders.length} orders (₹{metaFbRev.toLocaleString('en-IN')})</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -491,7 +541,7 @@ export const MarketingAdsHub = ({
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-indigo-400" />
-                <span className="text-slate-700 font-semibold">🌐 Direct Storefront:</span>
+                <span className="text-slate-700 font-semibold">🌐 Website / Unattributed:</span>
                 <span className="font-bold text-indigo-700">{metaWebOrders.length} orders (₹{metaWebRev.toLocaleString('en-IN')})</span>
               </div>
             </div>
@@ -502,8 +552,8 @@ export const MarketingAdsHub = ({
             <div className="flex flex-wrap items-center gap-2">
               {[
                 { key: 'ALL_META', label: `⚡ All Meta Ads (${allMetaOrders.length})` },
-                { key: 'INSTAGRAM', label: `📸 Instagram Ads (${metaInstaOrders.length})` },
-                { key: 'FACEBOOK', label: `🔵 Facebook Ads (${metaFbOrders.length})` },
+                { key: 'INSTAGRAM', label: `📸 Instagram traffic (${metaInstaOrders.length})` },
+                { key: 'FACEBOOK', label: `🔵 Facebook traffic (${metaFbOrders.length})` },
                 { key: 'WHATSAPP', label: `💬 WhatsApp (${metaWaOrders.length})` },
                 { key: 'ALL', label: `🛒 All Channels (${ordersList.length})` },
               ].map((btn) => (
@@ -533,18 +583,18 @@ export const MarketingAdsHub = ({
             </div>
           </div>
 
-          {/* Live Attributed Orders Feed Table */}
+          {/* Attributed Orders Feed Table */}
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
             <div className="p-4 px-6 border-b border-slate-200/80 flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                  <span>Live Attributed Orders Feed</span>
+                  <span>Attributed Orders Feed</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Real-time Meta Attribution
+                    First-party Attribution
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Customer verified orders with full marketing campaign source, click-to-call, and direct WhatsApp dispatch
+                  Orders with campaign source, click-to-call, and direct WhatsApp dispatch
                 </p>
               </div>
               <div className="text-xs text-slate-500 font-semibold">
@@ -594,8 +644,8 @@ export const MarketingAdsHub = ({
                                 <span>{badge.icon}</span>
                                 <span>{badge.label}</span>
                               </span>
-                              <div className="text-[10px] text-slate-600 font-semibold truncate max-w-[200px]" title={ord.campaign || 'Direct Storefront'}>
-                                🎯 {ord.campaign || ord.channelName || 'Storefront Organic'}
+                              <div className="text-[10px] text-slate-600 font-semibold truncate max-w-[200px]" title={ord.campaign || 'No campaign recorded'}>
+                                🎯 {ord.campaign || ord.channelName || 'No campaign recorded'}
                               </div>
                             </div>
                           </td>
@@ -630,7 +680,7 @@ export const MarketingAdsHub = ({
                           </td>
 
                           <td className="py-3.5 px-4 text-slate-600 font-medium">
-                            {ord.itemSummary || 'Artisanal Products'}
+                            {ord.itemSummary || 'No line items'}
                           </td>
 
                           <td className="py-3.5 px-4">
@@ -638,7 +688,7 @@ export const MarketingAdsHub = ({
                               ₹{(ord.total || 0).toLocaleString('en-IN')}
                             </div>
                             <span className="text-[10px] font-bold px-2 py-0.2 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
-                              {ord.pay || 'COD'}
+                              {ord.pay || ord.paymentMethod || 'Not recorded'}
                             </span>
                           </td>
 
@@ -683,107 +733,44 @@ export const MarketingAdsHub = ({
       {/* ================= SUB-TAB 2: CAMPAIGN PERFORMANCE & FUNNEL ================= */}
       {activeSubTab === 'campaigns' && (
         <div className="space-y-6">
-          {/* Row: Visual Conversion Funnel & Weekly Velocity */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Visual Funnel */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Target className="w-4 h-4 text-indigo-600" />
-                  <span>Meta Ads Conversion Funnel</span>
-                </h3>
-                <p className="text-[11px] text-slate-400">Visitor progression from Instagram/FB ad impression to verified sale</p>
-              </div>
-
-              <div className="space-y-3.5 text-xs">
-                <div>
-                  <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                    <span>1. Ad Impressions</span>
-                    <span className="font-bold text-slate-900">48,500</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-blue-600 h-full rounded-full" style={{ width: '100%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                    <span>2. Ad Clicks (CTR 4.2%)</span>
-                    <span className="font-bold text-slate-900">4,820</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-indigo-600 h-full rounded-full" style={{ width: '58%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                    <span>3. Storefront Product Views</span>
-                    <span className="font-bold text-slate-900">2,460</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-purple-600 h-full rounded-full" style={{ width: '38%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                    <span>4. Added To Cart</span>
-                    <span className="font-bold text-slate-900">680</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-pink-600 h-full rounded-full" style={{ width: '22%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                    <span>5. Verified Paid / COD Orders</span>
-                    <span className="font-bold text-emerald-700">{allMetaOrders.length || 43} Orders</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: '12%' }} />
-                  </div>
-                </div>
-              </div>
+          {/* First-party attribution coverage */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-2xs space-y-4">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <Target className="w-4 h-4 text-indigo-600" />
+                <span>Attribution Coverage</span>
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Counts and revenue below come from first-party orders and leads attributed to each channel.
+              </p>
             </div>
 
-            {/* Weekly Spend vs Revenue Velocity */}
-            <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">Weekly Ad Spend vs Attributed Revenue Velocity</h3>
-                  <p className="text-[11px] text-slate-400">Weekly return on ad spend trajectory across active campaigns</p>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> Revenue</span>
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-pink-400"></span> Ad Spend</span>
-                </div>
-              </div>
-
-              <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
-                {[
-                  { w: 'W1', rev: 45, sp: 20 },
-                  { w: 'W2', rev: 60, sp: 25 },
-                  { w: 'W3', rev: 52, sp: 22 },
-                  { w: 'W4', rev: 78, sp: 30 },
-                  { w: 'W5', rev: 68, sp: 28 },
-                  { w: 'W6', rev: 89, sp: 35 },
-                  { w: 'W7', rev: 82, sp: 32 },
-                  { w: 'W8', rev: 95, sp: 38 },
-                ].map((item, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                    <div className="w-full flex items-end justify-center gap-1 h-32">
-                      <div style={{ height: `${item.sp}%` }} className="w-1/2 bg-pink-400 rounded-t-sm" title={`Spend: ₹${item.sp * 500}`} />
-                      <div style={{ height: `${item.rev}%` }} className="w-1/2 bg-indigo-600 rounded-t-sm" title={`Revenue: ₹${item.rev * 1000}`} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {[
+                { key: 'instagram', label: 'Instagram' },
+                { key: 'facebook', label: 'Facebook' },
+                { key: 'whatsapp', label: 'WhatsApp' },
+                { key: 'direct', label: 'Direct / Organic' },
+              ].map(({ key, label }) => {
+                const channel = analyticsData?.channels?.[key] || { count: 0, revenue: 0 };
+                return (
+                  <div key={key} className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                    <div className="font-semibold text-slate-600">{label}</div>
+                    <div className="text-lg font-black text-slate-900">
+                      {channel.count?.toLocaleString('en-IN') || 0}
+                      <span className="text-[10px] font-semibold text-slate-400"> orders/leads</span>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-400">{item.w}</span>
+                    <div className="text-[11px] text-emerald-700 font-semibold">
+                      ₹{(channel.revenue || 0).toLocaleString('en-IN')}
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="text-[11px] text-slate-500 font-medium text-center">
-                Average ROAS during peak weeks reached <strong className="text-emerald-700">3.8x return</strong> on Meta campaign expenditure.
-              </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+              Impression, click, cart, and ad-spend metrics are not shown because no Meta Ads Insights
+              data source is connected. ROAS and CPA stay unavailable until real spend is imported.
             </div>
           </div>
 
@@ -791,11 +778,11 @@ export const MarketingAdsHub = ({
           <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
             <div className="p-4 px-6 border-b border-slate-200/80 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Active Meta Ad Campaigns Breakdown</h3>
-                <p className="text-[11px] text-slate-400">Tracked ROAS, cost per acquisition (CPA), and verified order revenue per campaign</p>
+                <h3 className="font-bold text-slate-900 text-sm">Attributed Campaign Breakdown</h3>
+                <p className="text-[11px] text-slate-400">First-party order revenue by campaign. Spend and ROAS require a connected Ads Insights source.</p>
               </div>
-              <span className="text-xs font-bold text-emerald-700 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-xl">
-                Average ROAS: 3.5x
+              <span className="text-xs font-bold text-slate-600 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl">
+                Ad spend: Not synced
               </span>
             </div>
 
@@ -807,31 +794,27 @@ export const MarketingAdsHub = ({
                     <th className="py-3 px-4">PLATFORM</th>
                     <th className="py-3 px-4">AD SPEND</th>
                     <th className="py-3 px-4">LEADS</th>
-                    <th className="py-3 px-4">VERIFIED ORDERS</th>
+                    <th className="py-3 px-4">ATTRIBUTED ORDERS</th>
                     <th className="py-3 px-4">ATTRIBUTED REVENUE</th>
                     <th className="py-3 px-4">EST. CPA</th>
                     <th className="py-3 px-6 text-right">ROAS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {(analyticsData?.campaigns || [
-                    { name: 'Diwali Festive Combo Promo', platform: 'INSTAGRAM', spend: 18000, leads: 104, orders: 24, revenue: 61400, roas: '3.4x', cpa: '₹750' },
-                    { name: 'Instagram Reels Video Showcase', platform: 'INSTAGRAM', spend: 12500, leads: 72, orders: 19, revenue: 44200, roas: '3.5x', cpa: '₹658' },
-                    { name: 'Facebook Feed & Carousel Catalog', platform: 'FACEBOOK', spend: 10000, leads: 55, orders: 14, revenue: 33500, roas: '3.3x', cpa: '₹714' },
-                    { name: 'WhatsApp Direct Click-to-Chat', platform: 'WHATSAPP', spend: 8000, leads: 41, orders: 16, revenue: 26800, roas: '3.3x', cpa: '₹500' },
-                    { name: 'Retargeting Cart Abandoners', platform: 'INSTAGRAM', spend: 6500, leads: 28, orders: 12, revenue: 21500, roas: '3.3x', cpa: '₹541' },
-                  ]).map((cmp, idx) => (
+                  {(analyticsData?.campaigns || []).map((cmp, idx) => (
                     <tr key={idx} className="hover:bg-slate-50 transition">
                       <td className="py-3.5 px-6 font-bold text-slate-900">
                         {cmp.name}
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-slate-50 text-slate-700 border-slate-200">
-                          {cmp.platform || 'INSTAGRAM'}
+                          {cmp.platform || 'UNKNOWN'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 font-semibold">
-                        ₹{(cmp.spend || 0).toLocaleString('en-IN')}
+                        {typeof cmp.spend === 'number'
+                          ? `₹${cmp.spend.toLocaleString('en-IN')}`
+                          : 'Not synced'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-800">
                         {cmp.leads || 0}
@@ -843,15 +826,22 @@ export const MarketingAdsHub = ({
                         ₹{(cmp.revenue || 0).toLocaleString('en-IN')}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-600">
-                        {cmp.cpa || '₹680'}
+                        {cmp.cpa || '—'}
                       </td>
                       <td className="py-3.5 px-6 text-right">
                         <span className="font-black text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
-                          {cmp.roas || '3.5x'}
+                          {cmp.roas || '—'}
                         </span>
                       </td>
                     </tr>
                   ))}
+                  {(!analyticsData?.campaigns || analyticsData.campaigns.length === 0) && (
+                    <tr>
+                      <td colSpan={8} className="py-8 px-6 text-center text-slate-500">
+                        No attributed campaign data yet. Campaigns appear after orders or leads carry a UTM campaign.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -991,11 +981,11 @@ export const MarketingAdsHub = ({
             </div>
           </div>
 
-          {/* Right: Live Interactive Ad Preview Phone Canvas */}
+          {/* Right: Ad Preview Phone Canvas */}
           <div className="lg:col-span-6 flex flex-col items-center justify-center bg-slate-100/80 rounded-3xl p-6 border border-slate-200">
             <div className="text-xs font-bold text-slate-500 mb-3 flex items-center gap-1.5">
               <Smartphone className="w-4 h-4 text-slate-700" />
-              <span>Live Social Ad Mockup ({adCreative.format === 'INSTAGRAM_REEL' ? 'Instagram Reel' : 'Facebook Feed'})</span>
+              <span>Social Ad Preview ({adCreative.format === 'INSTAGRAM_REEL' ? 'Instagram Reel' : 'Facebook Feed'})</span>
             </div>
 
             {/* Mobile Device Frame */}
@@ -1013,10 +1003,9 @@ export const MarketingAdsHub = ({
                     </div>
                     <div>
                       <div className="text-xs font-extrabold flex items-center gap-1">
-                        <span>desi.achar.house</span>
-                        <span className="text-[10px] text-blue-400">✓</span>
+                        <span>{tenantInfo?.slug || tenantInfo?.businessName || 'Your storefront'}</span>
                       </div>
-                      <div className="text-[9px] text-slate-400 font-semibold">Sponsored · Ads</div>
+                      <div className="text-[9px] text-slate-400 font-semibold">Ad preview</div>
                     </div>
                   </div>
                   <button className="text-slate-400 text-sm">•••</button>
@@ -1028,7 +1017,7 @@ export const MarketingAdsHub = ({
                     <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black tracking-wide shadow-sm">
                       {adCreative.badgeText}
                     </div>
-                    <div className="text-4xl py-3">🏺</div>
+                    <ShoppingBag className="w-12 h-12 mx-auto my-3 text-slate-500" />
                     <div className="font-extrabold text-sm text-white leading-snug">
                       {adCreative.productName}
                     </div>
@@ -1072,7 +1061,7 @@ export const MarketingAdsHub = ({
               <h3 className="font-extrabold text-slate-900 text-base">Smart UTM Tracking URL Builder</h3>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Create tagged links for your Instagram bio, WhatsApp messages, Influencer promos, and Facebook Ads with 100% verified sales attribution
+              Create tagged links for your Instagram bio, WhatsApp messages, influencer promos, and Facebook Ads with campaign-level sales attribution
             </p>
           </div>
 
@@ -1119,7 +1108,7 @@ export const MarketingAdsHub = ({
                 type="text"
                 value={utmForm.campaign}
                 onChange={(e) => setUtmForm({ ...utmForm, campaign: e.target.value })}
-                placeholder="e.g. diwali_sale_2026, achar_combo_offer"
+                placeholder="e.g. diwali_sale_2026, welcome_offer"
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -1152,7 +1141,7 @@ export const MarketingAdsHub = ({
             </div>
 
             <div className="text-[11px] text-slate-400 flex items-center gap-2">
-              <span>💡 Paste this link into your Instagram Bio or Meta Ad Manager URL field for 100% verified sales tracking.</span>
+              <span>💡 Paste this link into your Instagram Bio or Meta Ad Manager URL field to capture campaign attribution.</span>
             </div>
           </div>
         </div>
@@ -1169,7 +1158,7 @@ export const MarketingAdsHub = ({
                 <h3 className="font-extrabold text-slate-900 text-base">ROAS &amp; Profit Simulator</h3>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Simulate monthly marketing spend, projected revenue, net profit, and breakeven return
+                Manual what-if calculator. These projections use the sliders below, not your live account data.
               </p>
             </div>
 
@@ -1264,7 +1253,7 @@ export const MarketingAdsHub = ({
               </div>
 
               <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-                <div className="text-slate-400 text-[11px]">Net Profit (Post-Ad &amp; COGS)</div>
+                <div className="text-slate-400 text-[11px]">Contribution After Ad Spend &amp; COGS</div>
                 <div className={`text-xl font-black mt-0.5 ${simNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   ₹{simNetProfit.toLocaleString('en-IN')}
                 </div>
@@ -1277,8 +1266,12 @@ export const MarketingAdsHub = ({
             </div>
 
             <div className="p-3 rounded-2xl bg-indigo-600/30 border border-indigo-500/30 text-xs text-indigo-200 leading-relaxed">
-              💡 At an average order value of ₹{calcAov}, achieving {calcTargetRoas.toFixed(1)}x ROAS generates approximately <strong>{simOrders} verified customer parcels</strong> every month.
+              💡 At an average order value of ₹{calcAov}, achieving {calcTargetRoas.toFixed(1)}x ROAS projects approximately <strong>{simOrders} orders</strong> every month.
             </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              This is a user-input projection, not a guarantee. Contribution excludes shipping, payment fees, returns, and taxes.
+            </p>
           </div>
         </div>
       )}
@@ -1295,19 +1288,19 @@ export const MarketingAdsHub = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="font-extrabold text-slate-900 text-base flex items-center gap-2">
                 <Target className="w-5 h-5 text-indigo-600" />
-                <span>Attribution Trace: {selectedAttributionOrder.id}</span>
+                <span>Attribution Details: {selectedAttributionOrder.id}</span>
               </div>
               <button onClick={() => setSelectedAttributionOrder(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-2 text-slate-700">
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50">
-                <span className="text-slate-500">Ad Channel:</span>
-                <strong className="text-slate-900">{selectedAttributionOrder.source || 'INSTAGRAM'}</strong>
+                <span className="text-slate-500">Attributed Source:</span>
+                <strong className="text-slate-900">{selectedAttributionOrder.source || 'Not recorded'}</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50">
                 <span className="text-slate-500">Campaign Tag:</span>
-                <span className="font-mono font-bold text-indigo-700">{selectedAttributionOrder.campaign || 'Festive Combo Promo'}</span>
+                <span className="font-mono font-bold text-indigo-700">{selectedAttributionOrder.campaign || 'No campaign recorded'}</span>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50">
                 <span className="text-slate-500">Customer Phone:</span>
@@ -1316,10 +1309,6 @@ export const MarketingAdsHub = ({
               <div className="flex justify-between p-2.5 rounded-xl bg-slate-50">
                 <span className="text-slate-500">Order Amount:</span>
                 <strong className="text-slate-900">₹{(selectedAttributionOrder.total || 0).toLocaleString('en-IN')}</strong>
-              </div>
-              <div className="flex justify-between p-2.5 rounded-xl bg-slate-50">
-                <span className="text-slate-500">Meta CAPI Status:</span>
-                <span className="font-bold text-emerald-700">✓ Event Stream Matched &amp; Deduplicated</span>
               </div>
             </div>
 

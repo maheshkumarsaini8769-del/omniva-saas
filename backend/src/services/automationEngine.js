@@ -1,5 +1,7 @@
 const AutomationRule = require('../models/AutomationRule');
 const AutomationLog = require('../models/AutomationLog');
+const Tenant = require('../models/Tenant');
+const { assertSafeOutboundUrl } = require('../utils/outboundUrlGuard');
 
 /**
  * Replace tokens in template string e.g. {{customerName}} -> "Aarav Sharma"
@@ -51,6 +53,7 @@ const evaluateCondition = (condition, data = {}) => {
  * @param {String} [params.entityId='TEST_101'] - Primary ID of the entity
  * @param {Object} [params.data={}] - Entity payload attributes
  * @param {String} [params.targetRuleId=null] - Optional specific rule ID to evaluate (e.g. for testing)
+ * @param {Boolean} [params.dryRun=false] - Evaluate rules without dispatching external messages/webhooks
  */
 const triggerAutomation = async ({
   businessId,
@@ -59,6 +62,7 @@ const triggerAutomation = async ({
   entityId = 'DIRECT',
   data = {},
   targetRuleId = null,
+  dryRun = false,
 }) => {
   try {
     if (!businessId) {
@@ -91,49 +95,173 @@ const triggerAutomation = async ({
       }
 
       // Execute Action
+      let interpolatedMessage = '';
+      let actionType = rule.action?.type;
+      let recipient = rule.action?.target || 'Store Administration';
       try {
-        const interpolatedMessage = interpolateTemplate(rule.action.template, data);
+        interpolatedMessage = interpolateTemplate(rule.action.template, data);
+
+        if (dryRun) {
+          const logEntry = await AutomationLog.create({
+            businessId,
+            ruleId: rule._id,
+            ruleName: rule.name,
+            trigger,
+            entityType,
+            entityId: String(entityId || 'TEST'),
+            actionType: actionType || 'UNKNOWN',
+            recipient,
+            status: 'SKIPPED',
+            statusCode: 0,
+            payloadSummary: interpolatedMessage || `Dry-run ${actionType || 'action'}`,
+            details: interpolatedMessage || `Dry-run ${actionType || 'action'}`,
+            errorMessage: 'Dry run: no external message or webhook was sent',
+          });
+          results.push({
+            ruleId: rule._id,
+            ruleName: rule.name,
+            status: 'SKIPPED',
+            action: actionType,
+            recipient,
+            reason: 'Dry run: no external message or webhook was sent',
+            summary: interpolatedMessage,
+            logId: logEntry._id,
+          });
+          continue;
+        }
+        actionType = rule.action?.type;
 
         // Determine human-readable recipient destination
-        let recipient = rule.action?.target || 'Store Administration';
-        if (rule.action?.type === 'SEND_WHATSAPP') {
-          const phone = data.customerPhone || data.phone || '';
+        let skippedReason = '';
+        let customerPhone = '';
+
+        if (actionType === 'SEND_WHATSAPP') {
+          customerPhone = String(data.customerPhone || data.phone || '').replace(/\D/g, '');
           const name = data.customerName || data.name || '';
-          recipient = phone ? `${phone}${name ? ` (${name})` : ''}` : (rule.action?.target || 'Customer');
-        } else if (rule.action?.type === 'OUTBOUND_WEBHOOK') {
-          recipient = rule.action?.target || 'Outbound Webhook URL';
-        } else if (rule.action?.type === 'IN_APP_ALERT' || rule.action?.type === 'SEND_INTERNAL_ALERT') {
-          recipient = 'Store Administration / Staff';
-        }
+          recipient = customerPhone
+            ? `${customerPhone}${name ? ` (${name})` : ''}`
+            : (rule.action?.target || 'Customer');
 
-        // Webhook dispatch logic
-        if (rule.action.type === 'OUTBOUND_WEBHOOK' && rule.action.target) {
-          if (!rule.action.target.includes('omniva-test') && !rule.action.target.includes('beeceptor')) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            await fetch(rule.action.target, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Omniva-Trigger': trigger,
-                'X-Omniva-Entity': entityType,
-              },
-              body: JSON.stringify({
-                event: trigger,
-                entityType,
-                entityId,
-                data,
-                timestamp: new Date().toISOString(),
-              }),
-              signal: controller.signal,
-            }).catch((fetchErr) => {
-              console.warn('[Automation Webhook Dispatch Warning]:', fetchErr.message);
-            });
-            clearTimeout(timeoutId);
+          if (!customerPhone) {
+            skippedReason = 'No customer phone number is available for WhatsApp delivery';
+          } else {
+            const tenant = await Tenant.findById(businessId).select('integrations.whatsapp');
+            const wa = tenant?.integrations?.whatsapp || {};
+            const accessToken = wa.accessToken || process.env.WHATSAPP_ACCESS_TOKEN;
+            const phoneNumberId = wa.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+            if (!accessToken || !phoneNumberId) {
+              skippedReason = 'WhatsApp Cloud API credentials are not configured';
+            } else {
+              const to = customerPhone.length === 10 ? `91${customerPhone}` : customerPhone;
+              const response = await fetch(
+                `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+                {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to,
+                    type: 'text',
+                    text: { body: interpolatedMessage },
+                  }),
+                  signal: AbortSignal.timeout(5000),
+                }
+              );
+              if (!response.ok) {
+                const body = await response.text().catch(() => '');
+                throw new Error(
+                  `WhatsApp Cloud API returned HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`
+                );
+              }
+            }
           }
+        } else if (actionType === 'OUTBOUND_WEBHOOK') {
+          recipient = rule.action?.target || 'Outbound Webhook URL';
+
+          if (!rule.action?.target) {
+            skippedReason = 'No outbound webhook URL is configured';
+          } else {
+            // Older starter rules pointed at a public shared test sink. Never
+            // send tenant data there, even if such a rule still exists in the DB.
+            const isLegacyTestSink = rule.action.target.includes('omniva-test-webhook');
+
+            if (isLegacyTestSink) {
+              skippedReason = 'Legacy test webhook target is disabled';
+            } else {
+              await assertSafeOutboundUrl(rule.action.target);
+
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 4000);
+              try {
+                const response = await fetch(rule.action.target, {
+                  method: 'POST',
+                  redirect: 'error',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Omniva-Trigger': trigger,
+                    'X-Omniva-Entity': entityType,
+                  },
+                  body: JSON.stringify({
+                    event: trigger,
+                    entityType,
+                    entityId,
+                    data,
+                    timestamp: new Date().toISOString(),
+                  }),
+                  signal: controller.signal,
+                });
+                if (!response.ok) {
+                  throw new Error(`Webhook returned HTTP ${response.status}`);
+                }
+              } finally {
+                clearTimeout(timeoutId);
+              }
+            }
+          }
+        } else if (actionType === 'IN_APP_ALERT' || actionType === 'SEND_INTERNAL_ALERT') {
+          recipient = 'Store Administration / Staff';
+          skippedReason = 'In-app alert delivery is not configured';
+        } else if (actionType === 'ASSIGN_STAFF') {
+          skippedReason = 'Staff assignment action is not configured';
+        } else {
+          skippedReason = `Unsupported automation action: ${actionType || 'none'}`;
         }
 
-        // Log successful execution in database
+        if (skippedReason) {
+          const logEntry = await AutomationLog.create({
+            businessId,
+            ruleId: rule._id,
+            ruleName: rule.name,
+            trigger,
+            entityType,
+            entityId: String(entityId || 'DIRECT'),
+            actionType: actionType || 'UNKNOWN',
+            recipient,
+            status: 'SKIPPED',
+            statusCode: 0,
+            payloadSummary: interpolatedMessage || `Skipped ${actionType}`,
+            details: interpolatedMessage || `Skipped ${actionType}`,
+            errorMessage: skippedReason,
+          });
+
+          results.push({
+            ruleId: rule._id,
+            ruleName: rule.name,
+            status: 'SKIPPED',
+            action: actionType,
+            recipient,
+            reason: skippedReason,
+            summary: interpolatedMessage,
+            logId: logEntry._id,
+          });
+          continue;
+        }
+
+        // Log successful execution in database only after the action really ran.
         const logEntry = await AutomationLog.create({
           businessId,
           ruleId: rule._id,
@@ -141,15 +269,15 @@ const triggerAutomation = async ({
           trigger,
           entityType,
           entityId: String(entityId || 'DIRECT'),
-          actionType: rule.action.type,
+          actionType,
           recipient,
           status: 'SUCCESS',
           statusCode: 200,
-          payloadSummary: interpolatedMessage || `Executed ${rule.action.type}`,
-          details: interpolatedMessage || `Executed ${rule.action.type}`,
+          payloadSummary: interpolatedMessage || `Executed ${actionType}`,
+          details: interpolatedMessage || `Executed ${actionType}`,
         });
 
-        // Increment execution stats
+        // Increment execution stats only for real dispatches.
         rule.executionCount = (rule.executionCount || 0) + 1;
         rule.lastExecutedAt = new Date();
         await rule.save();
@@ -158,7 +286,7 @@ const triggerAutomation = async ({
           ruleId: rule._id,
           ruleName: rule.name,
           status: 'SUCCESS',
-          action: rule.action.type,
+          action: actionType,
           recipient,
           summary: interpolatedMessage,
           logId: logEntry._id,
@@ -175,6 +303,8 @@ const triggerAutomation = async ({
           recipient: rule.action?.target || 'Store Administration',
           status: 'FAILED',
           statusCode: 500,
+          payloadSummary: interpolatedMessage || `Failed ${actionType || 'action'}`,
+          details: interpolatedMessage || actionErr.message,
           errorMessage: actionErr.message,
         });
 

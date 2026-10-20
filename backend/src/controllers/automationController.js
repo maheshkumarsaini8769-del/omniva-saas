@@ -12,10 +12,8 @@ const DEFAULT_SEED_RULES = [
     action: {
       type: 'SEND_WHATSAPP',
       target: 'customer',
-      template: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been received. We are preparing your fresh package for dispatch. Thank you for shopping with us!',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been received. We are preparing your order for dispatch. Thank you for shopping with us!',
     },
-    executionCount: 142,
-    lastExecutedAt: new Date(Date.now() - 15 * 60 * 1000),
   },
   {
     name: 'Order Dispatched Courier Tracking Alert',
@@ -25,10 +23,8 @@ const DEFAULT_SEED_RULES = [
     action: {
       type: 'SEND_WHATSAPP',
       target: 'customer',
-      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Live tracking: {{trackingUrl}}',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Tracking link: {{trackingUrl}}',
     },
-    executionCount: 89,
-    lastExecutedAt: new Date(Date.now() - 45 * 60 * 1000),
   },
   {
     name: 'Duplicate / Double Order Verification Alert',
@@ -40,8 +36,6 @@ const DEFAULT_SEED_RULES = [
       target: 'customer',
       template: 'Hello {{customerName}}! We noticed duplicate orders placed with your phone number. Could you please confirm if you would like both packages delivered?',
     },
-    executionCount: 23,
-    lastExecutedAt: new Date(Date.now() - 2 * 3600 * 1000),
   },
   {
     name: 'Meta Ads Lead Instant WhatsApp Greeting',
@@ -51,26 +45,22 @@ const DEFAULT_SEED_RULES = [
     action: {
       type: 'SEND_WHATSAPP',
       target: 'customer',
-      template: 'Hello {{customerName}}! Thank you for inquiring on our Meta Ad. Check out our store catalog here: {{menuUrl}} and use coupon code WELCOME10 for 10% off your first order!',
+      template: 'Hello {{customerName}}! Thank you for your enquiry. Check out our store catalog here: {{menuUrl}}.',
     },
-    executionCount: 215,
-    lastExecutedAt: new Date(Date.now() - 5 * 60 * 1000),
   },
   {
     name: 'Outbound ERP / Webhook Order Sync',
     trigger: 'ORDER_CONFIRMED',
-    isActive: true,
+    isActive: false,
     condition: { field: 'always', operator: 'ALWAYS', value: '' },
     action: {
       type: 'OUTBOUND_WEBHOOK',
-      target: 'https://omniva-test-webhook.free.beeceptor.com/orders',
+      target: '',
       template: '{"orderId":"{{orderNumber}}","amount":"{{totalAmount}}","customer":"{{customerName}}"}',
     },
-    executionCount: 74,
-    lastExecutedAt: new Date(Date.now() - 60 * 60 * 1000),
   },
   {
-    name: 'Low Stock Kitchen Inventory Alert',
+    name: 'Low Stock Inventory Alert',
     trigger: 'STOCK_LOW',
     isActive: true,
     condition: { field: 'stock', operator: 'LESS_THAN', value: '10' },
@@ -79,8 +69,6 @@ const DEFAULT_SEED_RULES = [
       target: 'merchant_admin',
       template: '⚠️ Low Stock Alert: {{productName}} inventory is low. Please replenish stock soon!',
     },
-    executionCount: 16,
-    lastExecutedAt: new Date(Date.now() - 24 * 3600 * 1000),
   },
 ];
 
@@ -89,20 +77,28 @@ const DEFAULT_SEED_RULES = [
 // @access  Private (Merchant Admin)
 const getRules = async (req, res) => {
   try {
-    let rules = [];
-    if (mongoose.connection.readyState === 1 && req.businessId) {
-      rules = await AutomationRule.find({ businessId: req.businessId }).sort({ createdAt: -1 });
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Automation service is temporarily unavailable. Please try again.',
+      });
+    }
 
-      if (rules.length === 0) {
-        // Auto-seed persistent starter rules into MongoDB
-        const rulesToInsert = DEFAULT_SEED_RULES.map((r) => ({
-          ...r,
-          businessId: req.businessId,
-        }));
-        rules = await AutomationRule.insertMany(rulesToInsert);
-      }
-    } else {
-      rules = DEFAULT_SEED_RULES.map((r, i) => ({ ...r, _id: `rule_seed_${i + 1}` }));
+    if (!req.businessId) {
+      return res.status(400).json({ success: false, message: 'Tenant context is required' });
+    }
+
+    let rules = await AutomationRule.find({ businessId: req.businessId }).sort({ createdAt: -1 });
+
+    if (rules.length === 0) {
+      // Auto-seed starter rules, but never fabricate execution history.
+      const rulesToInsert = DEFAULT_SEED_RULES.map((r) => ({
+        ...r,
+        businessId: req.businessId,
+        executionCount: 0,
+        lastExecutedAt: null,
+      }));
+      rules = await AutomationRule.insertMany(rulesToInsert);
     }
 
     res.json({ success: true, count: rules.length, data: rules });
@@ -184,61 +180,19 @@ const deleteRule = async (req, res) => {
 // @access  Private (Merchant Admin)
 const getLogs = async (req, res) => {
   try {
-    let logs = [];
-    if (mongoose.connection.readyState === 1 && req.businessId) {
-      logs = await AutomationLog.find({ businessId: req.businessId })
-        .sort({ createdAt: -1 })
-        .limit(50);
-
-      if (logs.length === 0) {
-        // Auto-seed initial audit logs for immediate visibility
-        const starterLogs = [
-          {
-            businessId: req.businessId,
-            ruleName: 'Order Dispatched Courier Tracking Alert',
-            trigger: 'ORDER_SHIPPED',
-            entityType: 'ORDER',
-            entityId: 'ORD-9820',
-            actionType: 'SEND_WHATSAPP',
-            recipient: '+91 98290 88219 (Vikramaditya S.)',
-            status: 'SUCCESS',
-            statusCode: 200,
-            payloadSummary: 'WhatsApp tracking message dispatched with Delhivery AWB DEL-8492014 & live tracking link',
-            details: 'Hello Vikramaditya! Your order ORD-9820 has been dispatched via Delhivery Express. AWB Tracking: DEL-8492014. Live parcel tracking: https://omniva-saas.vercel.app/orders/track',
-            createdAt: new Date(Date.now() - 12 * 60 * 1000),
-          },
-          {
-            businessId: req.businessId,
-            ruleName: 'Meta Ads Lead Instant WhatsApp Greeting',
-            trigger: 'LEAD_INGESTED',
-            entityType: 'LEAD',
-            entityId: 'LEAD-401',
-            actionType: 'SEND_WHATSAPP',
-            recipient: '+91 98112 33445 (Priya Sharma)',
-            status: 'SUCCESS',
-            statusCode: 200,
-            payloadSummary: 'Instant greeting sent with 15% discount coupon DESI15',
-            details: 'Hello Priya! Thank you for inquiring on our Meta Ad. Check out our store catalog and use coupon code WELCOME10 for 10% off your first order!',
-            createdAt: new Date(Date.now() - 35 * 60 * 1000),
-          },
-          {
-            businessId: req.businessId,
-            ruleName: 'Order Placed Instant WhatsApp Confirmation',
-            trigger: 'ORDER_CREATED',
-            entityType: 'ORDER',
-            entityId: 'ORD-9818',
-            actionType: 'SEND_WHATSAPP',
-            recipient: '+91 94140 12398 (Anil Choudhary)',
-            status: 'SUCCESS',
-            statusCode: 200,
-            payloadSummary: 'Order #ORD-9818 confirmation message delivered',
-            details: 'Hello Anil Choudhary! Your order ORD-9818 for ₹1,299 has been received. We are preparing your fresh package for dispatch. Thank you!',
-            createdAt: new Date(Date.now() - 2 * 3600 * 1000),
-          },
-        ];
-        logs = await AutomationLog.insertMany(starterLogs);
-      }
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Automation logs are temporarily unavailable. Please try again.',
+      });
     }
+    if (!req.businessId) {
+      return res.status(400).json({ success: false, message: 'Tenant context is required' });
+    }
+
+    const logs = await AutomationLog.find({ businessId: req.businessId })
+      .sort({ createdAt: -1 })
+      .limit(50);
 
     const formatted = logs.map((l) => ({
       _id: l._id,
@@ -280,11 +234,13 @@ const testTriggerRule = async (req, res) => {
       entityId,
       data: testData || payload || {},
       targetRuleId: ruleId || null,
+      dryRun: true,
     });
 
     res.json({
       success: true,
-      message: 'Automation trigger evaluated successfully',
+      dryRun: true,
+      message: 'Automation test evaluated. No external messages or webhooks were sent.',
       matchedRulesCount: results.length,
       results,
     });

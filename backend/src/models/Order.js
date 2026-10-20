@@ -77,6 +77,24 @@ const orderSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Client-supplied retry key so a double-click or network retry cannot create
+    // two orders (and decrement stock twice) for one checkout attempt.
+    idempotencyKey: {
+      type: String,
+      default: undefined,
+      trim: true,
+      maxlength: 128,
+    },
+    // Set when this order actually decremented tracked inventory. Cancellation
+    // only restores stock for orders that took it.
+    stockDecremented: {
+      type: Boolean,
+      default: false,
+    },
+    stockRestored: {
+      type: Boolean,
+      default: false,
+    },
     customerName: {
       type: String,
       required: [true, 'Customer name is required'],
@@ -135,7 +153,7 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: ['COD', 'ONLINE', 'UPI'],
-      default: 'COD',
+      required: [true, 'Payment method is required'],
     },
     paymentStatus: {
       type: String,
@@ -201,5 +219,9 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ businessId: 1, orderNumber: 1 }, { unique: true });
 orderSchema.index({ businessId: 1, orderStatus: 1, createdAt: -1 });
+orderSchema.index(
+  { businessId: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('Order', orderSchema);

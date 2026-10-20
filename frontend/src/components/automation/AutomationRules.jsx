@@ -38,7 +38,7 @@ export const AutomationRules = () => {
     conditionOperator: 'ALWAYS',
     conditionValue: '',
     actionType: 'SEND_WHATSAPP',
-    actionTarget: '+919876543210',
+    actionTarget: '',
     actionTemplate: 'Hello {{customerName}}, your order {{orderNumber}} for ₹{{totalAmount}} has been received! We will ship it shortly.',
   });
 
@@ -105,7 +105,7 @@ export const AutomationRules = () => {
           conditionOperator: 'ALWAYS',
           conditionValue: '',
           actionType: 'SEND_WHATSAPP',
-          actionTarget: '+919876543210',
+          actionTarget: '',
           actionTemplate: 'Hello {{customerName}}, your order {{orderNumber}} for ₹{{totalAmount}} has been received! We will ship it shortly.',
         });
       } else {

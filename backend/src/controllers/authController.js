@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const User = require('../models/User');
 const Tenant = require('../models/Tenant');
 const generateToken = require('../utils/generateToken');
@@ -119,170 +120,11 @@ const login = async (req, res) => {
       });
     }
 
-    // Cloud Demo Mode Fallback if MongoDB is not connected
+    // Fail closed when the database is unreachable. Never issue tokens without a real user record.
     if (mongoose.connection.readyState !== 1) {
-      const normEmail = (email || '').toLowerCase().trim();
-      const validPass = ['password123', 'admin123', 'rahul@123', 'admin@123'].includes((password || '').toLowerCase());
-
-      if (
-        (normEmail === 'rahul@desirasoi.com' || normEmail === 'demo@omniva.io' || normEmail === 'admin@omniva.io') &&
-        validPass
-      ) {
-        const token = generateToken({
-          id: '6acf096038d323550330be65',
-          role: 'MERCHANT_OWNER',
-          businessId: '6acf096038d323550330be64',
-        });
-        return res.json({
-          success: true,
-          message: 'Login successful (Cloud Demo Mode)',
-          token,
-          user: {
-            id: '6acf096038d323550330be65',
-            name: 'Rahul Sharma',
-            email: 'rahul@desirasoi.com',
-            role: 'MERCHANT_OWNER',
-            phone: '9876543210',
-          },
-          tenant: {
-            id: '6acf096038d323550330be64',
-            businessName: 'Desi Rasoi Achar',
-            slug: 'desi-rasoi-achar-1',
-            businessType: 'PRODUCT',
-            templateCode: 'PRODUCT',
-            enabledModules: {
-              automations: true,
-              crmLeads: true,
-              marketingAds: true,
-              products: true,
-              serviceBookings: false,
-              travelBookings: false,
-              inventory: true,
-              orders: true,
-            },
-            planTier: 'GROWTH',
-            status: 'ACTIVE',
-            branding: {
-              logo: '',
-              primaryColor: '#4f46e5',
-              secondaryColor: '#06b6d4',
-            },
-          },
-        });
-      }
-
-      if (normEmail === 'vikram@royalfilms.com' && validPass) {
-        const token = generateToken({
-          id: '6acf096038d323550330be70',
-          role: 'MERCHANT_OWNER',
-          businessId: '6acf096038d323550330be71',
-        });
-        return res.json({
-          success: true,
-          message: 'Studio Login successful (Cloud Demo Mode)',
-          token,
-          user: {
-            id: '6acf096038d323550330be70',
-            name: 'Vikram Singh',
-            email: 'vikram@royalfilms.com',
-            role: 'MERCHANT_OWNER',
-            phone: '9876543211',
-          },
-          tenant: {
-            id: '6acf096038d323550330be71',
-            businessName: 'Royal Films Studio',
-            slug: 'royal-films-studio-1',
-            businessType: 'SERVICE',
-            templateCode: 'SERVICE',
-            enabledModules: {
-              automations: true,
-              crmLeads: true,
-              marketingAds: true,
-              products: false,
-              serviceBookings: true,
-              travelBookings: true,
-              inventory: false,
-              orders: false,
-            },
-            planTier: 'GROWTH',
-            status: 'ACTIVE',
-            branding: {
-              logo: '',
-              primaryColor: '#f59e0b',
-              secondaryColor: '#ec4899',
-            },
-          },
-        });
-      }
-
-      if (normEmail === 'karan@desertsafari.in' && validPass) {
-        const token = generateToken({
-          id: '6ad2006e99f3c258ba9087d2',
-          role: 'MERCHANT_OWNER',
-          businessId: '6ad2006e99f3c258ba9087d1',
-        });
-        return res.json({
-          success: true,
-          message: 'Desert Safari Tours Login successful',
-          token,
-          user: {
-            id: '6ad2006e99f3c258ba9087d2',
-            name: 'Karan Rathore',
-            email: 'karan@desertsafari.in',
-            role: 'MERCHANT_OWNER',
-            phone: '+91 98299 11223',
-          },
-          tenant: {
-            id: '6ad2006e99f3c258ba9087d1',
-            businessName: 'Desert Safari Tours',
-            slug: 'desert-safari-tours-6085',
-            businessType: 'TRAVEL',
-            templateCode: 'TRAVEL',
-            enabledModules: {
-              automations: true,
-              crmLeads: true,
-              marketingAds: true,
-              products: false,
-              serviceBookings: false,
-              travelBookings: true,
-              inventory: false,
-              orders: false,
-            },
-            planTier: 'PRO',
-            status: 'ACTIVE',
-            branding: {
-              logo: '',
-              primaryColor: '#d97706',
-              secondaryColor: '#f59e0b',
-            },
-          },
-        });
-      }
-
-      if (
-        (normEmail === 'superadmin@omniva.io' || normEmail === 'superadmin@admin.com') &&
-        validPass
-      ) {
-        const token = generateToken({
-          id: '6acf096038d323550330be63',
-          role: 'SUPER_ADMIN',
-        });
-        return res.json({
-          success: true,
-          message: 'Super Admin Login successful (Cloud Demo Mode)',
-          token,
-          user: {
-            id: '6acf096038d323550330be63',
-            name: 'Mahesh (Super Admin)',
-            email: 'superadmin@omniva.io',
-            role: 'SUPER_ADMIN',
-          },
-        });
-      }
-
-      return res.status(401).json({
+      return res.status(503).json({
         success: false,
-        message: 'Invalid credentials. Demo accounts: rahul@desirasoi.com / password123, or superadmin@omniva.io / password123',
+        message: 'Authentication service is temporarily unavailable. Please try again.',
       });
     }
 
@@ -387,31 +229,6 @@ const getMe = async (req, res) => {
     let tenant = null;
     if (mongoose.connection.readyState === 1 && user.businessId) {
       tenant = await Tenant.findById(user.businessId);
-    } else if (user.businessId) {
-      tenant = {
-        id: '6acf096038d323550330be64',
-        businessName: 'Desi Rasoi Achar',
-        slug: 'desi-rasoi-achar-1',
-        businessType: 'PRODUCT',
-        templateCode: 'PRODUCT',
-        enabledModules: {
-          automations: true,
-          crmLeads: true,
-          marketingAds: true,
-          products: true,
-          serviceBookings: false,
-          travelBookings: false,
-          inventory: true,
-          orders: true,
-        },
-        planTier: 'GROWTH',
-        status: 'ACTIVE',
-        branding: {
-          logo: '',
-          primaryColor: '#4f46e5',
-          secondaryColor: '#06b6d4',
-        },
-      };
     }
 
     res.status(200).json({
@@ -434,19 +251,37 @@ const setupSuperAdmin = async (req, res) => {
   try {
     const { name, email, password, masterKey } = req.body;
 
-    const existingSuperAdmin = await User.findOne({ role: 'SUPER_ADMIN' });
-    if (existingSuperAdmin) {
-      // If one already exists, require matching masterKey
-      const expectedMasterKey = process.env.MASTER_SETUP_KEY || 'omniva_master_setup_secret_2026';
-      if (masterKey !== expectedMasterKey) {
-        return res.status(403).json({
-          success: false,
-          message: 'Super Admin already initialized. Valid master key required to add more.',
-        });
-      }
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+      });
     }
 
-    const userExists = await User.findOne({ email: email.toLowerCase() });
+    // Always require a configured master key. Never accept a hardcoded default.
+    const expectedMasterKey = process.env.MASTER_SETUP_KEY;
+    if (!expectedMasterKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Super Admin setup is disabled. Set MASTER_SETUP_KEY to enable it.',
+      });
+    }
+
+    const suppliedKey = Buffer.from(String(masterKey || ''));
+    const expectedKey = Buffer.from(String(expectedMasterKey));
+    const keyMatches =
+      suppliedKey.length === expectedKey.length &&
+      crypto.timingSafeEqual(suppliedKey, expectedKey);
+
+    if (!keyMatches) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid master setup key',
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({
         success: false,
@@ -456,7 +291,7 @@ const setupSuperAdmin = async (req, res) => {
 
     const superAdmin = await User.create({
       name: name || 'Omniva Platform Owner',
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password,
       role: 'SUPER_ADMIN',
       businessId: null,
@@ -571,6 +406,97 @@ const getStaffList = async (req, res) => {
   }
 };
 
+// @desc    Update a staff account inside the current business
+// @route   PUT /api/auth/staff/:id
+// @access  Protected (MERCHANT_OWNER)
+const updateStaff = async (req, res) => {
+  try {
+    const allowedStaffRoles = [
+      'ORDER_MANAGER',
+      'INVENTORY_STAFF',
+      'MARKETING_STAFF',
+      'SUPPORT_STAFF',
+    ];
+    const staff = await User.findOne({
+      _id: req.params.id,
+      businessId: req.businessId,
+      role: { $in: allowedStaffRoles },
+    });
+
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found' });
+    }
+
+    const { name, phone, role, isActive, customPermissions } = req.body;
+    if (name !== undefined) {
+      if (!String(name).trim()) {
+        return res.status(400).json({ success: false, message: 'Staff name cannot be empty' });
+      }
+      staff.name = String(name).trim();
+    }
+    if (phone !== undefined) staff.phone = String(phone).trim();
+    if (role !== undefined) {
+      if (!allowedStaffRoles.includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid staff role. Permitted: ${allowedStaffRoles.join(', ')}`,
+        });
+      }
+      staff.role = role;
+    }
+    if (isActive !== undefined) staff.isActive = Boolean(isActive);
+    if (customPermissions !== undefined) {
+      if (!Array.isArray(customPermissions)) {
+        return res.status(400).json({ success: false, message: 'customPermissions must be an array' });
+      }
+      staff.customPermissions = customPermissions
+        .filter((permission) => typeof permission === 'string')
+        .map((permission) => permission.trim())
+        .filter(Boolean)
+        .slice(0, 30);
+    }
+
+    await staff.save();
+    const safeStaff = staff.toObject();
+    delete safeStaff.password;
+
+    return res.json({ success: true, message: 'Staff permissions updated', staff: safeStaff });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error updating staff member',
+    });
+  }
+};
+
+// @desc    Remove a staff account inside the current business
+// @route   DELETE /api/auth/staff/:id
+// @access  Protected (MERCHANT_OWNER)
+const deleteStaff = async (req, res) => {
+  try {
+    const staff = await User.findOne({
+      _id: req.params.id,
+      businessId: req.businessId,
+      role: { $ne: 'MERCHANT_OWNER' },
+    });
+
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found' });
+    }
+    if (String(staff._id) === String(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You cannot remove your own owner account' });
+    }
+
+    await User.deleteOne({ _id: staff._id, businessId: req.businessId });
+    return res.json({ success: true, message: 'Staff member removed' });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error removing staff member',
+    });
+  }
+};
+
 // @desc    Update current tenant business profile & settings
 // @route   PUT /api/auth/business-profile
 // @access  Protected (MERCHANT_OWNER / ADMIN)
@@ -580,7 +506,7 @@ const updateBusinessProfile = async (req, res) => {
     if (!tenant) {
       return res.status(404).json({ success: false, message: 'Tenant not found' });
     }
-    const { businessName, businessType, contactEmail, contactPhone, brandTagline, brandColor, settings } = req.body;
+    const { businessName, businessType, contactEmail, contactPhone, contactAddress, brandTagline, brandColor, settings } = req.body;
     if (businessName) tenant.businessName = businessName.trim();
     if (businessType) tenant.businessType = businessType.trim();
     if (contactEmail) {
@@ -591,6 +517,10 @@ const updateBusinessProfile = async (req, res) => {
       if (!tenant.contact) tenant.contact = {};
       tenant.contact.phone = contactPhone.trim();
     }
+    if (contactAddress !== undefined) {
+      if (!tenant.contact) tenant.contact = {};
+      tenant.contact.address = String(contactAddress).trim();
+    }
     if (brandTagline !== undefined) {
       if (!tenant.branding) tenant.branding = {};
       tenant.branding.tagline = brandTagline;
@@ -600,7 +530,45 @@ const updateBusinessProfile = async (req, res) => {
       tenant.branding.primaryColor = brandColor;
     }
     if (settings && typeof settings === 'object') {
-      tenant.settings = { ...tenant.settings, ...settings };
+      const allowedStringSettings = [
+        'gstinNumber',
+        'merchantUpiId',
+      ];
+      const allowedNumberSettings = [
+        'minOrderValue',
+        'shippingFee',
+        'freeShippingThreshold',
+      ];
+      const allowedBooleanSettings = [
+        'enableCOD',
+        'enableCod',
+        'enableOnlinePay',
+        'sendOrderNotifications',
+        'whatsappAlerts',
+      ];
+
+      for (const key of allowedStringSettings) {
+        if (settings[key] !== undefined) tenant.settings[key] = String(settings[key] || '').trim();
+      }
+      for (const key of allowedNumberSettings) {
+        if (settings[key] === undefined) continue;
+        const numeric = Number(settings[key]);
+        if (!Number.isFinite(numeric) || numeric < 0) {
+          return res.status(400).json({ success: false, message: `${key} must be a non-negative number` });
+        }
+        tenant.settings[key] = numeric;
+      }
+      for (const key of allowedBooleanSettings) {
+        if (settings[key] === undefined) continue;
+        const targetKey = key === 'enableCod' ? 'enableCOD' : key;
+        tenant.settings[targetKey] = Boolean(settings[key]);
+      }
+
+      // The address belongs in the contact record, not in an untyped settings blob.
+      if (settings.bizAddress !== undefined) {
+        if (!tenant.contact) tenant.contact = {};
+        tenant.contact.address = String(settings.bizAddress || '').trim();
+      }
     }
     await tenant.save();
     return res.status(200).json({ success: true, message: 'Business profile updated successfully', tenant });
@@ -616,5 +584,7 @@ module.exports = {
   setupSuperAdmin,
   createStaff,
   getStaffList,
+  updateStaff,
+  deleteStaff,
   updateBusinessProfile,
 };

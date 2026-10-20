@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/useAuth';
+import { NO_IMAGE_PLACEHOLDER } from '../../utils/imagePlaceholder';
 import {
   Package,
   Plus,
@@ -32,7 +33,7 @@ export const ProductCatalog = () => {
   const [prodCategory, setProdCategory] = useState('');
   const [prodPrice, setProdPrice] = useState('');
   const [prodComparePrice, setProdComparePrice] = useState('');
-  const [prodStock, setProdStock] = useState('50');
+  const [prodStock, setProdStock] = useState('');
   const [prodDesc, setProdDesc] = useState('');
   const [prodImage, setProdImage] = useState('');
   const [variants, setVariants] = useState([]);
@@ -111,7 +112,10 @@ export const ProductCatalog = () => {
 
   const handleCreateProduct = async (e) => {
     e.preventDefault();
-    if (!prodName || !prodPrice) return;
+    if (!prodName || !prodPrice || prodStock === '') {
+      alert('Product name, selling price, and stock quantity are required.');
+      return;
+    }
     try {
       const res = await fetch('/api/products', {
         method: 'POST',
@@ -124,7 +128,7 @@ export const ProductCatalog = () => {
           categoryId: prodCategory || null,
           price: Number(prodPrice),
           compareAtPrice: Number(prodComparePrice || 0),
-          stockQuantity: Number(prodStock || 0),
+          stockQuantity: Number(prodStock),
           description: prodDesc,
           images: prodImage ? [prodImage] : [],
           variants,
@@ -205,9 +209,7 @@ export const ProductCatalog = () => {
               const catProdCount = products.filter(
                 (p) => (p.categoryId?._id || p.categoryId) === c._id
               ).length;
-              const catImg =
-                c.image ||
-                'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
+              const catImg = c.image || NO_IMAGE_PLACEHOLDER;
               return (
                 <div
                   key={c._id}
@@ -218,8 +220,7 @@ export const ProductCatalog = () => {
                     alt={c.name}
                     onError={(e) => {
                       e.currentTarget.onerror = null;
-                      e.currentTarget.src =
-                        'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&auto=format&fit=crop&q=80';
+                      e.currentTarget.src = NO_IMAGE_PLACEHOLDER;
                     }}
                     className="w-9 h-9 rounded-xl object-cover border border-slate-800"
                   />
@@ -245,9 +246,7 @@ export const ProductCatalog = () => {
           </div>
         ) : (
           products.map((prod) => {
-            const prodImg =
-              prod.images?.[0] ||
-              'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+            const prodImg = prod.images?.[0] || NO_IMAGE_PLACEHOLDER;
             return (
               <div
                 key={prod._id}
@@ -260,8 +259,7 @@ export const ProductCatalog = () => {
                     alt={prod.name}
                     onError={(e) => {
                       e.currentTarget.onerror = null;
-                      e.currentTarget.src =
-                        'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80';
+                      e.currentTarget.src = NO_IMAGE_PLACEHOLDER;
                     }}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                   />
@@ -370,7 +368,7 @@ export const ProductCatalog = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Traditional Spicy Mango Pickle"
+                  placeholder="e.g. Product name"
                   value={prodName}
                   onChange={(e) => setProdName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
@@ -438,29 +436,6 @@ export const ProductCatalog = () => {
                   onChange={(e) => setProdImage(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
                 />
-                <div className="text-[11px] text-slate-500 font-medium">Quick Photo Presets:</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: '🥭 Mango Pickle', url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80' },
-                    { label: '🌶️ Lal Mirch', url: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=600&auto=format&fit=crop&q=80' },
-                    { label: '🍋 Khatta Lemon', url: 'https://images.unsplash.com/photo-1534483509719-3feaee7c30da?w=600&auto=format&fit=crop&q=80' },
-                    { label: '🧄 Garlic Spicy', url: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&auto=format&fit=crop&q=80' },
-                    { label: '🏺 Heritage Jar', url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80' },
-                  ].map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setProdImage(preset.url)}
-                      className={`px-2 py-1 rounded-lg border text-[10px] transition cursor-pointer ${
-                        prodImage === preset.url
-                          ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 font-semibold'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
                 {prodImage && (
                   <div className="relative w-full h-28 rounded-xl overflow-hidden border border-slate-200 mt-2 bg-slate-100">
                     <img
@@ -493,7 +468,7 @@ export const ProductCatalog = () => {
                 <div className="grid grid-cols-3 gap-2">
                   <input
                     type="text"
-                    placeholder="e.g. 500g Jar"
+                    placeholder="e.g. Large / 500g / Red"
                     value={variantName}
                     onChange={(e) => setVariantName(e.target.value)}
                     className="bg-white border border-slate-200 rounded-lg p-1.5 text-slate-800 text-[11px]"
@@ -574,7 +549,7 @@ export const ProductCatalog = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Traditional Pickles"
+                  placeholder="e.g. Product category"
                   value={categoryName}
                   onChange={(e) => setCategoryName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
@@ -591,27 +566,6 @@ export const ProductCatalog = () => {
                   onChange={(e) => setCategoryImage(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
                 />
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {[
-                    { label: '🥭 Mango', url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=300&auto=format&fit=crop&q=80' },
-                    { label: '🌶️ Mirch', url: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=300&auto=format&fit=crop&q=80' },
-                    { label: '🍋 Lemon', url: 'https://images.unsplash.com/photo-1534483509719-3feaee7c30da?w=300&auto=format&fit=crop&q=80' },
-                    { label: '🧄 Garlic', url: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=300&auto=format&fit=crop&q=80' },
-                  ].map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => setCategoryImage(p.url)}
-                      className={`px-2 py-0.5 rounded-lg border text-[10px] transition cursor-pointer ${
-                        categoryImage === p.url
-                          ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 font-semibold'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
                 {categoryImage && (
                   <div className="relative w-full h-20 rounded-xl overflow-hidden border border-slate-200 mt-1 bg-slate-100">
                     <img

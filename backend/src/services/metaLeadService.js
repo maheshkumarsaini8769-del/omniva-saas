@@ -6,9 +6,11 @@ const Lead = require('../models/Lead');
 const MetaIntegration = require('../models/MetaIntegration');
 const { generateOAuthState, encryptToken, decryptToken } = require('../utils/cryptoUtils');
 const { triggerAutomation } = require('./automationEngine');
+const { getMetaRedirectUri } = require('../utils/appUrl');
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v19.0';
-const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const GRAPH_BASE_URL =
+  process.env.META_GRAPH_BASE_URL || `https://graph.facebook.com/${GRAPH_VERSION}`;
 
 const REQUIRED_SCOPES = [
   'pages_show_list',
@@ -23,7 +25,7 @@ const REQUIRED_SCOPES = [
  */
 const getOAuthDialogUrl = (businessId) => {
   const appId = process.env.META_APP_ID;
-  const redirectUri = process.env.META_REDIRECT_URI || `${process.env.CLIENT_URL || 'https://omniva-saas.vercel.app'}/api/meta/oauth/callback`;
+  const redirectUri = getMetaRedirectUri();
 
   if (!appId) {
     throw new Error('META_APP_ID is not configured in server environment');
@@ -49,7 +51,7 @@ const getOAuthDialogUrl = (businessId) => {
 const exchangeCodeForTokens = async (code) => {
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
-  const redirectUri = process.env.META_REDIRECT_URI || `${process.env.CLIENT_URL || 'https://omniva-saas.vercel.app'}/api/meta/oauth/callback`;
+  const redirectUri = getMetaRedirectUri();
 
   if (!appId || !appSecret) {
     throw new Error('Meta App ID and Secret must be configured to complete OAuth exchange');
@@ -136,8 +138,8 @@ const fetchUserPagesWithForms = async (userAccessToken) => {
       if (formsData.data) {
         leadForms = formsData.data.map((f) => ({
           formId: f.id,
-          formName: f.name || `Lead Form #${f.id}`,
-          status: f.status || 'ACTIVE',
+          formName: f.name || '',
+          status: f.status || 'UNKNOWN',
           isSelected: true,
           leadCount: f.leads_count || 0,
           lastSyncedAt: null,
@@ -275,13 +277,11 @@ const parseLeadFields = (leadRawData) => {
   }
 
   if (!name) {
-    name = `Meta Lead #${leadRawData.id?.slice(-4) || 'New'}`;
+    name = 'Unnamed lead';
   }
 
-  if (!phone) {
-    phone = '9876500000';
-  }
-
+  // Never invent a phone number. A lead without a phone or email is not
+  // actionable and is rejected by the webhook handler.
   return {
     name,
     phone,
@@ -291,7 +291,7 @@ const parseLeadFields = (leadRawData) => {
     campaignName: leadRawData.campaign_name || '',
     adSetName: leadRawData.adset_name || '',
     adName: leadRawData.ad_name || '',
-    platform: leadRawData.platform || 'fb',
+    platform: leadRawData.platform || '',
     metaLeadId: leadRawData.id,
     metaFormId: leadRawData.form_id || '',
     metaFormName: leadRawData.form_name || '',
@@ -305,7 +305,7 @@ const parseLeadFields = (leadRawData) => {
  */
 const ingestLeadRecord = async (businessId, parsedData, pageContext = {}) => {
   if (mongoose.connection.readyState !== 1) {
-    return { success: true, isNew: true, mockMode: true };
+    throw new Error('Cannot ingest Meta lead while the database is unavailable');
   }
 
   // 1. Deduplicate by unique Meta Lead ID
@@ -345,16 +345,23 @@ const ingestLeadRecord = async (businessId, parsedData, pageContext = {}) => {
     metaFormId: parsedData.metaFormId,
     metaFormName: parsedData.metaFormName,
     metaAdId: parsedData.metaAdId,
-    platform: parsedData.platform || 'fb',
-    campaignName: parsedData.campaignName || 'Meta Instant Form Campaign',
+    platform: parsedData.platform || '',
+    campaignName: parsedData.campaignName || '',
     adSetName: parsedData.adSetName || '',
-    adName: parsedData.adName || 'Lead Ad Creative',
+    adName: parsedData.adName || '',
     formAnswers: parsedData.formAnswers || [],
     customFields: parsedData.customMap || {},
     status: 'NEW',
     notes: [
       {
-        note: `[Meta Lead Ingested] Form: "${parsedData.metaFormName || parsedData.metaFormId || 'Default'}" · Campaign: "${parsedData.campaignName || 'Meta Ads'}" · Platform: ${parsedData.platform?.toUpperCase() || 'META'}`,
+        note: [
+          '[Meta Lead Ingested]',
+          parsedData.metaFormName || parsedData.metaFormId
+            ? `Form: "${parsedData.metaFormName || parsedData.metaFormId}"`
+            : '',
+          parsedData.campaignName ? `Campaign: "${parsedData.campaignName}"` : '',
+          `Platform: ${parsedData.platform?.toUpperCase() || 'Unknown'}`,
+        ].filter(Boolean).join(' · '),
         authorName: 'Meta Lead Ads Sync',
         createdAt: new Date(),
       },

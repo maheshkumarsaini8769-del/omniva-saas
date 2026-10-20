@@ -280,7 +280,7 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
               <p className="text-xs text-slate-500 mt-0.5">
                 {isConnected
                   ? `Authenticated as Meta User: ${integration.metaUserName || 'Merchant Owner'} (${pages.length} Pages Authorized)`
-                  : 'Connect your Facebook Page & Instagram account to automatically ingest leads into CRM in real time.'}
+                  : 'Connect your Facebook Page & Instagram account to ingest leads into CRM through Meta webhooks.'}
               </p>
             </div>
           </div>
@@ -410,7 +410,7 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
             <div className="space-y-3">
               {pages.map((page) => {
                 const isExpanded = !!expandedPages[page.pageId];
-                const activeFormsCount = (page.leadForms || []).filter((f) => f.isSelected).length;
+                const selectedFormsCount = (page.leadForms || []).filter((f) => f.isSelected).length;
 
                 return (
                   <div
@@ -445,7 +445,7 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
                             <span>{page.category || 'Business Page'}</span>
                             <span>•</span>
                             <span className="font-semibold text-indigo-600">
-                              {page.leadForms?.length || 0} Lead Form{page.leadForms?.length === 1 ? '' : 's'} ({activeFormsCount} Active)
+                              {page.leadForms?.length || 0} Lead Form{page.leadForms?.length === 1 ? '' : 's'} ({selectedFormsCount} selected)
                             </span>
                           </div>
                         </div>
@@ -583,12 +583,15 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
               <input
                 type="text"
                 readOnly
-                value={integration?.webhookInfo?.verifyToken || 'omniva_meta_verify_token_2026'}
+                value={integration?.webhookInfo?.verifyToken || ''}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 select-all focus:outline-none"
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(integration?.webhookInfo?.verifyToken || 'omniva_meta_verify_token_2026', 'token')}
+                onClick={() => {
+                  const token = integration?.webhookInfo?.verifyToken;
+                  if (token) copyToClipboard(token, 'token');
+                }}
                 className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 shrink-0 cursor-pointer"
                 title="Copy Verify Token"
               >
@@ -608,7 +611,7 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
               <span>Integration Audit &amp; Sync History</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Complete audit log of real-time webhooks, manual imports, and connection changes.
+              Recorded audit log of webhooks, manual imports, and connection changes.
             </p>
           </div>
           <span className="text-xs font-bold text-slate-500">{syncLogs.length} Events Logged</span>

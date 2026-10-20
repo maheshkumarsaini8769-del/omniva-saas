@@ -7,6 +7,8 @@ const {
   setupSuperAdmin,
   createStaff,
   getStaffList,
+  updateStaff,
+  deleteStaff,
   updateBusinessProfile,
 } = require('../controllers/authController');
 const {
@@ -15,6 +17,7 @@ const {
   tenantScope,
 } = require('../middlewares/authMiddleware');
 const { authRateLimiter } = require('../middlewares/rateLimitMiddleware');
+const { enforceQuota } = require('../middlewares/quotaMiddleware');
 
 // Public auth routes with brute-force rate limiting
 router.post('/register-merchant', authRateLimiter.middleware(), registerMerchant);
@@ -26,7 +29,9 @@ router.get('/me', protect, getMe);
 router.put('/business-profile', protect, tenantScope, updateBusinessProfile);
 
 // Merchant staff management (Owner only, strictly isolated to req.businessId)
-router.post('/staff', protect, authorize('MERCHANT_OWNER'), tenantScope, createStaff);
+router.post('/staff', protect, authorize('MERCHANT_OWNER'), tenantScope, enforceQuota('staff'), createStaff);
 router.get('/staff', protect, authorize('MERCHANT_OWNER'), tenantScope, getStaffList);
+router.put('/staff/:id', protect, authorize('MERCHANT_OWNER'), tenantScope, updateStaff);
+router.delete('/staff/:id', protect, authorize('MERCHANT_OWNER'), tenantScope, deleteStaff);
 
 module.exports = router;

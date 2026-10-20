@@ -5,7 +5,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const runBackup = async () => {
   const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/omniva_saas';
-  console.log('[Omniva Backup Engine] Connecting to database:', mongoUri);
+  const redactedUri = String(mongoUri || '').replace(/\/\/([^:@/]+):([^@/]+)@/, '//$1:***@');
+  console.log('[Omniva Backup Engine] Connecting to database:', redactedUri);
   await mongoose.connect(mongoUri);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

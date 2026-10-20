@@ -23,42 +23,15 @@ export const BillingSettings = () => {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeSuccess, setUpgradeSuccess] = useState('');
+  const [fetchError, setFetchError] = useState('');
+  const [upgradeError, setUpgradeError] = useState('');
 
   const getToken = () => localStorage.getItem('omniva_token') || localStorage.getItem('token') || '';
-
-  const DEFAULT_PLANS = [
-    {
-      tier: 'STARTER',
-      name: 'Starter Tier',
-      priceInr: 999,
-      maxMonthlyOrders: 50,
-      maxMonthlyLeads: 100,
-      maxStaffSeats: 2,
-      features: ['Up to 50 Orders / month', 'Up to 100 Leads / month', 'Meta Browser Pixel & CAPI', 'COD Checkout Engine', 'Basic Automation Rules']
-    },
-    {
-      tier: 'GROWTH',
-      name: 'Growth Tier',
-      priceInr: 2999,
-      maxMonthlyOrders: 500,
-      maxMonthlyLeads: 1000,
-      maxStaffSeats: 5,
-      features: ['Up to 500 Orders / month', 'Up to 1,000 Leads / month', 'Priority Meta CAPI Sync', 'Custom Domain Support', 'Razorpay HMAC Webhooks', 'WhatsApp Automation & Outbound Webhooks']
-    },
-    {
-      tier: 'PRO',
-      name: 'Enterprise Pro',
-      priceInr: 7999,
-      maxMonthlyOrders: 10000,
-      maxMonthlyLeads: 50000,
-      maxStaffSeats: 25,
-      features: ['Unlimited Storefront Orders', 'Unlimited CRM & Meta Leads', 'Full Multi-Staff Delegation & Permissions', 'Real-Time Logistics Webhook Dispatch', 'VIP Dedicated Infrastructure']
-    }
-  ];
 
   const fetchBillingData = async () => {
     try {
       setLoading(true);
+      setFetchError('');
       const token = getToken();
       const headers = {
         'Content-Type': 'application/json',
@@ -71,85 +44,57 @@ export const BillingSettings = () => {
         fetch(`${API_BASE}/analytics`, { headers }).catch(() => null),
       ]);
 
-      let hasUsage = false;
-      let hasPlans = false;
-      let hasAnalytics = false;
+      const failedSections = [];
 
       if (usageRes && usageRes.ok) {
         const usageJson = await usageRes.json().catch(() => ({}));
         if (usageJson.success && usageJson.data) {
           setUsageData(usageJson.data);
-          hasUsage = true;
+        } else {
+          setUsageData(null);
+          failedSections.push('usage');
         }
+      } else {
+        setUsageData(null);
+        failedSections.push('usage');
       }
 
       if (plansRes && plansRes.ok) {
         const plansJson = await plansRes.json().catch(() => ({}));
         if (plansJson.success && Array.isArray(plansJson.data) && plansJson.data.length > 0) {
           setPlans(plansJson.data);
-          hasPlans = true;
+        } else {
+          setPlans([]);
+          failedSections.push('plans');
         }
+      } else {
+        setPlans([]);
+        failedSections.push('plans');
       }
 
       if (analyticsRes && analyticsRes.ok) {
         const analyticsJson = await analyticsRes.json().catch(() => ({}));
         if (analyticsJson.success && analyticsJson.data) {
           setAnalytics(analyticsJson.data);
-          hasAnalytics = true;
+        } else {
+          setAnalytics(null);
+          failedSections.push('analytics');
         }
+      } else {
+        setAnalytics(null);
+        failedSections.push('analytics');
       }
 
-      // Reliable fallbacks if API is unauthenticated or running in isolated demo mode
-      if (!hasPlans) {
-        setPlans(DEFAULT_PLANS);
-      }
-      if (!hasUsage) {
-        setUsageData({
-          planTier: 'GROWTH',
-          status: 'ACTIVE',
-          billingCycle: 'MONTHLY',
-          currentPeriodEnd: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-          usage: {
-            orders: { used: 38, limit: 500, percentage: 8 },
-            leads: { used: 114, limit: 1000, percentage: 11 },
-            staff: { used: 3, limit: 5, percentage: 60 }
-          }
-        });
-      }
-      if (!hasAnalytics) {
-        setAnalytics({
-          grossSales: 286500,
-          netSales: 248500,
-          codSales: 165000,
-          onlineSales: 83500,
-          estimatedNetProfit: 111825,
-          aov: 1499,
-          totalOrdersCount: 191
-        });
+      if (failedSections.length > 0) {
+        setFetchError(
+          `Unable to load ${failedSections.join(', ')} from the server. No placeholder values are shown.`
+        );
       }
     } catch (err) {
-      console.warn('Subscription fetch warning (using robust fallbacks):', err);
-      setPlans(DEFAULT_PLANS);
-      setUsageData({
-        planTier: 'GROWTH',
-        status: 'ACTIVE',
-        billingCycle: 'MONTHLY',
-        currentPeriodEnd: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-        usage: {
-          orders: { used: 38, limit: 500, percentage: 8 },
-          leads: { used: 114, limit: 1000, percentage: 11 },
-          staff: { used: 3, limit: 5, percentage: 60 }
-        }
-      });
-      setAnalytics({
-        grossSales: 286500,
-        netSales: 248500,
-        codSales: 165000,
-        onlineSales: 83500,
-        estimatedNetProfit: 111825,
-        aov: 1499,
-        totalOrdersCount: 191
-      });
+      setUsageData(null);
+      setPlans([]);
+      setAnalytics(null);
+      setFetchError(err.message || 'Unable to load billing data from the server.');
     } finally {
       setLoading(false);
     }
@@ -163,6 +108,7 @@ export const BillingSettings = () => {
     try {
       setUpgrading(true);
       setUpgradeSuccess('');
+      setUpgradeError('');
       const token = getToken();
       const headers = {
         'Content-Type': 'application/json',
@@ -173,30 +119,17 @@ export const BillingSettings = () => {
         method: 'POST',
         headers,
         body: JSON.stringify({ planTier: tier, billingCycle: 'MONTHLY' }),
-      }).catch(() => null);
+      });
 
-      if (res && res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.success) {
-          setUpgradeSuccess(`Successfully upgraded to ${tier} tier! Limits updated.`);
-          fetchBillingData();
-          return;
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Plan change failed with status ${res.status}`);
       }
 
-      // Local graceful upgrade simulation if backend demo mode
-      setUsageData(prev => ({
-        ...prev,
-        planTier: tier,
-        usage: {
-          orders: { used: prev?.usage?.orders?.used || 38, limit: tier === 'PRO' ? 10000 : tier === 'GROWTH' ? 500 : 50, percentage: 4 },
-          leads: { used: prev?.usage?.leads?.used || 114, limit: tier === 'PRO' ? 50000 : tier === 'GROWTH' ? 1000 : 100, percentage: 2 },
-          staff: { used: prev?.usage?.staff?.used || 3, limit: tier === 'PRO' ? 25 : tier === 'GROWTH' ? 5 : 2, percentage: 20 }
-        }
-      }));
-      setUpgradeSuccess(`⚡ Successfully upgraded to ${tier} tier! All quotas and limits updated.`);
+      setUpgradeSuccess(data.message || `Plan changed to ${tier}.`);
+      fetchBillingData();
     } catch (err) {
-      alert('Error updating plan: ' + err.message);
+      setUpgradeError(err.message || 'Unable to change plan.');
     } finally {
       setUpgrading(false);
     }
@@ -210,7 +143,7 @@ export const BillingSettings = () => {
     );
   }
 
-  const currentTier = usageData?.planTier || 'GROWTH';
+  const currentTier = usageData?.planTier || null;
   const usage = usageData?.usage || {};
 
   return (
@@ -225,14 +158,20 @@ export const BillingSettings = () => {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-extrabold text-slate-900">Subscription & Usage Limits</h2>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-bold uppercase">
-                {currentTier} Plan
+                {currentTier ? `${currentTier} Plan` : 'Plan unavailable'}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                Active
-              </span>
+              {usageData?.status && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                  {usageData.status}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Renewal Date: {usageData?.currentPeriodEnd ? new Date(usageData.currentPeriodEnd).toLocaleDateString() : '30 days remaining'} • Billing Cycle: Monthly
+              Renewal Date:{' '}
+              {usageData?.currentPeriodEnd
+                ? new Date(usageData.currentPeriodEnd).toLocaleDateString()
+                : 'Not available'}{' '}
+              • Billing Cycle: {usageData?.billingCycle || 'Not available'}
             </p>
           </div>
         </div>
@@ -253,6 +192,20 @@ export const BillingSettings = () => {
         </div>
       )}
 
+      {fetchError && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 text-xs font-semibold flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {fetchError}
+        </div>
+      )}
+
+      {upgradeError && (
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 text-xs font-semibold flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {upgradeError}
+        </div>
+      )}
+
       {/* Quota Progress Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Orders Quota */}
@@ -262,7 +215,7 @@ export const BillingSettings = () => {
               <ShoppingBag className="w-4 h-4 text-indigo-400" /> Monthly Orders
             </span>
             <span className="font-mono text-slate-900 font-bold">
-              {usage.orders?.used || 0} / {usage.orders?.limit || 500}
+              {usage.orders?.used ?? '—'} / {usage.orders?.limit ?? '—'}
             </span>
           </div>
           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
@@ -278,8 +231,16 @@ export const BillingSettings = () => {
             ></div>
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>{usage.orders?.percentage || 0}% Quota Consumed</span>
-            <span>{(usage.orders?.limit || 500) - (usage.orders?.used || 0)} Remaining</span>
+            <span>
+              {typeof usage.orders?.percentage === 'number'
+                ? `${usage.orders.percentage}% Quota Consumed`
+                : 'Usage unavailable'}
+            </span>
+            <span>
+              {typeof usage.orders?.limit === 'number' && typeof usage.orders?.used === 'number'
+                ? `${usage.orders.limit - usage.orders.used} Remaining`
+                : '—'}
+            </span>
           </div>
         </div>
 
@@ -290,7 +251,7 @@ export const BillingSettings = () => {
               <Zap className="w-4 h-4 text-cyan-400" /> CRM & Meta Leads
             </span>
             <span className="font-mono text-slate-900 font-bold">
-              {usage.leads?.used || 0} / {usage.leads?.limit || 1000}
+              {usage.leads?.used ?? '—'} / {usage.leads?.limit ?? '—'}
             </span>
           </div>
           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
@@ -300,8 +261,16 @@ export const BillingSettings = () => {
             ></div>
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>{usage.leads?.percentage || 0}% Quota Consumed</span>
-            <span>{(usage.leads?.limit || 1000) - (usage.leads?.used || 0)} Remaining</span>
+            <span>
+              {typeof usage.leads?.percentage === 'number'
+                ? `${usage.leads.percentage}% Quota Consumed`
+                : 'Usage unavailable'}
+            </span>
+            <span>
+              {typeof usage.leads?.limit === 'number' && typeof usage.leads?.used === 'number'
+                ? `${usage.leads.limit - usage.leads.used} Remaining`
+                : '—'}
+            </span>
           </div>
         </div>
 
@@ -312,7 +281,7 @@ export const BillingSettings = () => {
               <Users className="w-4 h-4 text-purple-400" /> Team Seats
             </span>
             <span className="font-mono text-slate-900 font-bold">
-              {usage.staff?.used || 1} / {usage.staff?.limit || 5}
+              {usage.staff?.used ?? '—'} / {usage.staff?.limit ?? '—'}
             </span>
           </div>
           <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
@@ -323,22 +292,26 @@ export const BillingSettings = () => {
           </div>
           <div className="flex items-center justify-between text-[11px] text-slate-500">
             <span>Active Team Members</span>
-            <span>{(usage.staff?.limit || 5) - (usage.staff?.used || 1)} Seats Left</span>
+            <span>
+              {typeof usage.staff?.limit === 'number' && typeof usage.staff?.used === 'number'
+                ? `${usage.staff.limit - usage.staff.used} Seats Left`
+                : 'Usage unavailable'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Financial Analytics & Margins Breakdown */}
+      {/* Server-calculated Revenue & Order Metrics */}
       {analytics && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                Financial Margins & Profit Benchmark
+                Revenue &amp; Order Metrics
               </h3>
               <p className="text-xs text-slate-500">
-                Live reconciliation of gross revenue, COD vs prepaid collections, and net profit margins
+                Server-calculated gross revenue, COD vs prepaid split, AOV and cancellation rate. No profit margin is estimated.
               </p>
             </div>
             <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
@@ -368,9 +341,11 @@ export const BillingSettings = () => {
             </div>
 
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1">
-              <div className="text-[11px] font-semibold text-indigo-400 uppercase">Estimated Net Profit</div>
-              <div className="text-xl font-extrabold text-indigo-400">₹{analytics.estimatedNetProfit?.toLocaleString()}</div>
-              <div className="text-[10px] text-slate-500">~45% benchmark margin</div>
+              <div className="text-[11px] font-semibold text-indigo-400 uppercase">Average Order Value</div>
+              <div className="text-xl font-extrabold text-indigo-400">₹{analytics.aov?.toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500">
+                {analytics.cancelledOrdersCount ?? 0} cancelled · {analytics.cancellationRate ?? 0}% cancellation rate
+              </div>
             </div>
           </div>
         </div>
@@ -384,6 +359,11 @@ export const BillingSettings = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {plans.length === 0 && (
+            <div className="md:col-span-3 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+              Plan information is not available from the server right now.
+            </div>
+          )}
           {plans.map((p) => {
             const isCurrent = p.tier === currentTier;
             return (

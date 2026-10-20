@@ -1,9 +1,9 @@
-const bcrypt = require('bcryptjs');
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Booking = require('../models/Booking');
 const Lead = require('../models/Lead');
+const { PLAN_LIMITS } = require('../config/plans');
 
 // @desc    Get all merchants for Super Admin
 // @route   GET /api/admin/merchants
@@ -14,20 +14,30 @@ const getAllMerchants = async (req, res) => {
 
     const enriched = await Promise.all(
       tenants.map(async (t) => {
-        const [ordersCount, bookingsCount, leadsCount, ownerUser] = await Promise.all([
+        const [ordersCount, bookingsCount, leadsCount, ownerUser, staffCount, activeStaffCount, revenueResult] = await Promise.all([
           Order.countDocuments({ businessId: t._id }),
           Booking.countDocuments({ businessId: t._id }),
           Lead.countDocuments({ businessId: t._id }),
           User.findOne({ businessId: t._id, role: 'MERCHANT_OWNER' }).lean(),
+          User.countDocuments({ businessId: t._id, role: { $ne: 'MERCHANT_OWNER' } }),
+          User.countDocuments({ businessId: t._id, role: { $ne: 'MERCHANT_OWNER' }, isActive: true }),
+          Order.aggregate([
+            { $match: { businessId: t._id, orderStatus: { $ne: 'CANCELLED' } } },
+            { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+          ]),
         ]);
+        const revenue = revenueResult[0]?.total || 0;
 
         return {
           ...t,
-          ownerName: ownerUser ? ownerUser.name : 'Unknown Owner',
-          ownerEmail: ownerUser ? ownerUser.email : 'unknown@example.com',
+          ownerName: ownerUser ? ownerUser.name : '',
+          ownerEmail: ownerUser ? ownerUser.email : '',
           ordersCount,
           bookingsCount,
           leadsCount,
+          staffCount,
+          activeStaffCount,
+          revenue,
         };
       })
     );
@@ -160,6 +170,57 @@ const updateMerchantModules = async (req, res) => {
   }
 };
 
+// @desc    List merchant staff accounts for Super Admin
+// @route   GET /api/admin/merchants/:id/staff
+// @access  Private (SUPER_ADMIN, SUPER_STAFF)
+const getMerchantStaff = async (req, res) => {
+  try {
+    const tenant = await Tenant.findById(req.params.id).select('_id businessName');
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Merchant not found' });
+    }
+    const staff = await User.find({ businessId: tenant._id })
+      .select('name email role isActive createdAt')
+      .sort({ createdAt: 1 })
+      .lean();
+    res.json({ success: true, data: staff });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get current-month quota usage for a merchant
+// @route   GET /api/admin/merchants/:id/usage
+// @access  Private (SUPER_ADMIN, SUPER_STAFF)
+const getMerchantUsage = async (req, res) => {
+  try {
+    const tenant = await Tenant.findById(req.params.id).select('_id businessName planTier subscription');
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Merchant not found' });
+    }
+    const limits = PLAN_LIMITS[tenant.planTier] || PLAN_LIMITS.GROWTH;
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [ordersThisMonth, leadsThisMonth, staffCount] = await Promise.all([
+      Order.countDocuments({ businessId: tenant._id, createdAt: { $gte: periodStart } }),
+      Lead.countDocuments({ businessId: tenant._id, createdAt: { $gte: periodStart } }),
+      User.countDocuments({ businessId: tenant._id, role: { $ne: 'MERCHANT_OWNER' } }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        planTier: tenant.planTier,
+        planName: limits.name,
+        limits,
+        periodStart: periodStart.toISOString(),
+        usage: { ordersThisMonth, leadsThisMonth, staffCount },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get merchant integrations & API keys for Super Admin
 // @route   GET /api/admin/merchants/:id/integrations
 // @access  Private (SUPER_ADMIN, SUPER_STAFF)
@@ -230,50 +291,52 @@ const testMerchantIntegration = async (req, res) => {
     }
 
     const { serviceType } = req.body;
-    const latency = Math.floor(Math.random() * 40) + 30;
 
-    let diagnostic = {
-      service: serviceType,
-      status: 'VERIFIED',
-      latency: `${latency}ms`,
-      testedAt: new Date().toISOString(),
-      details: {},
-    };
+    let details = null;
 
     if (serviceType === 'meta') {
-      diagnostic.details = {
-        pixelId: tenant.integrations?.meta?.pixelId || '8492019482910',
-        datasetMatchRate: '8.9 / 10',
-        eventQuality: 'High (Server-Side Dedup Active)',
-        graphApiVersion: 'v19.0',
-      };
+      const pixelId = tenant.integrations?.meta?.pixelId || tenant.settings?.metaPixelId;
+      if (!pixelId) {
+        return res.status(400).json({ success: false, message: 'Meta Pixel ID is not configured for this merchant' });
+      }
+      details = { pixelId, graphApiVersion: 'v21.0', capiConfigured: Boolean(tenant.integrations?.meta?.capiToken || tenant.settings?.metaCapiToken) };
     } else if (serviceType === 'whatsapp') {
-      diagnostic.details = {
-        wabaId: tenant.integrations?.whatsapp?.wabaId || 'WABA_9829012345',
-        phoneNumber: tenant.integrations?.whatsapp?.senderPhone || '+91 98290 12345',
-        templateStatus: 'Approved & Active',
-        qualityScore: 'High (Green)',
-      };
+      const wabaId = tenant.integrations?.whatsapp?.wabaId;
+      const phoneNumber = tenant.integrations?.whatsapp?.senderPhone;
+      if (!wabaId && !phoneNumber) {
+        return res.status(400).json({ success: false, message: 'WhatsApp credentials are not configured for this merchant' });
+      }
+      details = { wabaId: wabaId || '', phoneNumber: phoneNumber || '' };
     } else if (serviceType === 'courier') {
-      diagnostic.details = {
-        provider: tenant.integrations?.courier?.provider || 'Delhivery',
-        pickupPincode: tenant.integrations?.courier?.pickupPincode || '302020',
-        serviceableZones: 'All India Tier 1-3 (29,000+ pincodes)',
-        autoAwb: 'Enabled',
-      };
+      const provider = tenant.integrations?.courier?.provider;
+      const pickupPincode = tenant.integrations?.courier?.pickupPincode;
+      if (!provider || !pickupPincode) {
+        return res.status(400).json({ success: false, message: 'Courier provider and pickup pincode are not configured' });
+      }
+      details = { provider, pickupPincode };
     } else if (serviceType === 'payment') {
-      diagnostic.details = {
+      const keyId = tenant.integrations?.payment?.keyId;
+      if (!keyId) {
+        return res.status(400).json({ success: false, message: 'Payment gateway key is not configured for this merchant' });
+      }
+      details = {
         provider: tenant.integrations?.payment?.provider || 'Razorpay',
-        keyId: tenant.integrations?.payment?.keyId || 'rzp_live_94820184920',
-        liveMode: true,
-        upiInstantRefunds: 'Operational',
+        keyId,
+        liveMode: Boolean(tenant.integrations?.payment?.liveMode),
       };
+    } else {
+      return res.status(400).json({ success: false, message: `Unknown integration type: ${serviceType}` });
     }
 
     res.json({
       success: true,
-      message: `Diagnostic test successful: ${serviceType.toUpperCase()} connector is healthy and responding.`,
-      diagnostic,
+      message: `${serviceType.toUpperCase()} configuration found. No live request was made.`,
+      diagnostic: {
+        service: serviceType,
+        status: 'CONFIGURED',
+        testedAt: new Date().toISOString(),
+        details,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -293,13 +356,20 @@ const createMerchant = async (req, res) => {
       planTier = 'GROWTH',
       ownerName,
       ownerEmail,
-      password = 'password123',
+      password,
       phone = '',
       enabledModules,
     } = req.body;
 
     if (!businessName || !ownerEmail) {
       return res.status(400).json({ success: false, message: 'Business name and owner email are required' });
+    }
+
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'A password of at least 8 characters is required for the merchant owner',
+      });
     }
 
     const finalSlug = (slug || businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')) + '-' + Date.now().toString().slice(-4);
@@ -333,13 +403,12 @@ const createMerchant = async (req, res) => {
       contact: { email: ownerEmail, phone },
     });
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
+    // User.create runs the model's pre-save hook, which hashes the password once.
+    // Do NOT hash it here or the stored hash will be double-hashed and unusable.
     const user = await User.create({
       name: ownerName || businessName + ' Owner',
       email: ownerEmail.toLowerCase().trim(),
-      password: hashedPassword,
+      password,
       role: 'MERCHANT_OWNER',
       businessId: tenant._id,
       phone,
@@ -359,6 +428,91 @@ const createMerchant = async (req, res) => {
       },
     });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update a merchant's business profile and owner identity
+// @route   PATCH /api/admin/merchants/:id
+// @access  Private (SUPER_ADMIN)
+const updateMerchantProfile = async (req, res) => {
+  try {
+    const {
+      businessName,
+      ownerName,
+      ownerEmail,
+      contactEmail,
+      contactPhone,
+      contactAddress,
+      planTier,
+    } = req.body;
+
+    const tenant = await Tenant.findById(req.params.id);
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Merchant not found' });
+    }
+
+    if (businessName !== undefined) {
+      const cleanName = String(businessName || '').trim();
+      if (!cleanName) {
+        return res.status(400).json({ success: false, message: 'Business name cannot be empty' });
+      }
+      tenant.businessName = cleanName;
+    }
+
+    if (!tenant.contact) tenant.contact = {};
+    if (contactEmail !== undefined) tenant.contact.email = String(contactEmail || '').trim();
+    if (contactPhone !== undefined) tenant.contact.phone = String(contactPhone || '').trim();
+    if (contactAddress !== undefined) tenant.contact.address = String(contactAddress || '').trim();
+
+    if (planTier !== undefined) {
+      const normalizedPlan = String(planTier || '').toUpperCase();
+      if (!['STARTER', 'GROWTH', 'PRO'].includes(normalizedPlan)) {
+        return res.status(400).json({ success: false, message: 'Invalid plan tier' });
+      }
+      tenant.planTier = normalizedPlan;
+    }
+
+    const owner = await User.findOne({ businessId: tenant._id, role: 'MERCHANT_OWNER' });
+    if (ownerName !== undefined) {
+      const cleanOwnerName = String(ownerName || '').trim();
+      if (!cleanOwnerName) {
+        return res.status(400).json({ success: false, message: 'Owner name cannot be empty' });
+      }
+      if (owner) owner.name = cleanOwnerName;
+    }
+    if (ownerEmail !== undefined) {
+      const cleanEmail = String(ownerEmail || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        return res.status(400).json({ success: false, message: 'A valid owner email is required' });
+      }
+      const conflictingUser = await User.findOne({
+        email: cleanEmail,
+        _id: { $ne: owner?._id || null },
+      }).select('_id');
+      if (conflictingUser) {
+        return res.status(409).json({ success: false, message: 'Owner email is already in use by another account' });
+      }
+      if (owner) owner.email = cleanEmail;
+      tenant.contact.email = cleanEmail;
+    }
+
+    await tenant.save();
+    if (owner) await owner.save();
+
+    res.json({
+      success: true,
+      message: `Merchant profile updated for ${tenant.businessName}`,
+      data: {
+        ...tenant.toObject(),
+        ownerName: owner?.name || '',
+        ownerEmail: owner?.email || '',
+      },
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Email or slug is already in use' });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -399,22 +553,30 @@ const updateMerchantStatus = async (req, res) => {
   }
 };
 
+// @desc    Get the backend plan catalog and limits
+// @route   GET /api/admin/plans
+// @access  Private (SUPER_ADMIN, SUPER_STAFF)
+const getPlatformPlans = async (req, res) => {
+  res.json({ success: true, data: PLAN_LIMITS });
+};
+
 // @desc    Get aggregate platform metrics
 // @route   GET /api/admin/stats
 // @access  Private (SUPER_ADMIN, SUPER_STAFF)
 const getPlatformStats = async (req, res) => {
   try {
-    const [totalMerchants, activeMerchants, totalOrders, totalBookings, totalLeads] = await Promise.all([
+    const [totalMerchants, activeMerchants, totalOrders, totalBookings, totalLeads, activeSubscriptions] = await Promise.all([
       Tenant.countDocuments(),
       Tenant.countDocuments({ status: 'ACTIVE' }),
       Order.countDocuments(),
       Booking.countDocuments(),
       Lead.countDocuments(),
+      Tenant.countDocuments({ 'subscription.status': 'ACTIVE' }),
     ]);
 
     const ordersRevenue = await Order.aggregate([
-      { $match: { status: { $ne: 'CANCELLED' } } },
-      { $group: { _id: null, total: { $sum: '$total' } } },
+      { $match: { orderStatus: { $ne: 'CANCELLED' } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
 
     const totalRevenue = ordersRevenue[0]?.total || 0;
@@ -428,8 +590,7 @@ const getPlatformStats = async (req, res) => {
         totalBookings,
         totalLeads,
         totalRevenue,
-        activeSubscriptions: activeMerchants,
-        systemHealth: '100% Operational',
+        activeSubscriptions,
       },
     });
   } catch (error) {
@@ -441,9 +602,13 @@ module.exports = {
   getAllMerchants,
   createMerchant,
   updateMerchantStatus,
+  updateMerchantProfile,
   getPlatformStats,
+  getPlatformPlans,
   updateMerchantTemplate,
   updateMerchantModules,
+  getMerchantStaff,
+  getMerchantUsage,
   getMerchantIntegrations,
   updateMerchantIntegrations,
   testMerchantIntegration,

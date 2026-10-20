@@ -12,7 +12,7 @@ const callLogSchema = new mongoose.Schema({
   outcome: {
     type: String,
     enum: ['CONNECTED', 'NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'CALLBACK_REQUESTED'],
-    default: 'CONNECTED',
+    required: true,
   },
   notes: { type: String, default: '' },
   loggedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -67,13 +67,13 @@ const leadSchema = new mongoose.Schema(
     utmCampaign: { type: String, default: '' },
     utmContent: { type: String, default: '' },
     fbclid: { type: String, default: '' },
-    metaLeadId: { type: String, sparse: true, index: true },
+    metaLeadId: { type: String, default: null },
     metaPageId: { type: String, default: '' },
     metaPageName: { type: String, default: '' },
     metaFormId: { type: String, default: '' },
     metaFormName: { type: String, default: '' },
     metaAdId: { type: String, default: '' },
-    platform: { type: String, default: 'fb' },
+    platform: { type: String, default: '' },
     formAnswers: [
       {
         fieldKey: { type: String, default: '' },
@@ -129,7 +129,12 @@ const leadSchema = new mongoose.Schema(
 
 // Compound indexes for strict multi-tenant performance & deduplication queries
 leadSchema.index({ businessId: 1, phone: 1 });
-leadSchema.index({ businessId: 1, metaLeadId: 1 }, { unique: true, sparse: true });
+// Only real Meta lead IDs must be unique. Organic leads have metaLeadId = null,
+// and a sparse compound index would still index those nulls.
+leadSchema.index(
+  { businessId: 1, metaLeadId: 1 },
+  { unique: true, partialFilterExpression: { metaLeadId: { $type: 'string' } } }
+);
 leadSchema.index({ businessId: 1, status: 1 });
 leadSchema.index({ businessId: 1, assignedTo: 1 });
 leadSchema.index({ businessId: 1, createdAt: -1 });

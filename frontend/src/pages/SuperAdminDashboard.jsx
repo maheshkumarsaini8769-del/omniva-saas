@@ -62,227 +62,227 @@ import {
   Copy
 } from 'lucide-react';
 
+const formatAdminSyncTime = (value) => {
+  if (!value) return 'Never tested';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Never tested' : date.toLocaleString('en-IN');
+};
+
+const createEmptySuperAdminIntegrationConfig = () => ({
+  meta: {
+    enabled: false,
+    pixelId: '',
+    capiToken: '',
+    testEventCode: '',
+    datasetName: '',
+    status: 'NOT_CONFIGURED',
+    matchRate: 'Not measured',
+    lastTested: 'Never tested',
+  },
+  whatsapp: {
+    enabled: false,
+    wabaId: '',
+    phoneNumberId: '',
+    accessToken: '',
+    senderPhone: '',
+    status: 'NOT_CONFIGURED',
+    qualityScore: 'Not reported',
+    lastTested: 'Never tested',
+  },
+  courier: {
+    enabled: false,
+    provider: '',
+    apiKey: '',
+    apiSecret: '',
+    pickupPincode: '',
+    status: 'NOT_CONFIGURED',
+    serviceable: 'Not reported',
+    lastTested: 'Never tested',
+  },
+  payment: {
+    enabled: false,
+    provider: 'Razorpay',
+    keyId: '',
+    keySecret: '',
+    webhookSecret: '',
+    liveMode: false,
+    status: 'NOT_CONFIGURED',
+    instantRefunds: 'Not reported',
+    lastTested: 'Never tested',
+  },
+  webhooks: {
+    enabled: false,
+    targetUrl: '',
+    secretToken: '',
+    status: 'NOT_CONFIGURED',
+  },
+  managedBySuperAdmin: true,
+});
+
+const normalizeSuperAdminIntegrationConfig = (integrations = {}) => {
+  const empty = createEmptySuperAdminIntegrationConfig();
+  const meta = integrations.meta || {};
+  const whatsapp = integrations.whatsapp || {};
+  const courier = integrations.courier || {};
+  const payment = integrations.payment || {};
+  const webhooks = integrations.webhooks || {};
+
+  return {
+    meta: {
+      ...empty.meta,
+      enabled: Boolean(meta.enabled),
+      pixelId: meta.pixelId || '',
+      capiToken: meta.capiToken || '',
+      testEventCode: meta.testEventCode || '',
+      datasetName: meta.datasetId || '',
+      status: meta.status || (meta.enabled && meta.pixelId ? 'CONFIGURED' : 'NOT_CONFIGURED'),
+      matchRate: 'Not measured',
+      lastTested: formatAdminSyncTime(meta.lastSyncedAt),
+    },
+    whatsapp: {
+      ...empty.whatsapp,
+      enabled: Boolean(whatsapp.enabled),
+      wabaId: whatsapp.wabaId || '',
+      phoneNumberId: whatsapp.phoneNumberId || '',
+      accessToken: whatsapp.accessToken || '',
+      senderPhone: whatsapp.senderPhone || '',
+      status: whatsapp.status || (whatsapp.enabled && (whatsapp.wabaId || whatsapp.phoneNumberId) ? 'CONFIGURED' : 'NOT_CONFIGURED'),
+      lastTested: formatAdminSyncTime(whatsapp.lastSyncedAt),
+    },
+    courier: {
+      ...empty.courier,
+      enabled: Boolean(courier.enabled),
+      provider: courier.provider || '',
+      apiKey: courier.apiKey || '',
+      apiSecret: courier.apiSecret || '',
+      pickupPincode: courier.pickupPincode || '',
+      status: courier.status || (courier.enabled && courier.provider ? 'CONFIGURED' : 'NOT_CONFIGURED'),
+      lastTested: formatAdminSyncTime(courier.lastSyncedAt),
+    },
+    payment: {
+      ...empty.payment,
+      enabled: Boolean(payment.enabled),
+      provider: payment.provider || 'Razorpay',
+      keyId: payment.keyId || '',
+      keySecret: payment.keySecret || '',
+      webhookSecret: payment.webhookSecret || '',
+      liveMode: Boolean(payment.liveMode),
+      status: payment.status || (payment.enabled && payment.keyId ? 'CONFIGURED' : 'NOT_CONFIGURED'),
+      lastTested: formatAdminSyncTime(payment.lastSyncedAt),
+    },
+    webhooks: {
+      ...empty.webhooks,
+      enabled: Boolean(webhooks.enabled),
+      targetUrl: webhooks.url || '',
+      secretToken: webhooks.secret || '',
+      status: webhooks.status || (webhooks.enabled && webhooks.url ? 'CONFIGURED' : 'NOT_CONFIGURED'),
+    },
+    managedBySuperAdmin: integrations.managedBySuperAdmin !== false,
+  };
+};
+
+
+const mapAdminMerchant = (t) => ({
+  id: t._id,
+  realDbId: t._id,
+  displayId: `M-${String(t._id).slice(-6).toUpperCase()}`,
+  gstin: t.gstinNumber || '',
+  slug: t.slug || '',
+  templateCode: t.templateCode || '',
+  name: t.businessName || 'Unnamed merchant',
+  owner: t.ownerName || '',
+  email: t.ownerEmail || t.contact?.email || '',
+  phone: t.contact?.phone || '',
+  address: t.contact?.address || [t.contact?.city, t.contact?.state].filter(Boolean).join(', '),
+  type: t.businessType === 'PRODUCT' ? 'Product' : t.businessType === 'SERVICE' ? 'Service' : t.businessType === 'TRAVEL' ? 'Travel' : (t.businessType || 'Custom'),
+  plan: t.planTier ? t.planTier.charAt(0) + t.planTier.slice(1).toLowerCase() : '',
+  status: t.status === 'ACTIVE' ? 'Active' : t.status === 'SUSPENDED' ? 'Suspended' : 'Pending',
+  joinedDate: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+  domain: t.customDomain || (t.slug ? `/store/${t.slug}` : ''),
+  orders: Number(t.ordersCount) || 0,
+  bookings: Number(t.bookingsCount) || 0,
+  leads: Number(t.leadsCount) || 0,
+  staffCount: Number(t.staffCount) || 0,
+  activeStaffCount: Number(t.activeStaffCount) || 0,
+  subscription: t.subscription || null,
+  revenue: Number(t.revenue) || 0,
+  customers: null,
+  staff: '',
+  storage: '',
+  quota: '',
+  enabledModules: t.enabledModules || {}
+});
+
+const buildSuperAdminIntegrationPayload = (config) => ({
+  managedBySuperAdmin: config.managedBySuperAdmin !== false,
+  meta: {
+    enabled: Boolean(config.meta.enabled),
+    pixelId: config.meta.pixelId?.trim() || '',
+    capiToken: config.meta.capiToken?.trim() || '',
+    testEventCode: config.meta.testEventCode?.trim() || '',
+    datasetId: config.meta.datasetName?.trim() || '',
+    status: config.meta.enabled && config.meta.pixelId?.trim() ? 'CONFIGURED' : 'NOT_CONFIGURED',
+  },
+  whatsapp: {
+    enabled: Boolean(config.whatsapp.enabled),
+    wabaId: config.whatsapp.wabaId?.trim() || '',
+    phoneNumberId: config.whatsapp.phoneNumberId?.trim() || '',
+    accessToken: config.whatsapp.accessToken?.trim() || '',
+    senderPhone: config.whatsapp.senderPhone?.trim() || '',
+    status: config.whatsapp.enabled && (config.whatsapp.phoneNumberId?.trim() || config.whatsapp.wabaId?.trim()) ? 'CONFIGURED' : 'NOT_CONFIGURED',
+  },
+  courier: {
+    enabled: Boolean(config.courier.enabled),
+    provider: config.courier.provider?.trim() || '',
+    apiKey: config.courier.apiKey?.trim() || '',
+    apiSecret: config.courier.apiSecret?.trim() || '',
+    pickupPincode: config.courier.pickupPincode?.trim() || '',
+    status: config.courier.enabled && config.courier.provider?.trim() ? 'CONFIGURED' : 'NOT_CONFIGURED',
+  },
+  payment: {
+    enabled: Boolean(config.payment.enabled),
+    provider: config.payment.provider?.trim() || 'Razorpay',
+    keyId: config.payment.keyId?.trim() || '',
+    keySecret: config.payment.keySecret?.trim() || '',
+    webhookSecret: config.payment.webhookSecret?.trim() || '',
+    liveMode: Boolean(config.payment.liveMode),
+    status: config.payment.enabled && config.payment.keyId?.trim() ? 'CONFIGURED' : 'NOT_CONFIGURED',
+  },
+  webhooks: {
+    enabled: Boolean(config.webhooks.enabled),
+    url: config.webhooks.targetUrl?.trim() || '',
+    secret: config.webhooks.secretToken?.trim() || '',
+    status: config.webhooks.enabled && config.webhooks.targetUrl?.trim() ? 'CONFIGURED' : 'NOT_CONFIGURED',
+  },
+});
+
+
 export const SuperAdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   // Active platform tab
   const [activeTab, setActiveTab] = useState('overview'); // overview, merchants, add-merchant, merchant-details, subscriptions, plans, templates, integrations, analytics, tickets, staff, health, logs, settings
-  const [selectedMerchantId, setSelectedMerchantId] = useState('SUB-0021');
+  const [selectedMerchantId, setSelectedMerchantId] = useState('');
   const [addStep, setAddStep] = useState(1);
   const [merchantDetailsSubTab, setMerchantDetailsSubTab] = useState('overview');
   const [adminToast, setAdminToast] = useState('');
+  const [adminError, setAdminError] = useState('');
   const [merchantPage, setMerchantPage] = useState(1);
+
+  const showAdminError = (message) => {
+    setAdminError(message);
+    setTimeout(() => setAdminError(''), 6500);
+  };
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // ================= Merchant API Keys & Connectors Provisioning (Super Admin Managed) =================
-  const [selectedApiMerchantId, setSelectedApiMerchantId] = useState('SUB-0021');
+  const [selectedApiMerchantId, setSelectedApiMerchantId] = useState('');
   const [activeApiConnectorTab, setActiveApiConnectorTab] = useState('meta');
   const [showApiTokenSecret, setShowApiTokenSecret] = useState(false);
   const [apiTestingConnector, setApiTestingConnector] = useState(null);
   const [apiTestSuccessMsg, setApiTestSuccessMsg] = useState('');
-  const [merchantApiStore, setMerchantApiStore] = useState({
-    'SUB-0021': {
-      meta: {
-        enabled: true,
-        pixelId: '8492019482910',
-        capiToken: 'EAAG8492019482901_pqrZ90abcdefLiveToken',
-        testEventCode: 'TEST84920',
-        datasetName: 'Desi Achar House CAPI Dataset',
-        status: 'CONNECTED',
-        matchRate: '8.9 / 10',
-        lastTested: 'Verified 2 mins ago',
-      },
-      whatsapp: {
-        enabled: true,
-        wabaId: 'WABA_9829012345',
-        phoneNumberId: 'PN_44820194',
-        accessToken: 'EAAW9829012345_LivePermTokenMeta2026',
-        senderPhone: '+91 98290 12345',
-        status: 'CONNECTED',
-        qualityScore: 'High (Green)',
-        lastTested: 'Verified 10 mins ago',
-      },
-      courier: {
-        enabled: true,
-        provider: 'Delhivery',
-        apiKey: 'del_live_k894029104',
-        apiSecret: 'del_sec_9948201948201',
-        pickupPincode: '302020',
-        status: 'CONNECTED',
-        serviceable: '29,000+ Pincodes',
-        lastTested: 'Verified 1 hour ago',
-      },
-      payment: {
-        enabled: true,
-        provider: 'Razorpay',
-        keyId: 'rzp_live_94820184920',
-        keySecret: 'rzp_sec_4920194820194',
-        webhookSecret: 'whsec_94820194820',
-        liveMode: true,
-        status: 'CONNECTED',
-        instantRefunds: 'Operational',
-        lastTested: 'Verified 25 mins ago',
-      },
-      webhooks: {
-        enabled: true,
-        targetUrl: 'https://hooks.zapier.com/hooks/catch/desiachar/orders',
-        secretToken: 'wh_sec_8492019482',
-        status: 'CONNECTED',
-      },
-      managedBySuperAdmin: true,
-    },
-    'SUB-0022': {
-      meta: {
-        enabled: true,
-        pixelId: '7729104920194',
-        capiToken: 'EAAG7729104920194_pixelStudioLiveToken',
-        testEventCode: 'TEST77291',
-        datasetName: 'Pixel Studio Event Stream',
-        status: 'CONNECTED',
-        matchRate: '9.2 / 10',
-        lastTested: 'Verified 4 hours ago',
-      },
-      whatsapp: {
-        enabled: true,
-        wabaId: 'WABA_9811122334',
-        phoneNumberId: 'PN_88192019',
-        accessToken: 'EAAW9811122334_LiveToken',
-        senderPhone: '+91 98111 22334',
-        status: 'CONNECTED',
-        qualityScore: 'High (Green)',
-        lastTested: 'Verified yesterday',
-      },
-      courier: {
-        enabled: false,
-        provider: 'Shiprocket',
-        apiKey: '',
-        apiSecret: '',
-        pickupPincode: '400001',
-        status: 'NOT_CONFIGURED',
-        serviceable: 'N/A (Studio/Service Model)',
-        lastTested: 'Not configured',
-      },
-      payment: {
-        enabled: true,
-        provider: 'Razorpay',
-        keyId: 'rzp_live_7729104920',
-        keySecret: 'rzp_sec_7729104920',
-        webhookSecret: 'whsec_772910',
-        liveMode: true,
-        status: 'CONNECTED',
-        instantRefunds: 'Operational',
-        lastTested: 'Verified 1 day ago',
-      },
-      webhooks: {
-        enabled: true,
-        targetUrl: 'https://api.pixelstudio.com/crm/webhook',
-        secretToken: 'wh_sec_7729104920',
-        status: 'CONNECTED',
-      },
-      managedBySuperAdmin: true,
-    },
-    'SUB-0023': {
-      meta: {
-        enabled: true,
-        pixelId: '6639201948201',
-        capiToken: 'EAAG6639201948201_rajasthanToursToken',
-        testEventCode: 'TEST66392',
-        datasetName: 'Rajasthan Tours CAPI',
-        status: 'CONNECTED',
-        matchRate: '8.6 / 10',
-        lastTested: 'Verified 3 days ago',
-      },
-      whatsapp: {
-        enabled: true,
-        wabaId: 'WABA_9822233445',
-        phoneNumberId: 'PN_77291049',
-        accessToken: 'EAAW9822233445_LiveToken',
-        senderPhone: '+91 98222 33445',
-        status: 'CONNECTED',
-        qualityScore: 'High (Green)',
-        lastTested: 'Verified 2 days ago',
-      },
-      courier: {
-        enabled: false,
-        provider: 'Shiprocket',
-        apiKey: '',
-        apiSecret: '',
-        pickupPincode: '313001',
-        status: 'NOT_CONFIGURED',
-        serviceable: 'N/A (Tour Package Business)',
-        lastTested: 'Not configured',
-      },
-      payment: {
-        enabled: true,
-        provider: 'Cashfree',
-        keyId: 'cf_live_6639201948',
-        keySecret: 'cf_sec_6639201948',
-        webhookSecret: 'whsec_663920',
-        liveMode: true,
-        status: 'CONNECTED',
-        instantRefunds: 'Operational',
-        lastTested: 'Verified 3 days ago',
-      },
-      webhooks: {
-        enabled: false,
-        targetUrl: '',
-        secretToken: '',
-        status: 'NOT_CONFIGURED',
-      },
-      managedBySuperAdmin: true,
-    },
-    'SUB-0024': {
-      meta: {
-        enabled: true,
-        pixelId: '5549201948201',
-        capiToken: 'EAAG5549201948201_glowSalonToken',
-        testEventCode: 'TEST55492',
-        datasetName: 'Glow Salon Ads Tracking',
-        status: 'CONNECTED',
-        matchRate: '8.4 / 10',
-        lastTested: 'Verified 5 days ago',
-      },
-      whatsapp: {
-        enabled: true,
-        wabaId: 'WABA_9833344556',
-        phoneNumberId: 'PN_66392019',
-        accessToken: 'EAAW9833344556_LiveToken',
-        senderPhone: '+91 98333 44556',
-        status: 'CONNECTED',
-        qualityScore: 'High (Green)',
-        lastTested: 'Verified 4 days ago',
-      },
-      courier: {
-        enabled: false,
-        provider: 'Delhivery',
-        apiKey: '',
-        apiSecret: '',
-        pickupPincode: '110001',
-        status: 'NOT_CONFIGURED',
-        serviceable: 'N/A (Salon & Spa Business)',
-        lastTested: 'Not configured',
-      },
-      payment: {
-        enabled: true,
-        provider: 'Razorpay',
-        keyId: 'rzp_live_5549201948',
-        keySecret: 'rzp_sec_5549201948',
-        webhookSecret: 'whsec_554920',
-        liveMode: true,
-        status: 'CONNECTED',
-        instantRefunds: 'Operational',
-        lastTested: 'Verified 5 days ago',
-      },
-      webhooks: {
-        enabled: false,
-        targetUrl: '',
-        secretToken: '',
-        status: 'NOT_CONFIGURED',
-      },
-      managedBySuperAdmin: true,
-    }
-  });
+  const [merchantApiStore, setMerchantApiStore] = useState({});
 
   const handleUpdateMerchantConnectorField = (merchantId, connectorKey, field, val) => {
     setMerchantApiStore(prev => ({
@@ -298,34 +298,109 @@ export const SuperAdminDashboard = () => {
   };
 
   const handleToggleManagedBySuperAdmin = (merchantId) => {
+    const current = merchantApiStore[merchantId] || createEmptySuperAdminIntegrationConfig();
+    const nextValue = !current.managedBySuperAdmin;
     setMerchantApiStore(prev => ({
       ...prev,
       [merchantId]: {
-        ...(prev[merchantId] || {}),
-        managedBySuperAdmin: !prev[merchantId]?.managedBySuperAdmin
+        ...(prev[merchantId] || createEmptySuperAdminIntegrationConfig()),
+        managedBySuperAdmin: nextValue
       }
     }));
-    const isNow = !merchantApiStore[merchantId]?.managedBySuperAdmin;
-    setAdminToast(`Super Admin Managed Mode is now ${isNow ? 'ACTIVE (Keys secured from merchant)' : 'SHARED (Merchant can view)'}`);
-    setTimeout(() => setAdminToast(''), 4000);
-  };
-
-  const handleTestApiConnector = (serviceName) => {
-    setApiTestingConnector(serviceName);
-    setApiTestSuccessMsg('');
-    setTimeout(() => {
-      setApiTestingConnector(null);
-      const latency = Math.floor(Math.random() * 35) + 32;
-      setApiTestSuccessMsg(`⚡ Diagnostic Successful: ${serviceName.toUpperCase()} connector handshake verified! Response HTTP 200 OK (${latency}ms latency). Credentials authenticated.`);
-      setTimeout(() => setApiTestSuccessMsg(''), 6000);
-    }, 700);
-  };
-
-  const handleSaveMerchantApiKeys = (merchantId) => {
-    const target = merchants.find(m => m.id === merchantId) || { name: 'Selected Merchant' };
-    setAdminToast(`✅ API keys & connectors successfully provisioned for "${target.name}"! Merchant access locked in managed mode.`);
+    setAdminToast('Managed mode changed locally. Click Provision All Keys to save it on the server.');
     setTimeout(() => setAdminToast(''), 4500);
   };
+
+  const handleTestApiConnector = async (serviceName) => {
+    const target = merchants.find(m => m.id === selectedApiMerchantId);
+    if (!target?.realDbId) {
+      showAdminError('Select a real merchant before testing an integration.');
+      return;
+    }
+    setApiTestingConnector(serviceName);
+    setApiTestSuccessMsg('');
+    try {
+      const res = await axios.post(
+        `/api/admin/merchants/${target.realDbId}/integrations/test`,
+        { serviceType: serviceName }
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The configuration check failed.');
+      }
+      const checkedAt = res.data.diagnostic?.testedAt
+        ? new Date(res.data.diagnostic.testedAt).toLocaleString('en-IN')
+        : new Date().toLocaleString('en-IN');
+      setApiTestSuccessMsg(`${res.data.message} Checked ${checkedAt}.`);
+      setTimeout(() => setApiTestSuccessMsg(''), 8000);
+    } catch (err) {
+      setApiTestSuccessMsg('');
+      showAdminError(err.response?.data?.message || err.message || 'The configuration check failed.');
+    } finally {
+      setApiTestingConnector(null);
+    }
+  };
+
+  const handleSaveMerchantApiKeys = async (merchantId) => {
+    const target = merchants.find(m => m.id === merchantId);
+    if (!target?.realDbId) {
+      showAdminError('Select a real merchant before saving integration credentials.');
+      return;
+    }
+    const config = merchantApiStore[merchantId];
+    if (!config) {
+      showAdminError('The integration configuration has not loaded yet. Try again in a moment.');
+      return;
+    }
+    try {
+      const res = await axios.put(
+        `/api/admin/merchants/${target.realDbId}/integrations`,
+        { integrations: buildSuperAdminIntegrationPayload(config) }
+      );
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The integration credentials were not saved.');
+      }
+      setMerchantApiStore(prev => ({
+        ...prev,
+        [merchantId]: normalizeSuperAdminIntegrationConfig({ ...config, ...res.data.data }),
+      }));
+      setAdminToast(`Connector settings saved for "${target.name}". The UI no longer claims a live handshake.`);
+    } catch (err) {
+      showAdminError(err.response?.data?.message || err.message || 'Could not save integration credentials.');
+    }
+    setTimeout(() => setAdminToast(''), 5000);
+  };
+
+  useEffect(() => {
+    const target = merchants.find(m => m.id === selectedApiMerchantId);
+    if (!target?.realDbId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`/api/admin/merchants/${target.realDbId}/integrations`);
+        if (cancelled) return;
+        if (!res.data?.success) {
+          throw new Error(res.data?.message || 'Could not load integration settings.');
+        }
+        setMerchantApiStore(prev => ({
+          ...prev,
+          [target.id]: normalizeSuperAdminIntegrationConfig(res.data.integrations || {}),
+        }));
+      } catch (err) {
+        if (cancelled) return;
+        setMerchantApiStore(prev => ({
+          ...prev,
+          [target.id]: createEmptySuperAdminIntegrationConfig(),
+        }));
+        showAdminError(
+          err.response?.status === 403
+            ? 'Only a SUPER_ADMIN can view merchant integration secrets.'
+            : err.response?.data?.message || err.message || 'Could not load integration settings.'
+        );
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedApiMerchantId, merchants]);
+
   const [showEditMerchantModal, setShowEditMerchantModal] = useState(false);
   const [editMerchantForm, setEditMerchantForm] = useState({ id: '', name: '', owner: '', email: '', phone: '', address: '', plan: 'Growth', type: 'Product' });
 
@@ -335,12 +410,13 @@ export const SuperAdminDashboard = () => {
   const [merchantStatusFilter, setMerchantStatusFilter] = useState('ALL');
 
   // Add Merchant Form State
-  const [newBizName, setNewBizName] = useState('Desi Achar House');
+  const [newBizName, setNewBizName] = useState('');
   const [newBizType, setNewBizType] = useState('Product selling');
-  const [newOwnerName, setNewOwnerName] = useState('Rahul Sharma');
-  const [newOwnerEmail, setNewOwnerEmail] = useState('owner@example.com');
-  const [newPhone, setNewPhone] = useState('+91 98765 43210');
-  const [newAddress, setNewAddress] = useState('Jaipur, Rajasthan, India');
+  const [newOwnerName, setNewOwnerName] = useState('');
+  const [newOwnerEmail, setNewOwnerEmail] = useState('');
+  const [newOwnerPassword, setNewOwnerPassword] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newAddress, setNewAddress] = useState('');
   const [isolateWorkspace, setIsolateWorkspace] = useState(true);
   const [sendInvite, setSendInvite] = useState(true);
   const [defaultCrm, setDefaultCrm] = useState(false);
@@ -348,9 +424,9 @@ export const SuperAdminDashboard = () => {
   // Platform Settings State
   const [platformName, setPlatformName] = useState('Omniva');
   const [timezone, setTimezone] = useState('Asia/Kolkata (GMT+5:30)');
-  const [platformUrl, setPlatformUrl] = useState('https://app.omniva.io');
+  const [platformUrl, setPlatformUrl] = useState(typeof window !== 'undefined' ? window.location.origin : '');
   const [currency, setCurrency] = useState('INR — Indian Rupee');
-  const [supportEmail, setSupportEmail] = useState('support@omniva.io');
+  const [supportEmail, setSupportEmail] = useState('');
   const [dateFormat, setDateFormat] = useState('DD MMM YYYY');
   const [reqEmailVerify, setReqEmailVerify] = useState(true);
   const [req2FA, setReq2FA] = useState(true);
@@ -358,206 +434,123 @@ export const SuperAdminDashboard = () => {
   const [allowUnverifiedDomains, setAllowUnverifiedDomains] = useState(false);
 
   // Merchants Data
-  const [merchants, setMerchants] = useState([
-    {
-      id: 'SUB-0021',
-      name: 'Desi Achar House',
-      owner: 'Rahul Sharma',
-      email: 'rahul@example.com',
-      phone: '+91 98765 43210',
-      address: 'Jaipur, Rajasthan, India',
-      type: 'Product',
-      plan: 'Growth',
-      status: 'Active',
-      joinedDate: '12 Oct 2026',
-      domain: 'desiachar.omniva.io',
-      orders: 1245,
-      revenue: '₹2,48,500',
-      customers: 892,
-      staff: '5 / 10',
-      storage: '3.8 / 10 GB',
-      quota: '33 / 100 units'
-    },
-    {
-      id: 'SUB-0022',
-      name: 'Pixel Studio',
-      owner: 'Neha Verma',
-      email: 'neha@pixelstudio.com',
-      phone: '+91 98111 22334',
-      address: 'Mumbai, Maharashtra',
-      type: 'Service',
-      plan: 'Pro',
-      status: 'Active',
-      joinedDate: '11 Oct 2026',
-      domain: 'pixelstudio.omniva.io',
-      orders: 430,
-      revenue: '₹4,12,000',
-      customers: 340,
-      staff: '12 / 25',
-      storage: '18 / 50 GB',
-      quota: '72 / 250 units'
-    },
-    {
-      id: 'SUB-0023',
-      name: 'Rajasthan Tours',
-      owner: 'Amit Singh',
-      email: 'amit@rajasthantours.in',
-      phone: '+91 98222 33445',
-      address: 'Udaipur, Rajasthan',
-      type: 'Travel',
-      plan: 'Growth',
-      status: 'Trial',
-      joinedDate: '10 Oct 2026',
-      domain: 'rajasthantours.omniva.io',
-      orders: 86,
-      revenue: '₹1,45,000',
-      customers: 120,
-      staff: '4 / 10',
-      storage: '2.1 / 10 GB',
-      quota: '19 / 100 units'
-    },
-    {
-      id: 'SUB-0024',
-      name: 'Glow Salon',
-      owner: 'Priya Singh',
-      email: 'priya@glowsalon.com',
-      phone: '+91 98333 44556',
-      address: 'Bengaluru, Karnataka',
-      type: 'Service',
-      plan: 'Starter',
-      status: 'Past due',
-      joinedDate: '09 Oct 2026',
-      domain: 'glowsalon.omniva.io',
-      orders: 210,
-      revenue: '₹94,000',
-      customers: 195,
-      staff: '2 / 3',
-      storage: '0.8 / 5 GB',
-      quota: '45 / 50 units'
-    },
-    {
-      id: 'SUB-0025',
-      name: 'FreshMart',
-      owner: 'Vikas Kumar',
-      email: 'vikas@freshmart.com',
-      phone: '+91 98444 55667',
-      address: 'Delhi NCR',
-      type: 'Product',
-      plan: 'Pro',
-      status: 'Active',
-      joinedDate: '08 Oct 2026',
-      domain: 'freshmart.omniva.io',
-      orders: 3120,
-      revenue: '₹8,92,000',
-      customers: 2450,
-      staff: '18 / 25',
-      storage: '32 / 50 GB',
-      quota: '190 / 250 units'
-    },
-    {
-      id: 'SUB-0026',
-      name: 'Event Planners',
-      owner: 'Karan Mehta',
-      email: 'karan@eventplanners.in',
-      phone: '+91 98555 66778',
-      address: 'Pune, Maharashtra',
-      type: 'Service',
-      plan: 'Growth',
-      status: 'Suspended',
-      joinedDate: '07 Oct 2026',
-      domain: 'eventplanners.omniva.io',
-      orders: 54,
-      revenue: '₹1,20,000',
-      customers: 80,
-      staff: '3 / 10',
-      storage: '4.5 / 10 GB',
-      quota: '12 / 100 units'
-    },
-    {
-      id: 'SUB-0027',
-      name: 'Trendz Clothing',
-      owner: 'Neha Patel',
-      email: 'neha@trendz.com',
-      phone: '+91 98666 77889',
-      address: 'Surat, Gujarat',
-      type: 'Product',
-      plan: 'Starter',
-      status: 'Pending',
-      joinedDate: '06 Oct 2026',
-      domain: 'trendz.omniva.io',
-      orders: 12,
-      revenue: '₹14,500',
-      customers: 22,
-      staff: '1 / 3',
-      storage: '0.4 / 5 GB',
-      quota: '5 / 50 units'
-    },
-    {
-      id: 'SUB-0028',
-      name: 'Desert Adventures',
-      owner: 'Amit Rao',
-      email: 'amit@desertadv.com',
-      phone: '+91 98777 88990',
-      address: 'Jaisalmer, Rajasthan',
-      type: 'Travel',
-      plan: 'Pro',
-      status: 'Active',
-      joinedDate: '05 Oct 2026',
-      domain: 'desertadv.omniva.io',
-      orders: 320,
-      revenue: '₹5,60,000',
-      customers: 410,
-      staff: '8 / 25',
-      storage: '12 / 50 GB',
-      quota: '88 / 250 units'
-    }
-  ]);
+  const [merchants, setMerchants] = useState([]);
 
   const [livePlatformStats, setLivePlatformStats] = useState(null);
+  const [platformPlans, setPlatformPlans] = useState(null);
+  const [healthSnapshot, setHealthSnapshot] = useState(null);
+  const [healthError, setHealthError] = useState('');
+  const [merchantUsage, setMerchantUsage] = useState(null);
+  const [merchantStaff, setMerchantStaff] = useState(null);
+  const [merchantDetailError, setMerchantDetailError] = useState('');
 
   // Load real merchants and platform statistics from backend
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
-        const [merchantsRes, statsRes] = await Promise.all([
+        const [merchantsRes, statsRes, plansRes] = await Promise.all([
           axios.get('/api/admin/merchants'),
-          axios.get('/api/admin/stats')
+          axios.get('/api/admin/stats'),
+          axios.get('/api/admin/plans').catch(() => ({ data: { success: false } }))
         ]);
-        if (merchantsRes.data.success && Array.isArray(merchantsRes.data.data) && merchantsRes.data.data.length > 0) {
-          const liveList = merchantsRes.data.data.map((t, idx) => ({
-            id: 'SUB-' + (idx + 21).toString().padStart(4, '0'),
-            realDbId: t._id,
-            name: t.businessName,
-            owner: t.ownerName || 'Merchant Owner',
-            email: t.ownerEmail || t.contact?.email || 'owner@example.com',
-            phone: t.contact?.phone || '+91 98765 43210',
-            address: t.contact?.city ? `${t.contact.city}, ${t.contact.state}` : 'Jaipur, Rajasthan',
-            type: t.businessType === 'PRODUCT' ? 'Product' : t.businessType === 'SERVICE' ? 'Service' : t.businessType === 'TRAVEL' ? 'Travel' : 'Product',
-            plan: t.planTier ? t.planTier.charAt(0) + t.planTier.slice(1).toLowerCase() : 'Growth',
-            status: t.status === 'ACTIVE' ? 'Active' : t.status === 'SUSPENDED' ? 'Suspended' : 'Pending',
-            joinedDate: new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            domain: `${t.slug}.omniva.io`,
-            orders: t.ordersCount || 0,
-            revenue: '₹' + ((t.ordersCount || 0) * 850).toLocaleString('en-IN'),
-            customers: (t.leadsCount || 0) + (t.ordersCount || 0),
-            staff: '5 / 10',
-            storage: '2.5 / 10 GB',
-            quota: `${t.ordersCount || 0} / 500 units`,
-            enabledModules: t.enabledModules || {}
-          }));
+        if (merchantsRes.data.success && Array.isArray(merchantsRes.data.data)) {
+          const liveList = merchantsRes.data.data.map(mapAdminMerchant);
           setMerchants(liveList);
+          setSelectedMerchantId(prev => prev || liveList[0]?.id || '');
+          setSelectedApiMerchantId(prev => prev || liveList[0]?.id || '');
+        } else {
+          setMerchants([]);
         }
         if (statsRes.data.success) {
           setLivePlatformStats(statsRes.data.data);
+        } else {
+          setLivePlatformStats(null);
         }
+        setPlatformPlans(plansRes.data?.success ? plansRes.data.data : null);
       } catch (err) {
-        console.warn('Live admin data load fallback:', err.message);
+        console.warn('Could not load live admin data:', err.message);
+        setMerchants([]);
+        setLivePlatformStats(null);
+        setPlatformPlans(null);
+        setAdminToast(err.response?.data?.message || 'Could not load live platform data.');
+        setTimeout(() => setAdminToast(''), 5000);
       }
     };
     fetchAdminData();
   }, []);
 
+  const loadHealthSnapshot = async () => {
+    setHealthError('');
+    try {
+      const res = await axios.get('/api/health/deep');
+      if (!res.data) throw new Error('Health endpoint returned no data.');
+      setHealthSnapshot(res.data);
+    } catch (err) {
+      setHealthError(err.response?.data?.message || err.message || 'Could not reach the health endpoint.');
+      setHealthSnapshot(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'health') loadHealthSnapshot();
+  }, [activeTab]);
+
+  const handleChangeMerchantTemplate = async (templateCode, businessType) => {
+    const target = merchants.find(m => m.id === selectedMerchantId);
+    if (!target?.realDbId) {
+      showAdminError('Merchant could not be identified. Refresh the list and try again.');
+      return;
+    }
+    try {
+      const res = await axios.patch(`/api/admin/merchants/${target.realDbId}/template`, { templateCode, businessType });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Template update was rejected.');
+      }
+      const displayType = templateCode === 'PRODUCT' ? 'Product'
+        : templateCode === 'TRAVEL' ? 'Travel'
+        : templateCode === 'SERVICE' ? 'Service'
+        : templateCode;
+      setMerchants(prev => prev.map(m => m.id === target.id
+        ? { ...m, type: displayType, templateCode, enabledModules: res.data.data?.enabledModules || m.enabledModules }
+        : m));
+      setAdminToast(`Template updated to ${templateCode} for ${target.name}.`);
+      setTimeout(() => setAdminToast(''), 4000);
+    } catch (err) {
+      showAdminError(err.response?.data?.message || err.message || 'Could not update the merchant template.');
+    }
+  };
+
   const selectedMerchant = merchants.find((m) => m.id === selectedMerchantId) || merchants[0];
+
+  useEffect(() => {
+    if (!selectedMerchant?.realDbId) {
+      setMerchantUsage(null);
+      setMerchantStaff(null);
+      return undefined;
+    }
+    if (merchantDetailsSubTab !== 'usage' && merchantDetailsSubTab !== 'staff') return undefined;
+    let cancelled = false;
+    const load = async () => {
+      setMerchantDetailError('');
+      try {
+        if (merchantDetailsSubTab === 'usage') {
+          setMerchantUsage(null);
+          const res = await axios.get(`/api/admin/merchants/${selectedMerchant.realDbId}/usage`);
+          if (!cancelled && res.data?.success) setMerchantUsage(res.data.data);
+        } else {
+          setMerchantStaff(null);
+          const res = await axios.get(`/api/admin/merchants/${selectedMerchant.realDbId}/staff`);
+          if (!cancelled && res.data?.success) setMerchantStaff(res.data.data || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setMerchantDetailError(err.response?.data?.message || err.message || 'Could not load merchant details.');
+        }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [merchantDetailsSubTab, selectedMerchantId]);
 
   const filteredMerchants = merchants.filter((m) => {
     const matchesSearch =
@@ -579,30 +572,81 @@ export const SuperAdminDashboard = () => {
 
   const handleToggleSuspend = async (merchantId) => {
     const target = merchants.find((m) => m.id === merchantId);
-    if (!target) return;
+    if (!target?.realDbId) {
+      showAdminError('Merchant could not be identified. Refresh the list and try again.');
+      return;
+    }
     const newStatus = target.status === 'Suspended' ? 'Active' : 'Suspended';
     try {
-      if (target.realDbId) {
-        await axios.patch(`/api/admin/merchants/${target.realDbId}/status`, { status: newStatus.toUpperCase() });
+      const res = await axios.patch(`/api/admin/merchants/${target.realDbId}/status`, {
+        status: newStatus.toUpperCase()
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Status update was rejected.');
       }
     } catch (err) {
-      console.warn('Backend status update warning:', err.message);
+      showAdminError(err.response?.data?.message || err.message || 'Could not update merchant status.');
+      return;
     }
-    setMerchants((prev) =>
-      prev.map((m) => {
-        if (m.id === merchantId) {
-          setAdminToast(`Merchant "${m.name}" is now marked as ${newStatus}!`);
-          return { ...m, status: newStatus };
-        }
-        return m;
-      })
-    );
+    setMerchants((prev) => prev.map((m) => m.id === merchantId ? { ...m, status: newStatus } : m));
+    setAdminToast(`Merchant "${target.name}" is now marked ${newStatus}.`);
     setTimeout(() => setAdminToast(''), 4000);
+  };
+
+  const handleCreateMerchant = async () => {
+    if (!newBizName.trim() || !newOwnerName.trim() || !newOwnerEmail.trim() || !newOwnerPassword) {
+      showAdminError('Business name, owner name, owner email and a temporary password are required.');
+      return;
+    }
+    if (newOwnerPassword.length < 8) {
+      showAdminError('The temporary owner password must be at least 8 characters.');
+      return;
+    }
+    const typeMap = {
+      'Product selling': { businessType: 'PRODUCT', templateCode: 'PRODUCT' },
+      'Photography & Events': { businessType: 'SERVICE', templateCode: 'SERVICE' },
+      'Travel Agency': { businessType: 'TRAVEL', templateCode: 'TRAVEL' },
+      'Salon & Beauty': { businessType: 'SALON', templateCode: 'SERVICE' },
+    };
+    const mappedType = typeMap[newBizType] || typeMap['Product selling'];
+    try {
+      const res = await axios.post('/api/admin/merchants', {
+        businessName: newBizName.trim(),
+        businessType: mappedType.businessType,
+        templateCode: mappedType.templateCode,
+        planTier: 'GROWTH',
+        ownerName: newOwnerName.trim(),
+        ownerEmail: newOwnerEmail.trim(),
+        password: newOwnerPassword,
+        phone: newPhone.trim(),
+        enabledModules: defaultCrm
+          ? undefined
+          : { products: true, orders: true, inventory: true, serviceBookings: false, travelBookings: false, crmLeads: false, marketingAds: true, automations: true },
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'The merchant account was not created.');
+      }
+      const created = mapAdminMerchant(res.data.data);
+      setMerchants(prev => [created, ...prev]);
+      setSelectedMerchantId(created.id);
+      setSelectedApiMerchantId(created.id);
+      setNewBizName('');
+      setNewOwnerName('');
+      setNewOwnerEmail('');
+      setNewOwnerPassword('');
+      setNewPhone('');
+      setNewAddress('');
+      setActiveTab('merchants');
+      setAdminToast(`Merchant "${created.name}" created. Share the temporary password with the owner securely.`);
+      setTimeout(() => setAdminToast(''), 7000);
+    } catch (err) {
+      showAdminError(err.response?.data?.message || err.message || 'Could not create the merchant.');
+    }
   };
 
   const handleExportMerchantsCsv = () => {
     const headers = "ID,Name,Owner,Email,Phone,Type,Plan,Status,JoinedDate\n";
-    const rows = merchants.map(m => `"${m.id}","${m.name}","${m.owner}","${m.email}","${m.phone}","${m.type}","${m.plan}","${m.status}","${m.joinedDate}"`).join("\n");
+    const rows = merchants.map(m => `"${m.displayId}","${m.name}","${m.owner}","${m.email}","${m.phone}","${m.type}","${m.plan}","${m.status}","${m.joinedDate}"`).join("\n");
     const blob = new Blob([headers + rows], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -628,12 +672,35 @@ export const SuperAdminDashboard = () => {
     setShowEditMerchantModal(true);
   };
 
-  const handleSaveEditMerchant = (e) => {
+  const handleSaveEditMerchant = async (e) => {
     e.preventDefault();
-    setMerchants(prev => prev.map(m => m.id === editMerchantForm.id ? { ...m, ...editMerchantForm } : m));
-    setShowEditMerchantModal(false);
-    setAdminToast(`Merchant "${editMerchantForm.name}" updated successfully!`);
-    setTimeout(() => setAdminToast(''), 4000);
+    const target = merchants.find(m => m.id === editMerchantForm.id);
+    if (!target?.realDbId) {
+      showAdminError('Merchant could not be identified. Refresh the list and try again.');
+      return;
+    }
+    const planTier = String(editMerchantForm.plan || '').toUpperCase();
+    try {
+      const res = await axios.patch(`/api/admin/merchants/${target.realDbId}`, {
+        businessName: editMerchantForm.name.trim(),
+        ownerName: editMerchantForm.owner.trim(),
+        ownerEmail: editMerchantForm.email.trim(),
+        contactEmail: editMerchantForm.email.trim(),
+        contactPhone: editMerchantForm.phone.trim(),
+        contactAddress: editMerchantForm.address.trim(),
+        planTier: ['STARTER', 'GROWTH', 'PRO', 'ENTERPRISE'].includes(planTier) ? planTier : undefined,
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Merchant profile update was rejected.');
+      }
+      const updated = mapAdminMerchant(res.data.data);
+      setMerchants(prev => prev.map(m => m.id === updated.id ? updated : m));
+      setShowEditMerchantModal(false);
+      setAdminToast(`Merchant "${updated.name}" updated in the database.`);
+      setTimeout(() => setAdminToast(''), 4000);
+    } catch (err) {
+      showAdminError(err.response?.data?.message || err.message || 'Could not update the merchant profile.');
+    }
   };
 
   const handleToggleMerchantModule = async (merchantId, moduleKey) => {
@@ -653,23 +720,21 @@ export const SuperAdminDashboard = () => {
       [moduleKey]: !currentModules[moduleKey]
     };
 
+    if (!target.realDbId) {
+      showAdminError('Merchant could not be identified. Refresh the list and try again.');
+      return;
+    }
     try {
-      if (target.realDbId) {
-        await axios.patch(`/api/admin/merchants/${target.realDbId}/modules`, { enabledModules: updatedModules });
+      const res = await axios.patch(`/api/admin/merchants/${target.realDbId}/modules`, { enabledModules: updatedModules });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Module update was rejected.');
       }
     } catch (err) {
-      console.warn('Backend module update warning:', err.message);
+      showAdminError(err.response?.data?.message || err.message || 'Could not update merchant modules.');
+      return;
     }
 
-    setMerchants(prev => prev.map(m => {
-      if (m.id === merchantId) {
-        return {
-          ...m,
-          enabledModules: updatedModules
-        };
-      }
-      return m;
-    }));
+    setMerchants(prev => prev.map(m => m.id === merchantId ? { ...m, enabledModules: updatedModules } : m));
     setAdminToast(`Module "${moduleKey}" updated for ${target.name}.`);
     setTimeout(() => setAdminToast(''), 3000);
   };
@@ -705,6 +770,16 @@ export const SuperAdminDashboard = () => {
       </div>
 
       {/* Admin Action Success Toast */}
+      {adminError && (
+        <div className="bg-rose-600 text-white px-5 py-2.5 shadow-lg flex items-center justify-between text-xs font-semibold z-40 sticky top-10 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-200" />
+            <span>{adminError}</span>
+          </div>
+          <button onClick={() => setAdminError('')} className="text-white/80 hover:text-white font-bold cursor-pointer">✕</button>
+        </div>
+      )}
+
       {adminToast && (
         <div className="bg-indigo-600 text-white px-5 py-2.5 shadow-lg flex items-center justify-between text-xs font-semibold z-40 sticky top-10 shrink-0">
           <div className="flex items-center gap-2">
@@ -776,11 +851,11 @@ export const SuperAdminDashboard = () => {
         <div className="p-3.5 border-t border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-              SA
+              {(user?.name || 'A').trim().charAt(0).toUpperCase()}
             </div>
             <div className="overflow-hidden">
-              <div className="text-xs font-bold text-slate-800 truncate">Platform Admin</div>
-              <div className="text-[10px] text-slate-500 truncate">admin@omniva.io</div>
+              <div className="text-xs font-bold text-slate-800 truncate">{user?.name || 'Platform Admin'}</div>
+              <div className="text-[10px] text-slate-500 truncate">{user?.email || 'Email not loaded'}</div>
             </div>
           </div>
           <button
@@ -814,7 +889,7 @@ export const SuperAdminDashboard = () => {
                 {activeTab === 'add-merchant'
                   ? 'Add Merchant'
                   : activeTab === 'merchant-details'
-                  ? selectedMerchant.name
+                  ? (selectedMerchant?.name || 'Merchant details')
                   : activeTab.replace('-', ' ')}
               </h1>
             </div>
@@ -844,11 +919,11 @@ export const SuperAdminDashboard = () => {
             {/* Admin Avatar */}
             <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
               <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
-                A
+                {(user?.name || 'A').trim().charAt(0).toUpperCase()}
               </div>
               <div className="hidden sm:block text-left">
-                <div className="text-xs font-bold text-slate-800 leading-tight">Admin</div>
-                <div className="text-[10px] text-slate-400 leading-tight">Super Admin</div>
+                <div className="text-xs font-bold text-slate-800 leading-tight">{user?.name || 'Platform Admin'}</div>
+                <div className="text-[10px] text-slate-400 leading-tight">{user?.role === 'SUPER_ADMIN' ? 'Super Admin' : (user?.role || 'Platform team')}</div>
               </div>
             </div>
           </div>
@@ -871,117 +946,94 @@ export const SuperAdminDashboard = () => {
                 </div>
               </div>
 
-              {/* 4 Top KPI Cards */}
+              {/* Live platform metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-                    <span>Total merchants</span>
-                    <span className="p-1 rounded-lg bg-indigo-50 text-indigo-600">
-                      <Building2 className="w-4 h-4" />
-                    </span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-2xl font-black text-slate-900">245</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 12.4% vs last month
+                {[
+                  {
+                    label: 'Total merchants',
+                    value: livePlatformStats?.totalMerchants ?? merchants.length,
+                    note: 'All tenant accounts in the database',
+                    icon: Building2,
+                    color: 'bg-indigo-50 text-indigo-600',
+                  },
+                  {
+                    label: 'Active merchants',
+                    value: livePlatformStats?.activeMerchants ?? merchants.filter(m => m.status === 'Active').length,
+                    note: 'Status ACTIVE',
+                    icon: CheckCircle2,
+                    color: 'bg-emerald-50 text-emerald-600',
+                  },
+                  {
+                    label: 'Orders',
+                    value: livePlatformStats?.totalOrders ?? '—',
+                    note: 'Across all tenants',
+                    icon: ShoppingBag,
+                    color: 'bg-blue-50 text-blue-600',
+                  },
+                  {
+                    label: 'Recorded order value',
+                    value: livePlatformStats?.totalRevenue != null
+                      ? `₹${Number(livePlatformStats.totalRevenue).toLocaleString('en-IN')}`
+                      : '—',
+                    note: 'Excludes cancelled orders',
+                    icon: Activity,
+                    color: 'bg-amber-50 text-amber-600',
+                  },
+                ].map((metric) => (
+                  <div key={metric.label} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+                      <span>{metric.label}</span>
+                      <span className={`p-1 rounded-lg ${metric.color}`}>
+                        <metric.icon className="w-4 h-4" />
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <div className="text-2xl font-black text-slate-900">{metric.value}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{metric.note}</div>
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-                    <span>Active subscriptions</span>
-                    <span className="p-1 rounded-lg bg-emerald-50 text-emerald-600">
-                      <CheckCircle2 className="w-4 h-4" />
-                    </span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-2xl font-black text-slate-900">210</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 8.2% vs last month
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-                    <span>Monthly recurring revenue</span>
-                    <span className="p-1 rounded-lg bg-indigo-50 text-indigo-600 font-bold">₹</span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-2xl font-black text-slate-900">₹4,25,000</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <ArrowUpRight className="w-3.5 h-3.5" /> 10.8% vs last month
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-                    <span>Platform uptime</span>
-                    <span className="p-1 rounded-lg bg-amber-50 text-amber-600">
-                      <Activity className="w-4 h-4" />
-                    </span>
-                  </div>
-                  <div className="mt-2">
-                    <div className="text-2xl font-black text-slate-900">99.9%</div>
-                    <div className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> All systems operational
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* Row 2: Revenue Line Chart & Registration Bar Chart */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Revenue Overview (2 Cols) */}
                 <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs text-slate-400 font-semibold uppercase">Revenue overview</div>
-                      <div className="text-2xl font-black text-slate-900">₹4,25,000</div>
-                    </div>
-                    <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 font-medium text-slate-600">
-                      Last 30 days
-                    </span>
+                  <div>
+                    <div className="text-xs text-slate-400 font-semibold uppercase">Live platform totals</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Only fields returned by /api/admin/stats are displayed</div>
                   </div>
-
-                  {/* Simulated Smooth Revenue Line Chart */}
-                  <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
-                    {[35, 42, 38, 55, 48, 62, 58, 75, 70, 95].map((val, idx) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div
-                          style={{ height: `${val}%` }}
-                          className="w-full bg-indigo-500/80 group-hover:bg-indigo-600 rounded-t-lg transition relative"
-                        >
-                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap z-10">
-                            ₹{(val * 4500).toLocaleString('en-IN')}
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-medium">W{idx + 1}</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      ['Bookings', livePlatformStats?.totalBookings ?? '—'],
+                      ['Leads', livePlatformStats?.totalLeads ?? '—'],
+                      ['Active subscriptions', livePlatformStats?.activeSubscriptions ?? '—'],
+                      ['Merchant accounts', livePlatformStats?.totalMerchants ?? merchants.length],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">{label}</div>
+                        <div className="text-lg font-black text-slate-900 mt-1">{value}</div>
                       </div>
                     ))}
+                  </div>
+                  <div className="rounded-xl border border-dashed border-slate-200 p-4 text-xs text-slate-500">
+                    Revenue trend and onboarding charts are not rendered because the backend does not expose a historical time-series endpoint. No simulated bars are shown.
                   </div>
                 </div>
 
-                {/* New Merchant Registrations (1 Col) */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
                   <div>
-                    <div className="text-xs text-slate-400 font-semibold uppercase">New merchant registrations</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Monthly onboarding trend</div>
+                    <div className="text-xs text-slate-400 font-semibold uppercase">Operational note</div>
+                    <h3 className="font-bold text-slate-900 text-sm mt-1">No uptime or MRR telemetry</h3>
                   </div>
-
-                  <div className="h-44 w-full flex items-end gap-2 pt-6 pb-2 px-2 border-b border-slate-100">
-                    {[20, 30, 24, 45, 52, 60, 48, 70, 65, 80].map((h, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                        <div
-                          style={{ height: `${h}%` }}
-                          className="w-full bg-indigo-600 hover:bg-indigo-600 rounded-t-md transition"
-                        />
-                        <span className="text-[9px] text-slate-400">M{i + 1}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Omniva does not currently store platform uptime samples or subscription billing amounts in these admin endpoints. Those values are intentionally shown as unavailable rather than hardcoded.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('health')}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Open system health
+                  </button>
                 </div>
               </div>
 
@@ -1019,6 +1071,7 @@ export const SuperAdminDashboard = () => {
                             key={m.id}
                             onClick={() => {
                               setSelectedMerchantId(m.id);
+                              setSelectedApiMerchantId(m.id);
                               setActiveTab('merchant-details');
                             }}
                             className="hover:bg-slate-50 transition cursor-pointer"
@@ -1057,53 +1110,41 @@ export const SuperAdminDashboard = () => {
                   </div>
                 </div>
 
-                {/* Platform Activity Feed (1 col) */}
+                {/* Recent merchant records (1 col) */}
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">Platform activity</h3>
-                    <p className="text-[11px] text-slate-400">Latest important events</p>
+                    <h3 className="font-bold text-slate-900 text-sm">Recent merchant records</h3>
+                    <p className="text-[11px] text-slate-400">Live tenants, newest first</p>
                   </div>
 
                   <div className="space-y-3.5">
-                    {[
-                      {
-                        title: 'New merchant registered',
-                        sub: 'Desi Achar House · 12 min ago',
-                        icon: Building2,
-                        color: 'bg-indigo-50 text-indigo-600'
-                      },
-                      {
-                        title: 'Payment received',
-                        sub: '₹1,199 from Pixel Studio · 36 min ago',
-                        icon: CreditCard,
-                        color: 'bg-emerald-50 text-emerald-600'
-                      },
-                      {
-                        title: 'Plan upgraded',
-                        sub: 'Rajasthan Tours · 1 hour ago',
-                        icon: RefreshCw,
-                        color: 'bg-blue-50 text-blue-600'
-                      },
-                      {
-                        title: 'Integration needs attention',
-                        sub: 'WhatsApp connection · 2 hours ago',
-                        icon: AlertTriangle,
-                        color: 'bg-amber-50 text-amber-600'
-                      }
-                    ].map((act, i) => {
-                      const Icon = act.icon;
-                      return (
-                        <div key={i} className="flex items-start gap-3">
-                          <div className={`p-2 rounded-xl ${act.color} shrink-0`}>
-                            <Icon className="w-3.5 h-3.5" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-slate-800">{act.title}</div>
-                            <div className="text-[11px] text-slate-400">{act.sub}</div>
+                    {merchants.slice(0, 5).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMerchantId(m.id);
+                              setSelectedApiMerchantId(m.id);
+                          setActiveTab('merchant-details');
+                        }}
+                        className="w-full flex items-start gap-3 text-left hover:bg-slate-50 rounded-xl p-2 -m-2 transition cursor-pointer"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-800 truncate">{m.name}</div>
+                          <div className="text-[11px] text-slate-400 truncate">
+                            {m.joinedDate ? `Joined ${m.joinedDate}` : 'Join date not recorded'} · {m.status}
                           </div>
                         </div>
-                      );
-                    })}
+                      </button>
+                    ))}
+                    {merchants.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-xs text-slate-500">
+                        No merchant records are available.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1139,32 +1180,32 @@ export const SuperAdminDashboard = () => {
                     <span>All merchants</span>
                     <span className="p-1 rounded-md bg-indigo-50 text-indigo-600"><Building2 className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">245</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">12.4% growth</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Loaded from the database</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
                     <span>Active</span>
                     <span className="p-1 rounded-md bg-emerald-50 text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">210</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">85.7% of total</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.filter(m => m.status === 'Active').length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Status ACTIVE</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>On trial</span>
+                    <span>Pending</span>
                     <span className="p-1 rounded-md bg-purple-50 text-purple-600"><Clock className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">25</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">10.2% of total</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.filter(m => m.status === 'Pending').length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Awaiting activation</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
                     <span>Suspended</span>
                     <span className="p-1 rounded-md bg-amber-50 text-amber-600"><AlertTriangle className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">10</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Needs review</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.filter(m => m.status === 'Suspended').length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Status SUSPENDED</div>
                 </div>
               </div>
 
@@ -1226,6 +1267,7 @@ export const SuperAdminDashboard = () => {
                           key={m.id}
                           onClick={() => {
                             setSelectedMerchantId(m.id);
+                              setSelectedApiMerchantId(m.id);
                             setActiveTab('merchant-details');
                           }}
                           className="hover:bg-slate-50 transition cursor-pointer"
@@ -1249,7 +1291,7 @@ export const SuperAdminDashboard = () => {
                                 ? 'bg-blue-50 text-blue-800 border-blue-200'
                                 : 'bg-purple-50 text-purple-800 border-purple-200'
                             }`}>
-                              {m.type === 'Product' ? '🛍️ Product (Achar)' : m.type === 'Travel' ? '✈️ Travel Tours' : '📸 Photography'}
+                              {m.type || 'Not set'}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 font-bold text-slate-800">{m.plan}</td>
@@ -1278,35 +1320,9 @@ export const SuperAdminDashboard = () => {
                   </table>
                 </div>
 
-                <div className="p-3 px-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                  <span>Showing 1-8 of 245 merchants</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setMerchantPage(p => Math.max(1, p - 1))}
-                      className="px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 cursor-pointer text-xs"
-                    >
-                      &lt;
-                    </button>
-                    {[1, 2, 3].map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => setMerchantPage(page)}
-                        className={`px-2.5 py-1 rounded text-xs cursor-pointer ${
-                          merchantPage === page
-                            ? 'bg-indigo-600 text-white font-bold shadow-xs'
-                            : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => setMerchantPage(p => Math.min(3, p + 1))}
-                      className="px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer text-xs"
-                    >
-                      Next &gt;
-                    </button>
-                  </div>
+                <div className="p-3 px-5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                  <span>Showing {filteredMerchants.length} of {merchants.length} merchant(s)</span>
+                  <span>All loaded records are shown; no server-side paging endpoint is configured.</span>
                 </div>
               </div>
             </div>
@@ -1405,10 +1421,13 @@ export const SuperAdminDashboard = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-slate-600 font-semibold block mb-1">Website (optional)</label>
+                        <label className="text-slate-600 font-semibold block mb-1">Temporary owner password *</label>
                         <input
-                          type="text"
-                          placeholder="https://"
+                          type="password"
+                          value={newOwnerPassword}
+                          onChange={(e) => setNewOwnerPassword(e.target.value)}
+                          minLength={8}
+                          placeholder="At least 8 characters"
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900"
                         />
                       </div>
@@ -1516,10 +1535,7 @@ export const SuperAdminDashboard = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          alert(`Merchant "${newBizName}" created successfully with isolated workspace!`);
-                          setActiveTab('merchants');
-                        }}
+                        onClick={handleCreateMerchant}
                         className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm cursor-pointer"
                       >
                         Continue to plan &rarr;
@@ -1596,7 +1612,16 @@ export const SuperAdminDashboard = () => {
           )}
 
           {/* ==================== 4. MERCHANT DETAILS (DEEP VIEW) ==================== */}
-          {activeTab === 'merchant-details' && (
+          {activeTab === 'merchant-details' && !selectedMerchant && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+              <Building2 className="w-6 h-6 text-slate-400 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-900">No merchant selected</h3>
+              <p className="text-xs text-slate-500">Open the merchants directory and select a real account.</p>
+              <button onClick={() => setActiveTab('merchants')} className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold">Open merchants</button>
+            </div>
+          )}
+
+          {activeTab === 'merchant-details' && selectedMerchant && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <button
@@ -1657,14 +1682,18 @@ export const SuperAdminDashboard = () => {
                     <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 text-xs font-bold border border-purple-200">
                       {selectedMerchant.plan} plan
                     </span>
-                    <a
-                      href={`http://localhost:5173/store/desi-rasoi-achar-1`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-mono border border-slate-200 flex items-center gap-1"
-                    >
-                      {selectedMerchant.domain} <ExternalLink className="w-3 h-3 text-slate-400" />
-                    </a>
+                    {selectedMerchant.slug ? (
+                      <a
+                        href={`/store/${selectedMerchant.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-mono border border-slate-200 flex items-center gap-1"
+                      >
+                        {selectedMerchant.domain} <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </a>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-50 text-slate-500 text-xs border border-slate-200">No storefront slug</span>
+                    )}
                   </div>
                 </div>
 
@@ -1703,22 +1732,22 @@ export const SuperAdminDashboard = () => {
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="text-xs text-slate-500 font-medium">Total orders</div>
                   <div className="text-2xl font-black text-slate-900 mt-1">{selectedMerchant.orders}</div>
-                  <div className="text-[11px] text-slate-400">This month</div>
+                  <div className="text-[11px] text-slate-400">All time, all statuses</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Attributed revenue</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">{selectedMerchant.revenue}</div>
-                  <div className="text-[11px] text-emerald-600 font-medium">Available records</div>
+                  <div className="text-xs text-slate-500 font-medium">Recorded order value</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">₹{Number(selectedMerchant.revenue || 0).toLocaleString('en-IN')}</div>
+                  <div className="text-[11px] text-emerald-600 font-medium">Excludes cancelled orders</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Customers</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">{selectedMerchant.customers}</div>
-                  <div className="text-[11px] text-slate-400">Total records</div>
+                  <div className="text-xs text-slate-500 font-medium">CRM leads</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{selectedMerchant.leads}</div>
+                  <div className="text-[11px] text-slate-400">{selectedMerchant.bookings} booking(s)</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="text-xs text-slate-500 font-medium">Staff accounts</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">5</div>
-                  <div className="text-[11px] text-slate-400">4 active</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{selectedMerchant.staffCount}</div>
+                  <div className="text-[11px] text-slate-400">{selectedMerchant.activeStaffCount} active</div>
                 </div>
               </div>
 
@@ -1774,68 +1803,57 @@ export const SuperAdminDashboard = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-bold text-slate-900 text-sm">Subscription and usage</h3>
-                      <p className="text-[11px] text-slate-400">Current plan and included limits</p>
+                      <p className="text-[11px] text-slate-400">Current subscription record</p>
                     </div>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Active
+                      {selectedMerchant.subscription?.status || selectedMerchant.status}
                     </span>
                   </div>
 
                   <div className="text-xs space-y-3.5">
                     <div>
                       <span className="text-slate-400 block text-[10px] uppercase font-semibold">Current plan</span>
-                      <div className="text-base font-extrabold text-slate-900 mt-0.5">Growth · ₹1,199 / month</div>
-                    </div>
-
-                    {/* Quota 1: Staff seats */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-slate-600 font-medium">
-                        <span>Staff seats</span>
-                        <span className="font-bold text-slate-900">5 / 10</span>
+                      <div className="text-base font-extrabold text-slate-900 mt-0.5">
+                        {selectedMerchant.plan || 'Not set'}
+                        {selectedMerchant.subscription?.billingCycle ? ` · ${selectedMerchant.subscription.billingCycle.toLowerCase()}` : ''}
                       </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '50%' }} />
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {selectedMerchant.subscription?.currentPeriodEnd
+                          ? `Current period ends ${new Date(selectedMerchant.subscription.currentPeriodEnd).toLocaleDateString('en-IN')}`
+                          : 'Billing period not recorded'}
                       </div>
                     </div>
 
-                    {/* Quota 2: Order allowance */}
-                    <div className="space-y-1">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-2">
                       <div className="flex justify-between text-slate-600 font-medium">
-                        <span>Order allowance</span>
-                        <span className="font-bold text-slate-900">620 / 5,000</span>
+                        <span>Staff accounts</span>
+                        <span className="font-bold text-slate-900">{selectedMerchant.staffCount} total · {selectedMerchant.activeStaffCount} active</span>
                       </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: '12.4%' }} />
+                      <div className="flex justify-between text-slate-600 font-medium">
+                        <span>Orders</span>
+                        <span className="font-bold text-slate-900">{selectedMerchant.orders} all-time</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 font-medium">
+                        <span>Bookings</span>
+                        <span className="font-bold text-slate-900">{selectedMerchant.bookings}</span>
                       </div>
                     </div>
 
-                    {/* Quota 3: Storage */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-slate-600 font-medium">
-                        <span>Storage</span>
-                        <span className="font-bold text-slate-900">3.8 / 10 GB</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full" style={{ width: '38%' }} />
-                      </div>
-                    </div>
-
-                    {/* Quota 4: API quota */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-slate-600 font-medium">
-                        <span>API monthly quota</span>
-                        <span className="font-bold text-slate-900">33 / 100 units</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-blue-500 h-full rounded-full" style={{ width: '33%' }} />
-                      </div>
+                    <div className="rounded-xl border border-dashed border-slate-200 p-3 text-[11px] text-slate-500">
+                      Storage usage and API quota counters are not stored in the tenant admin payload, so no invented usage bars are displayed.
                     </div>
 
                     <div className="pt-2 flex items-center gap-2">
-                      <button className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50">
-                        Manage plan
+                      <button
+                        onClick={() => handleOpenEditModal(selectedMerchant)}
+                        className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
+                      >
+                        Edit plan
                       </button>
-                      <button className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50">
+                      <button
+                        onClick={() => setMerchantDetailsSubTab('audit-logs')}
+                        className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 cursor-pointer"
+                      >
                         View audit log
                       </button>
                     </div>
@@ -1866,27 +1884,16 @@ export const SuperAdminDashboard = () => {
                   <div className="text-right">
                     <span className="text-[11px] text-slate-400 block font-medium">Current Active System:</span>
                     <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block mt-0.5">
-                      {selectedMerchant.type === 'Product' ? 'Handcrafted Pickles & Physical E-Commerce (PRODUCT)' : `${selectedMerchant.type} System`}
+                      {selectedMerchant.templateCode || selectedMerchant.type || 'Not configured'}
                     </span>
                   </div>
                 </div>
 
                 {/* 3 Template Selection Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Card 1: Product / Achar */}
+                  {/* Card 1: Product */}
                   <div
-                    onClick={async () => {
-                      if (selectedMerchant.realDbId) {
-                        try {
-                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'PRODUCT', businessType: 'PRODUCT' });
-                        } catch (err) {
-                          console.warn('Backend template update warning:', err.message);
-                        }
-                      }
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Product', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
-                      setAdminToast(`Configured ${selectedMerchant.name} with Physical Product Selling (Achar Storefront & Orders) system!`);
-                      setTimeout(() => setAdminToast(''), 4000);
-                    }}
+                    onClick={() => handleChangeMerchantTemplate('PRODUCT', 'PRODUCT')}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Product'
                         ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
@@ -1901,31 +1908,20 @@ export const SuperAdminDashboard = () => {
                     <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs mb-3">
                       🛍️
                     </div>
-                    <div className="font-bold text-slate-900 text-sm">Product Selling (Achar / Food)</div>
+                    <div className="font-bold text-slate-900 text-sm">Product Selling</div>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      E-Commerce Storefront, Pickle categories, shopping cart, order lifecycle (Pack, Ship, Deliver), and inventory.
+                      E-commerce storefront, categories, cart, order lifecycle (pack, ship, deliver), and inventory.
                     </p>
                     <div className="mt-3 pt-2 border-t border-slate-100 flex flex-wrap gap-1">
                       <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">Storefront</span>
-                      <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">Pickle Catalog</span>
+                      <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">Product Catalog</span>
                       <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">COD &amp; Orders</span>
                     </div>
                   </div>
 
                   {/* Card 2: Travel Bookings */}
                   <div
-                    onClick={async () => {
-                      if (selectedMerchant.realDbId) {
-                        try {
-                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'TRAVEL', businessType: 'TRAVEL' });
-                        } catch (err) {
-                          console.warn('Backend template update warning:', err.message);
-                        }
-                      }
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Travel', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
-                      setAdminToast(`Switched ${selectedMerchant.name} to Travel Agency & Tour Booking system!`);
-                      setTimeout(() => setAdminToast(''), 4000);
-                    }}
+                    onClick={() => handleChangeMerchantTemplate('TRAVEL', 'TRAVEL')}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Travel'
                         ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
@@ -1953,18 +1949,7 @@ export const SuperAdminDashboard = () => {
 
                   {/* Card 3: Service Bookings */}
                   <div
-                    onClick={async () => {
-                      if (selectedMerchant.realDbId) {
-                        try {
-                          await axios.patch(`/api/admin/merchants/${selectedMerchant.realDbId}/template`, { templateCode: 'SERVICE', businessType: 'SERVICE' });
-                        } catch (err) {
-                          console.warn('Backend template update warning:', err.message);
-                        }
-                      }
-                      setMerchants(prev => prev.map(m => m.id === selectedMerchant.id ? { ...m, type: 'Service', domain: `${m.name.toLowerCase().replace(/\s+/g, '')}.omniva.io` } : m));
-                      setAdminToast(`Switched ${selectedMerchant.name} to Photography & Event Studio Booking system!`);
-                      setTimeout(() => setAdminToast(''), 4000);
-                    }}
+                    onClick={() => handleChangeMerchantTemplate('SERVICE', 'SERVICE')}
                     className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
                       selectedMerchant.type === 'Service'
                         ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
@@ -2100,19 +2085,8 @@ export const SuperAdminDashboard = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <div className="text-xs text-slate-500">
-                    Changes take effect instantly on the merchant dashboard and public storefront.
-                  </div>
-                  <button
-                    onClick={() => {
-                      setAdminToast(`System configuration and modules synchronized for ${selectedMerchant.name}!`);
-                      setTimeout(() => setAdminToast(''), 4000);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm shadow-indigo-500/10 transition cursor-pointer"
-                  >
-                    Sync System &amp; Save Changes
-                  </button>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                  Module toggles are saved immediately through the backend. There is no separate unsaved configuration to synchronize.
                 </div>
               </div>
             </>
@@ -2123,8 +2097,8 @@ export const SuperAdminDashboard = () => {
                 <div className="space-y-4 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
-                      <h3 className="font-extrabold text-slate-900 text-sm">Full Business &amp; Legal Profile</h3>
-                      <p className="text-slate-400">Registered commercial entity information and compliance</p>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Business profile</h3>
+                      <p className="text-slate-400">Fields stored on the tenant record</p>
                     </div>
                     <button
                       onClick={() => handleOpenEditModal(selectedMerchant)}
@@ -2135,91 +2109,103 @@ export const SuperAdminDashboard = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                      <span className="font-bold text-slate-700 block">Commercial Entity:</span>
-                      <div className="text-slate-900 font-bold text-sm">{selectedMerchant.name} Pvt Ltd</div>
-                      <div className="text-slate-600">GSTIN: 08AAACD1234F1Z8 (Active Verified)</div>
-                      <div className="text-slate-600">Business Model: Multi-Channel Commerce &amp; CRM</div>
-                      <div className="text-slate-600">Domain: {selectedMerchant.domain} (SSL Active)</div>
+                      <span className="font-bold text-slate-700 block">Business identity:</span>
+                      <div className="text-slate-900 font-bold text-sm">{selectedMerchant.name}</div>
+                      <div className="text-slate-600">GSTIN: {selectedMerchant.gstin || 'Not recorded'}</div>
+                      <div className="text-slate-600">Business model: {selectedMerchant.type || 'Not set'}</div>
+                      <div className="text-slate-600">Storefront slug: {selectedMerchant.slug || 'Not configured'}</div>
                     </div>
                     <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
-                      <span className="font-bold text-slate-700 block">Registered Operational Address:</span>
-                      <div className="text-slate-900 font-semibold">{selectedMerchant.address}</div>
-                      <div className="text-slate-600">Primary Contact: {selectedMerchant.phone}</div>
-                      <div className="text-slate-600">Official Email: {selectedMerchant.email}</div>
-                      <div className="text-slate-600">Owner / Authorized Signatory: {selectedMerchant.owner}</div>
+                      <span className="font-bold text-slate-700 block">Contact and ownership:</span>
+                      <div className="text-slate-900 font-semibold">{selectedMerchant.address || 'Address not recorded'}</div>
+                      <div className="text-slate-600">Primary contact: {selectedMerchant.phone || 'Not recorded'}</div>
+                      <div className="text-slate-600">Official email: {selectedMerchant.email || 'Not recorded'}</div>
+                      <div className="text-slate-600">Owner: {selectedMerchant.owner || 'No owner account found'}</div>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* SUBSCRIPTION SUBTAB */}
-              {merchantDetailsSubTab === 'subscription' && (
+              {merchantDetailsSubTab === 'subscription' && (() => {
+                const planInfo = Object.values(platformPlans || {}).find(
+                  plan => plan.tier === (selectedMerchant.plan || '').toUpperCase()
+                );
+                const subscription = selectedMerchant.subscription;
+                return (
                 <div className="space-y-4 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
-                      <h3 className="font-extrabold text-slate-900 text-sm">Subscription &amp; Billing Schedule</h3>
-                      <p className="text-slate-400">Merchant recurring revenue and invoices</p>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Subscription record</h3>
+                      <p className="text-slate-400">Only stored plan, status and period dates are shown</p>
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                      Active · Auto-Renew Enabled
+                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                      {subscription?.status || 'Status not recorded'}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/50">
-                      <span className="text-slate-500 font-medium">Assigned Tier</span>
-                      <div className="text-2xl font-black text-indigo-950 mt-1">{selectedMerchant.plan} Plan</div>
-                      <div className="text-indigo-600 font-semibold mt-1">₹2,999 / month billed annually</div>
+                      <span className="text-slate-500 font-medium">Assigned tier</span>
+                      <div className="text-2xl font-black text-indigo-950 mt-1">{selectedMerchant.plan || 'Not set'}</div>
+                      <div className="text-indigo-700 font-semibold mt-1">
+                        {planInfo ? `₹${Number(planInfo.priceInr || 0).toLocaleString('en-IN')} configured list price` : 'No plan price record loaded'}
+                      </div>
                     </div>
                     <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                      <span className="text-slate-500 font-medium">Next Renewal Date</span>
-                      <div className="text-2xl font-black text-slate-900 mt-1">01 Nov 2026</div>
-                      <div className="text-slate-500 font-medium mt-1">Auto-debit via Razorpay Subscriptions</div>
+                      <span className="text-slate-500 font-medium">Current period ends</span>
+                      <div className="text-2xl font-black text-slate-900 mt-1">
+                        {subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN') : 'Not recorded'}
+                      </div>
+                      <div className="text-slate-500 font-medium mt-1">Auto-debit and renewal history are not stored</div>
                     </div>
                     <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
-                      <span className="text-slate-500 font-medium">Total Lifetime Invoiced</span>
-                      <div className="text-2xl font-black text-slate-900 mt-1">₹35,988</div>
-                      <div className="text-emerald-600 font-semibold mt-1">12 Paid Invoices (0 Failed)</div>
+                      <span className="text-slate-500 font-medium">Billing cycle</span>
+                      <div className="text-2xl font-black text-slate-900 mt-1">{subscription?.billingCycle || 'Not recorded'}</div>
+                      <div className="text-slate-500 font-semibold mt-1">Invoice totals are not exposed by the admin API</div>
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* USAGE SUBTAB */}
               {merchantDetailsSubTab === 'usage' && (
                 <div className="space-y-4 text-xs">
-                  <h3 className="font-extrabold text-slate-900 text-sm">Quota Consumption &amp; System Limits</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-                      <div className="flex justify-between font-bold text-slate-800">
-                        <span>Monthly Order Volume</span>
-                        <span className="text-indigo-600">1,245 / 5,000</span>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Current-month quota usage</h3>
+                  {merchantDetailError && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">{merchantDetailError}</div>
+                  )}
+                  {!merchantUsage && !merchantDetailError && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-500">Loading usage from the server…</div>
+                  )}
+                  {merchantUsage && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                          ['Monthly orders', merchantUsage.usage?.ordersThisMonth || 0, merchantUsage.limits?.maxMonthlyOrders],
+                          ['Monthly leads', merchantUsage.usage?.leadsThisMonth || 0, merchantUsage.limits?.maxMonthlyLeads],
+                          ['Staff seats', merchantUsage.usage?.staffCount || 0, merchantUsage.limits?.maxStaffSeats],
+                        ].map(([label, used, limit]) => {
+                          const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+                          return (
+                            <div key={label} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                              <div className="flex justify-between font-bold text-slate-800">
+                                <span>{label}</span>
+                                <span className="text-indigo-600">{used} / {limit ?? '—'}</span>
+                              </div>
+                              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-slate-400 text-[11px]">{pct}% of the configured limit</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '25%' }} />
-                      </div>
-                      <span className="text-slate-400 text-[11px]">25% quota utilized this month</span>
-                    </div>
-                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-                      <div className="flex justify-between font-bold text-slate-800">
-                        <span>Image &amp; Asset Storage</span>
-                        <span className="text-emerald-600">3.8 GB / 10 GB</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: '38%' }} />
-                      </div>
-                      <span className="text-slate-400 text-[11px]">38% cloud bucket capacity</span>
-                    </div>
-                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-                      <div className="flex justify-between font-bold text-slate-800">
-                        <span>Meta Ad Webhook Events</span>
-                        <span className="text-blue-600">33 / 100 per hr</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-blue-500 h-full rounded-full" style={{ width: '33%' }} />
-                      </div>
-                      <span className="text-slate-400 text-[11px]">Burst capacity available</span>
-                    </div>
-                  </div>
+                      <p className="text-[11px] text-slate-400">
+                        Period starts {new Date(merchantUsage.periodStart).toLocaleDateString('en-IN')}. Storage and webhook-rate counters are not stored by the backend.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -2227,92 +2213,97 @@ export const SuperAdminDashboard = () => {
               {merchantDetailsSubTab === 'staff' && (
                 <div className="space-y-4 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 className="font-extrabold text-slate-900 text-sm">Authorized Merchant Personnel</h3>
-                    <button
-                      onClick={() => {
-                        setAdminToast('Staff invite link copied to clipboard!');
-                        setTimeout(() => setAdminToast(''), 3000);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 cursor-pointer"
-                    >
-                      + Add Staff Account
-                    </button>
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Merchant personnel</h3>
+                      <p className="text-slate-400">Accounts stored for this tenant</p>
+                    </div>
                   </div>
+                  {merchantDetailError && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800">{merchantDetailError}</div>
+                  )}
+                  {!merchantStaff && !merchantDetailError && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-500">Loading staff accounts…</div>
+                  )}
                   <div className="divide-y divide-slate-100">
-                    {[
-                      { name: selectedMerchant.owner, role: 'Merchant Owner (Root)', email: selectedMerchant.email, status: 'Active' },
-                      { name: 'Vikas Meena', role: 'Fulfillment & Order Manager', email: 'vikas@desiachar.example', status: 'Active' },
-                      { name: 'Suman Devi', role: 'Kitchen & Packaging Staff', email: 'suman@desiachar.example', status: 'Active' },
-                      { name: 'Amit Jain', role: 'Inventory Supervisor', email: 'amit@desiachar.example', status: 'Active' },
-                      { name: 'Priya Rao', role: 'Customer Support Lead', email: 'priya@desiachar.example', status: 'Active' }
-                    ].map((st, i) => (
-                      <div key={i} className="py-2.5 flex items-center justify-between">
+                    {(merchantStaff || []).map((staff) => (
+                      <div key={staff._id} className="py-2.5 flex items-center justify-between gap-3">
                         <div>
-                          <div className="font-bold text-slate-800">{st.name}</div>
-                          <div className="text-[11px] text-slate-400">{st.email}</div>
+                          <div className="font-bold text-slate-800">{staff.name || 'Unnamed account'}</div>
+                          <div className="text-[11px] text-slate-400">{staff.email || 'No email recorded'}</div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="font-semibold text-slate-600">{st.role}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                            {st.status}
+                          <span className="font-semibold text-slate-600">{staff.role}</span>
+                          <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${staff.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                            {staff.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </div>
                       </div>
                     ))}
+                    {merchantStaff && merchantStaff.length === 0 && (
+                      <div className="py-6 text-center text-slate-500">No staff accounts are stored for this merchant.</div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* INTEGRATIONS SUBTAB */}
-              {merchantDetailsSubTab === 'integrations' && (
+              {merchantDetailsSubTab === 'integrations' && (() => {
+                const config = merchantApiStore[selectedMerchant.id];
+                const connectors = config ? [
+                  { name: 'Meta Ads & CAPI', status: config.meta.status, detail: config.meta.pixelId ? 'Pixel ID stored' : 'No Pixel ID stored', icon: '📢' },
+                  { name: 'WhatsApp Cloud API', status: config.whatsapp.status, detail: config.whatsapp.phoneNumberId || config.whatsapp.wabaId ? 'WhatsApp identifier stored' : 'No WhatsApp identifier stored', icon: '💬' },
+                  { name: 'Courier API', status: config.courier.status, detail: config.courier.provider ? `${config.courier.provider} selected` : 'No courier provider selected', icon: '🚚' },
+                  { name: 'Payment Gateway', status: config.payment.status, detail: config.payment.keyId ? 'Gateway key ID stored' : 'No gateway key ID stored', icon: '💳' },
+                ] : [];
+                return (
                 <div className="space-y-4 text-xs">
-                  <h3 className="font-extrabold text-slate-900 text-sm">Installed Business Connectors</h3>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Stored connector configuration</h3>
+                  <p className="text-[11px] text-slate-500">Status reflects saved fields only. No live handshake is performed.</p>
+                  {!config && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-500">
+                      Loading connector configuration for this merchant…
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { name: 'Meta Lead Ads API', status: 'Connected', desc: 'Real-time webhook ingestion from Facebook & Instagram lead forms', icon: '📢' },
-                      { name: 'Delhivery Courier Express', status: 'Connected', desc: 'Direct AWB generation, shipping label printing and live tracking webhooks', icon: '🚚' },
-                      { name: 'Razorpay Payment Gateway', status: 'Active', desc: 'UPI QR, Cards and NetBanking automated settlements', icon: '💳' },
-                      { name: 'WhatsApp Cloud API', status: 'Active', desc: 'Automated dispatch notifications and tracking link messaging', icon: '💬' }
-                    ].map((it, i) => (
-                      <div key={i} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-start gap-3">
-                        <span className="text-2xl">{it.icon}</span>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900">{it.name}</span>
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px]">
-                              {it.status}
-                            </span>
+                    {connectors.map((it) => {
+                      const configured = it.status === 'CONFIGURED';
+                      return (
+                        <div key={it.name} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex items-start gap-3">
+                          <span className="text-2xl">{it.icon}</span>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">{it.name}</span>
+                              <span className={`px-2 py-0.5 rounded-full border font-bold text-[10px] ${configured ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                {it.status || 'NOT_CONFIGURED'}
+                              </span>
+                            </div>
+                            <p className="text-slate-500 text-[11px] leading-relaxed">{it.detail}</p>
                           </div>
-                          <p className="text-slate-500 text-[11px] leading-relaxed">{it.desc}</p>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('integrations')}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs"
+                  >
+                    Open connector provisioning
+                  </button>
                 </div>
-              )}
+                );
+              })()}
 
               {/* AUDIT LOGS SUBTAB */}
               {merchantDetailsSubTab === 'audit-logs' && (
                 <div className="space-y-4 text-xs">
-                  <h3 className="font-extrabold text-slate-900 text-sm">Security &amp; Administrative Activity Trail</h3>
-                  <div className="divide-y divide-slate-100">
-                    {[
-                      { action: 'Order Accepted & Moved to Packaging (ORD-1087)', actor: selectedMerchant.owner, time: '10 minutes ago', ip: '103.21.144.12' },
-                      { action: 'Courier Dispatched via Delhivery (AWB DEL-8492014)', actor: 'Vikas Meena', time: '1 hour ago', ip: '103.21.144.12' },
-                      { action: 'Meta Lead Ad synchronized: Diwali Achar Campaign', actor: 'Automated Ingestion Worker', time: '3 hours ago', ip: 'Internal System' },
-                      { action: 'Super Admin viewed merchant settings', actor: 'Platform Admin (audited)', time: 'Today, 11:42 AM', ip: '127.0.0.1' }
-                    ].map((lg, i) => (
-                      <div key={i} className="py-2.5 flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-slate-800">{lg.action}</div>
-                          <div className="text-[10px] text-slate-400">Actor: {lg.actor} · IP: {lg.ip}</div>
-                        </div>
-                        <span className="text-[11px] text-slate-400 font-mono">{lg.time}</span>
-                      </div>
-                    ))}
+                  <h3 className="font-extrabold text-slate-900 text-sm">Administrative activity trail</h3>
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-slate-500">
+                    No persisted audit-log endpoint is configured. The previous rows, timestamps and IP addresses were hardcoded and have been removed.
                   </div>
                 </div>
               )}
+
             </div>
           )}
         </div>
@@ -2322,50 +2313,44 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'subscriptions' && (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Manage recurring revenue, renewals and billing health</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" /> Invoices
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> Create
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Read-only subscription records. Payment collection and invoicing are handled outside this admin console.</p>
               </div>
 
-              {/* 4 Stat Cards */}
+              {/* Real subscription counts */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Monthly recurring revenue</span>
-                    <span className="p-1 rounded-md bg-indigo-50 text-indigo-600 font-bold">₹</span>
+                    <span>Merchant accounts</span>
+                    <span className="p-1 rounded-md bg-indigo-50 text-indigo-600"><Building2 className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">₹4,25,000</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">10.8% growth</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Loaded from the database</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
                     <span>Active subscriptions</span>
                     <span className="p-1 rounded-md bg-emerald-50 text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">210</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">85.7% of merchants</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.filter(m => (m.subscription?.status || '').toUpperCase() === 'ACTIVE').length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Subscription status ACTIVE</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Payment issues</span>
-                    <span className="p-1 rounded-md bg-amber-50 text-amber-600"><AlertTriangle className="w-3.5 h-3.5" /></span>
+                    <span>Trial subscriptions</span>
+                    <span className="p-1 rounded-md bg-amber-50 text-amber-600"><Clock className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">8</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Needs follow-up</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">{merchants.filter(m => (m.subscription?.status || '').toUpperCase() === 'TRIAL').length}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Subscription status TRIAL</div>
                 </div>
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Trial accounts</span>
-                    <span className="p-1 rounded-md bg-blue-50 text-blue-600"><Clock className="w-3.5 h-3.5" /></span>
+                    <span>Recorded order value</span>
+                    <span className="p-1 rounded-md bg-blue-50 text-blue-600"><Activity className="w-3.5 h-3.5" /></span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">25</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Convert to paid</div>
+                  <div className="text-2xl font-black text-slate-900 mt-2">
+                    {livePlatformStats?.totalRevenue != null ? `₹${Number(livePlatformStats.totalRevenue).toLocaleString('en-IN')}` : '—'}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Plan billing amounts are not recorded</div>
                 </div>
               </div>
 
@@ -2415,51 +2400,66 @@ export const SuperAdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {[
-                        { name: 'Desi Achar House', id: 'SUB-0021', plan: 'Growth', amount: '₹1,199', cycle: 'Monthly', status: 'Active', next: '12 Nov 2026' },
-                        { name: 'Pixel Studio', id: 'SUB-0022', plan: 'Pro', amount: '₹1,999', cycle: 'Monthly', status: 'Active', next: '11 Nov 2026' },
-                        { name: 'Rajasthan Tours', id: 'SUB-0023', plan: 'Growth', amount: '₹1,199', cycle: 'Monthly', status: 'Trial', next: '10 Nov 2026' },
-                        { name: 'Glow Salon', id: 'SUB-0024', plan: 'Starter', amount: '₹799', cycle: 'Monthly', status: 'Past due', next: '09 Oct 2026' },
-                        { name: 'FreshMart', id: 'SUB-0025', plan: 'Pro', amount: '₹1,999', cycle: 'Yearly', status: 'Active', next: '08 Oct 2027' },
-                        { name: 'Event Planners', id: 'SUB-0026', plan: 'Growth', amount: '₹1,199', cycle: 'Monthly', status: 'Cancelled', next: '—' },
-                        { name: 'Travel With Us', id: 'SUB-0027', plan: 'Starter', amount: '₹799', cycle: 'Monthly', status: 'Active', next: '18 Nov 2026' }
-                      ].map((sub, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center border border-indigo-100">
-                                {sub.name.charAt(0)}
+                      {merchants.map((m) => {
+                        const cycle = m.subscription?.billingCycle
+                          ? (m.subscription.billingCycle === 'ANNUAL' ? 'Yearly' : 'Monthly')
+                          : '—';
+                        const status = m.subscription?.status || m.status;
+                        const nextBilling = m.subscription?.currentPeriodEnd
+                          ? new Date(m.subscription.currentPeriodEnd).toLocaleDateString('en-IN')
+                          : '—';
+                        return (
+                          <tr key={m.id} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-5">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center border border-indigo-100">
+                                  {m.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-900">{m.name}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono">{m.displayId}</div>
+                                </div>
                               </div>
-                              <div>
-                                <div className="font-bold text-slate-900">{sub.name}</div>
-                                <div className="text-[10px] text-slate-400 font-mono">{sub.id}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-slate-800">{sub.plan}</td>
-                          <td className="py-3 px-4 font-bold text-slate-900">{sub.amount}</td>
-                          <td className="py-3 px-4 text-slate-600">{sub.cycle}</td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                sub.status === 'Active'
+                            </td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{m.plan || 'Not set'}</td>
+                            <td className="py-3 px-4 font-bold text-slate-500">Not recorded</td>
+                            <td className="py-3 px-4 text-slate-600">{cycle}</td>
+                            <td className="py-3 px-4">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                status === 'ACTIVE' || status === 'Active'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : sub.status === 'Trial'
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                  : sub.status === 'Cancelled'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
-                            >
-                              {sub.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-slate-500 text-[11px]">{sub.next}</td>
-                          <td className="py-3 px-5 text-right text-slate-400">
-                            <MoreVertical className="w-4 h-4 ml-auto" />
+                                  : status === 'TRIAL' || status === 'Pending'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}>
+                                {status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-slate-500 text-[11px]">{nextBilling}</td>
+                            <td className="py-3 px-5 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedMerchantId(m.id);
+                              setSelectedApiMerchantId(m.id);
+                                  setActiveTab('merchant-details');
+                                  setMerchantDetailsSubTab('subscription');
+                                }}
+                                className="text-[11px] font-bold text-indigo-600 hover:underline"
+                              >
+                                Manage
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {merchants.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="py-8 px-5 text-center text-slate-500">
+                            No merchant subscription records are available.
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2468,173 +2468,94 @@ export const SuperAdminDashboard = () => {
           )}
 
           {/* ==================== 6. PLANS & PRICING ==================== */}
-          {activeTab === 'plans' && (
+          {activeTab === 'plans' && (() => {
+            const plans = Object.values(platformPlans || {});
+            const activeSubscriptionCount = livePlatformStats?.activeSubscriptions
+              ?? merchants.filter(m => (m.subscription?.status || '').toUpperCase() === 'ACTIVE').length;
+            return (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Configure subscription plans, limits and feature access</p>
-                <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer">
-                  <Plus className="w-3.5 h-3.5" /> Create plan
-                </button>
+                <div>
+                  <p className="text-xs text-slate-500">Plan limits come from the backend plan configuration.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Merchant counts are calculated from live tenant records.</p>
+                </div>
               </div>
 
-              {/* 4 Stat Cards */}
+              {(!platformPlans || plans.length === 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800">
+                  The plan catalog could not be loaded from <code>/api/admin/plans</code>. No replacement prices or limits are displayed.
+                </div>
+              )}
+
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Published plans</span>
-                    <span className="p-1 rounded-md bg-indigo-50 text-indigo-600"><Tag className="w-3.5 h-3.5" /></span>
+                {[
+                  ['Configured plans', plans.length],
+                  ['Merchant accounts', merchants.length],
+                  ['Active subscriptions', activeSubscriptionCount],
+                  ['Recorded order value', livePlatformStats?.totalRevenue != null ? `₹${Number(livePlatformStats.totalRevenue).toLocaleString('en-IN')}` : '—'],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                    <div className="text-xs text-slate-500 font-medium">{label}</div>
+                    <div className="text-2xl font-black text-slate-900 mt-2">{value}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Live backend data</div>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">3</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">2 active, 1 draft</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Merchants on Growth</span>
-                    <span className="p-1 rounded-md bg-purple-50 text-purple-600"><ArrowUpRight className="w-3.5 h-3.5" /></span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">85</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">34.7% of paid users</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Average revenue / merchant</span>
-                    <span className="p-1 rounded-md bg-emerald-50 text-emerald-600 font-bold">₹</span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">₹1,738</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Across paid accounts</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="flex justify-between text-xs text-slate-500 font-medium">
-                    <span>Upcoming plan reviews</span>
-                    <span className="p-1 rounded-md bg-amber-50 text-amber-600"><Clock className="w-3.5 h-3.5" /></span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">2</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Next 30 days</div>
-                </div>
+                ))}
               </div>
 
-              {/* 3 Pricing Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Starter */}
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">Starter</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">For small businesses</p>
+                {plans.map((plan) => {
+                  const merchantCount = merchants.filter(m => (m.plan || '').toUpperCase() === plan.tier).length;
+                  return (
+                    <div key={plan.tier} className={`bg-white border rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6 ${plan.tier === 'GROWTH' ? 'border-indigo-600 border-2' : 'border-slate-200/80'}`}>
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-lg font-black text-slate-900">{plan.name}</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">{merchantCount} merchant(s) on this tier</p>
+                        </div>
+                        <div>
+                          <div className="text-3xl font-black text-slate-900">₹{Number(plan.priceInr || 0).toLocaleString('en-IN')} <span className="text-xs text-slate-400 font-medium">/ month</span></div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Configured list price. Billing agreements are not stored per merchant.</p>
+                        </div>
+                        <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                          {(plan.features || []).map((feature) => (
+                            <li key={feature} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> {feature}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('merchants')}
+                        className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        View merchant directory
+                      </button>
                     </div>
-                    <div>
-                      <div className="text-3xl font-black text-slate-900">₹799 <span className="text-xs text-slate-400 font-medium">/ month</span></div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Billed monthly · annual discount configurable</p>
-                    </div>
-
-                    <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> 1 business workspace</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Up to 3 staff</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Basic CRM</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Products or services</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Basic reports</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Email notifications</li>
-                    </ul>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit plan</button>
-                    <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Limits</button>
-                  </div>
-                </div>
-
-                {/* Growth - Most Popular */}
-                <div className="bg-white border-2 border-indigo-600 rounded-3xl p-6 shadow-xl relative flex flex-col justify-between space-y-6">
-                  <div className="absolute -top-3 right-6 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-sm">
-                    MOST POPULAR
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">Growth</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">For growing teams</p>
-                    </div>
-                    <div>
-                      <div className="text-3xl font-black text-slate-900">₹1,199 <span className="text-xs text-slate-400 font-medium">/ month</span></div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Billed monthly · annual discount configurable</p>
-                    </div>
-
-                    <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> 1 business workspace</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Up to 10 staff</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> CRM + automation</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Orders and bookings</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Campaign reports</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> WhatsApp notifications</li>
-                    </ul>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button className="py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700">Edit plan</button>
-                    <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Limits</button>
-                  </div>
-                </div>
-
-                {/* Pro */}
-                <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900">Pro</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">For advanced operations</p>
-                    </div>
-                    <div>
-                      <div className="text-3xl font-black text-slate-900">₹1,999 <span className="text-xs text-slate-400 font-medium">/ month</span></div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Billed monthly · annual discount configurable</p>
-                    </div>
-
-                    <ul className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> 1 business workspace</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Up to 25 staff</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> All available templates</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Advanced automation</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> API access (limited)</li>
-                      <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Priority support</li>
-                    </ul>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit plan</button>
-                    <button className="py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">Limits</button>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
-              {/* Bottom Feature Entitlement Matrix Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="p-4 px-6 border-b border-slate-200/80">
-                  <h3 className="font-bold text-slate-900 text-sm">Feature entitlements and plan limits</h3>
-                  <p className="text-[11px] text-slate-400">Configure what each subscription includes</p>
+                  <h3 className="font-bold text-slate-900 text-sm">Enforced quotas</h3>
+                  <p className="text-[11px] text-slate-400">These limits are enforced by the backend quota middleware.</p>
                 </div>
-
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[600px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
-                        <th className="py-3 px-6">FEATURE</th>
-                        <th className="py-3 px-6">STARTER</th>
-                        <th className="py-3 px-6">GROWTH</th>
-                        <th className="py-3 px-6">PRO</th>
+                        <th className="py-3 px-6">LIMIT</th>
+                        {plans.map(plan => <th key={plan.tier} className="py-3 px-6">{plan.tier}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {[
-                        { f: 'CRM & lead management', s: 'Included', g: 'Included', p: 'Included' },
-                        { f: 'Product orders', s: 'Basic', g: 'Advanced', p: 'Advanced' },
-                        { f: 'Service bookings', s: 'Basic', g: 'Included', p: 'Included' },
-                        { f: 'Meta CAPI', s: 'Limited / add-on', g: 'Included', p: 'Included' },
-                        { f: 'Custom workflows', s: '—', g: 'Basic', p: 'Advanced' },
-                        { f: 'API and webhooks', s: '—', g: 'Limited', p: 'Expanded' }
-                      ].map((row, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-6 font-semibold text-slate-800">{row.f}</td>
-                          <td className="py-3 px-6 text-slate-600">{row.s}</td>
-                          <td className="py-3 px-6 font-bold text-indigo-700">{row.g}</td>
-                          <td className="py-3 px-6 font-bold text-slate-900">{row.p}</td>
+                        ['Orders / month', 'maxMonthlyOrders'],
+                        ['Leads / month', 'maxMonthlyLeads'],
+                        ['Staff seats', 'maxStaffSeats'],
+                      ].map(([label, key]) => (
+                        <tr key={key} className="hover:bg-slate-50 transition">
+                          <td className="py-3 px-6 font-semibold text-slate-800">{label}</td>
+                          {plans.map(plan => <td key={plan.tier} className="py-3 px-6 text-slate-700 font-bold">{plan[key]?.toLocaleString('en-IN') ?? '—'}</td>)}
                         </tr>
                       ))}
                     </tbody>
@@ -2642,127 +2563,99 @@ export const SuperAdminDashboard = () => {
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ==================== 7. BUSINESS TEMPLATES ==================== */}
-          {activeTab === 'templates' && (
+          {activeTab === 'templates' && (() => {
+            const templates = [
+              { code: 'PRODUCT', name: 'Product Selling', desc: 'Catalog, inventory and order management', tags: ['Products', 'Stock', 'Checkout'] },
+              { code: 'SERVICE', name: 'Service Business', desc: 'Service packages, bookings and staff schedules', tags: ['Services', 'Bookings', 'Calendar'] },
+              { code: 'TRAVEL', name: 'Travel Agency', desc: 'Tours, passengers and trip bookings', tags: ['Tours', 'Passengers', 'Trips'] },
+              { code: 'RESTAURANT', name: 'Restaurant', desc: 'Menu-led ordering workflow', tags: ['Menu', 'Orders', 'Delivery'] },
+              { code: 'SALON', name: 'Salon & Beauty', desc: 'Appointments and service teams', tags: ['Services', 'Availability', 'Reminders'] },
+              { code: 'CUSTOM', name: 'Custom Template', desc: 'A tenant-specific workflow selection', tags: ['Modules', 'Roles', 'Custom'] },
+            ];
+            const countFor = (code) => merchants.filter(m => (m.templateCode || '') === code).length;
+            const assigned = templates.reduce((sum, tpl) => sum + countFor(tpl.code), 0);
+            return (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Configure workflows and modules for each industry</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
-                    Version history
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> Create template
-                  </button>
+                <div>
+                  <p className="text-xs text-slate-500">Template codes are stored on each tenant. Workflow editing is not persisted by this console.</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">The counts below are live; no draft or version metadata is claimed.</p>
                 </div>
               </div>
 
-              {/* 4 Stat Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Available templates</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">5</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Across key verticals</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Merchants using templates</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">245</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">All workspaces</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Custom workflows</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">18</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Configured workflows</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Draft templates</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">2</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Not yet published</div>
-                </div>
+                {[
+                  ['Supported template codes', templates.length],
+                  ['Assigned workspaces', assigned],
+                  ['Unassigned records', Math.max(0, merchants.length - assigned)],
+                  ['Custom workspaces', countFor('CUSTOM')],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                    <div className="text-xs text-slate-500 font-medium">{label}</div>
+                    <div className="text-2xl font-black text-slate-900 mt-2">{value}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Derived from tenant records</div>
+                  </div>
+                ))}
               </div>
 
-              {/* 6 Template Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  {
-                    name: 'Product Selling',
-                    desc: 'Catalog, inventory and order management',
-                    tags: ['Products', 'Stock', 'Checkout'],
-                    merchants: '124 merchants'
-                  },
-                  {
-                    name: 'Photography & Events',
-                    desc: 'Packages, availability and quotations',
-                    tags: ['Packages', 'Calendar', 'Quotes'],
-                    merchants: '38 merchants'
-                  },
-                  {
-                    name: 'Travel Agency',
-                    desc: 'Tours, passengers and trip bookings',
-                    tags: ['Tours', 'Passengers', 'Trips'],
-                    merchants: '24 merchants'
-                  },
-                  {
-                    name: 'Salon & Beauty',
-                    desc: 'Appointments and service teams',
-                    tags: ['Services', 'Availability', 'Reminders'],
-                    merchants: '18 merchants'
-                  },
-                  {
-                    name: 'Lead Generation',
-                    desc: 'Enquiries, pipeline and follow-ups',
-                    tags: ['CRM', 'Tasks', 'Attribution'],
-                    merchants: '29 merchants'
-                  },
-                  {
-                    name: 'Custom Template',
-                    desc: 'Create a tailored workflow',
-                    tags: ['Fields', 'Statuses', 'Roles'],
-                    merchants: 'Create new'
-                  }
-                ].map((tpl, i) => (
-                  <div key={i} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+                {templates.map((tpl) => (
+                  <div key={tpl.code} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
                           <Layers className="w-4 h-4" />
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Active
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                          {tpl.code}
                         </span>
                       </div>
                       <div>
                         <h4 className="font-bold text-slate-900 text-sm">{tpl.name}</h4>
                         <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{tpl.desc}</p>
                       </div>
-
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        {tpl.tags.map((t, idx) => (
-                          <span key={idx} className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] text-slate-600 font-medium">
-                            {t}
+                        {tpl.tags.map((tag) => (
+                          <span key={tag} className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-[10px] text-slate-600 font-medium">
+                            {tag}
                           </span>
                         ))}
                       </div>
                     </div>
-
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400 font-medium">{tpl.merchants}</span>
-                      <button className="px-3 py-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                        Configure
+                      <span className="text-[11px] text-slate-500 font-semibold">{countFor(tpl.code)} workspace(s)</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('merchants')}
+                        className="px-3 py-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        View merchants
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ==================== 8. INTEGRATIONS ==================== */}
           {activeTab === 'integrations' && (() => {
             const currentApiMerchant = merchants.find(m => m.id === selectedApiMerchantId) || merchants[0];
-            const currentConfig = merchantApiStore[selectedApiMerchantId] || merchantApiStore['SUB-0021'];
+            if (!currentApiMerchant) {
+              return (
+                <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+                  <Key className="w-6 h-6 text-slate-400 mx-auto" />
+                  <h3 className="text-sm font-bold text-slate-900">No merchant accounts found</h3>
+                  <p className="text-xs text-slate-500">Create a merchant account before provisioning integration credentials.</p>
+                </div>
+              );
+            }
+            const currentConfig = merchantApiStore[currentApiMerchant.id] || createEmptySuperAdminIntegrationConfig();
 
             return (
             <div className="space-y-6">
@@ -2818,7 +2711,7 @@ export const SuperAdminDashboard = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-slate-500 font-medium">Currently Configuring:</span>
                     <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">
-                      {currentApiMerchant.name} ({currentApiMerchant.id})
+                      {currentApiMerchant.name} ({currentApiMerchant.slug || currentApiMerchant.displayId})
                     </span>
                   </div>
                 </div>
@@ -2901,9 +2794,9 @@ export const SuperAdminDashboard = () => {
                   {[
                     { id: 'meta', name: 'Meta Ads & Instagram CAPI', sub: 'Conversions API & Pixel ID', icon: '📸', status: currentConfig.meta.status },
                     { id: 'whatsapp', name: 'WhatsApp Business Cloud API', sub: 'WABA ID & Permanent Token', icon: '💬', status: currentConfig.whatsapp.status },
-                    { id: 'courier', name: 'Logistics & Courier Delivery API', sub: 'Delhivery / Shiprocket Live AWBs', icon: '🚚', status: currentConfig.courier.status },
+                    { id: 'courier', name: 'Logistics & Courier Delivery API', sub: 'Saved courier API credentials', icon: '🚚', status: currentConfig.courier.status },
                     { id: 'payment', name: 'Razorpay UPI & Payment Gateway', sub: 'Key ID, Secret & Webhooks', icon: '💳', status: currentConfig.payment.status },
-                    { id: 'webhooks', name: 'Outbound ERP & Zapier Webhook', sub: 'Real-time JSON event dispatches', icon: '🌐', status: currentConfig.webhooks.status }
+                    { id: 'webhooks', name: 'Outbound ERP & Zapier Webhook', sub: 'Saved outbound webhook URL', icon: '🌐', status: currentConfig.webhooks.status }
                   ].map((connector) => {
                     const isActive = activeApiConnectorTab === connector.id;
                     const isConn = connector.status === 'CONNECTED';
@@ -2937,10 +2830,10 @@ export const SuperAdminDashboard = () => {
 
                   <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-900 text-[11px] space-y-1">
                     <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Security Guarantee
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" /> Credential storage warning
                     </div>
                     <p className="text-slate-600">
-                      All provisioned tokens are encrypted at rest using AES-256 before storage in the database.
+                      Integration credentials are stored on the tenant record and returned to SUPER_ADMIN accounts. This is not encrypted-at-rest storage; use an external secrets manager before production.
                     </p>
                   </div>
                 </div>
@@ -2982,7 +2875,7 @@ export const SuperAdminDashboard = () => {
                             type="text"
                             value={currentConfig.meta.datasetName}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'meta', 'datasetName', e.target.value)}
-                            placeholder="e.g. Desi Achar House CAPI Dataset"
+                            placeholder="Dataset name"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3003,7 +2896,7 @@ export const SuperAdminDashboard = () => {
                             type={showApiTokenSecret ? 'text' : 'password'}
                             value={currentConfig.meta.capiToken}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'meta', 'capiToken', e.target.value)}
-                            placeholder="EAAG84920194..."
+                            placeholder="Paste Meta CAPI token"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3024,7 +2917,7 @@ export const SuperAdminDashboard = () => {
                           <input
                             type="text"
                             readOnly
-                            value={`https://app.omniva.io/api/webhooks/meta?merchant=${currentApiMerchant.id}`}
+                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/meta?merchant=${currentApiMerchant.slug || currentApiMerchant.realDbId}`}
                             className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-600 select-all focus:outline-none"
                           />
                         </div>
@@ -3075,7 +2968,7 @@ export const SuperAdminDashboard = () => {
                             type="text"
                             value={currentConfig.whatsapp.wabaId}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'whatsapp', 'wabaId', e.target.value)}
-                            placeholder="e.g. WABA_9829012345"
+                            placeholder="WhatsApp Business Account ID"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3124,13 +3017,10 @@ export const SuperAdminDashboard = () => {
                         </div>
 
                         <div>
-                          <label className="block text-slate-700 font-bold mb-1">Inbound Webhook Verification Token</label>
-                          <input
-                            type="text"
-                            readOnly
-                            value="omniva_whatsapp_secure_2026"
-                            className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-mono text-slate-600 select-all focus:outline-none"
-                          />
+                          <label className="block text-slate-700 font-bold mb-1">Inbound Webhook Verification</label>
+                          <div className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-600 text-xs">
+                            Not configured. Omniva currently uses WhatsApp Cloud API credentials for outbound messages only.
+                          </div>
                         </div>
                       </div>
 
@@ -3204,7 +3094,7 @@ export const SuperAdminDashboard = () => {
                             type="text"
                             value={currentConfig.courier.apiKey}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'courier', 'apiKey', e.target.value)}
-                            placeholder="del_live_k894029104"
+                            placeholder="Courier API key"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3255,7 +3145,7 @@ export const SuperAdminDashboard = () => {
                           </div>
                         </div>
                         <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Mode: Live Production
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Credentials Saved
                         </span>
                       </div>
 
@@ -3279,7 +3169,7 @@ export const SuperAdminDashboard = () => {
                             type="text"
                             value={currentConfig.payment.keyId}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'payment', 'keyId', e.target.value)}
-                            placeholder="rzp_live_94820184920"
+                            placeholder="Razorpay key ID"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3360,7 +3250,7 @@ export const SuperAdminDashboard = () => {
                             type="text"
                             value={currentConfig.webhooks.secretToken}
                             onChange={(e) => handleUpdateMerchantConnectorField(selectedApiMerchantId, 'webhooks', 'secretToken', e.target.value)}
-                            placeholder="wh_sec_8492019482"
+                            placeholder="Webhook signing secret"
                             className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
                           />
                         </div>
@@ -3394,11 +3284,11 @@ export const SuperAdminDashboard = () => {
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm">Cross-Merchant API Provisioning Health Matrix</h3>
-                    <p className="text-xs text-slate-500">Live operational status across all provisioned client workspaces</p>
+                    <h3 className="font-extrabold text-slate-900 text-sm">Cross-Merchant API Provisioning Status</h3>
+                    <p className="text-xs text-slate-500">Status from the saved tenant fields; no live handshake is performed</p>
                   </div>
                   <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200">
-                    4 Active Workspaces Monitored
+                    {merchants.length} Workspaces Loaded
                   </span>
                 </div>
 
@@ -3418,14 +3308,14 @@ export const SuperAdminDashboard = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                       {merchants.map((m) => {
-                        const mConfig = merchantApiStore[m.id] || merchantApiStore['SUB-0021'];
+                        const mConfig = merchantApiStore[m.id] || createEmptySuperAdminIntegrationConfig();
                         const isSelected = m.id === selectedApiMerchantId;
 
                         return (
                           <tr key={m.id} className={`hover:bg-slate-50 transition ${isSelected ? 'bg-indigo-50/30' : ''}`}>
                             <td className="py-3 px-4">
                               <div className="font-bold text-slate-900">{m.name}</div>
-                              <div className="text-[10px] text-slate-400 font-mono">{m.id} · {m.owner}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">{m.displayId} · {m.owner || 'No owner record'}</div>
                             </td>
                             <td className="py-3 px-4">
                               <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
@@ -3455,7 +3345,7 @@ export const SuperAdminDashboard = () => {
                             </td>
                             <td className="py-3 px-4">
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                                {mConfig.payment.provider} (Live)
+                                {mConfig.payment.provider}
                               </span>
                             </td>
                             <td className="py-3 px-4">
@@ -3488,136 +3378,59 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'analytics' && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Understand platform growth, merchant usage and recurring revenue</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-slate-600">
-                    Last 30 days
-                  </span>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" /> Export
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Live aggregate metrics returned by the admin API</p>
+                <button
+                  onClick={handleExportMerchantsCsv}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export merchants
+                </button>
               </div>
 
-              {/* 4 Stat Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Platform revenue</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">₹4,25,000</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">10.8% vs prior period</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Total merchants</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">245</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">12.4% growth</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Orders processed</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">3,460</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">8.4% growth</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Bookings received</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">1,320</div>
-                  <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">18.2% growth</div>
-                </div>
+                {[
+                  ['Recorded order value', livePlatformStats?.totalRevenue != null ? `₹${Number(livePlatformStats.totalRevenue).toLocaleString('en-IN')}` : '—'],
+                  ['Total merchants', livePlatformStats?.totalMerchants ?? merchants.length],
+                  ['Orders processed', livePlatformStats?.totalOrders ?? '—'],
+                  ['Bookings received', livePlatformStats?.totalBookings ?? '—'],
+                ].map(([label, value]) => (
+                  <div key={label} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                    <div className="text-xs text-slate-500 font-medium">{label}</div>
+                    <div className="text-2xl font-black text-slate-900 mt-2">{value}</div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">Current database aggregate</div>
+                  </div>
+                ))}
               </div>
 
-              {/* Row 2: Revenue Trend & Donut Share */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">Revenue trend</h3>
-                  <div className="h-44 w-full flex items-end gap-3 pt-6 pb-2 px-2 border-b border-slate-100">
-                    {[35, 42, 38, 55, 48, 62, 58, 75, 70, 95].map((val, idx) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                        <div style={{ height: `${val}%` }} className="w-full bg-indigo-600 rounded-t-lg transition" />
-                        <span className="text-[9px] text-slate-400">W{idx + 1}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Donut Chart: Merchants by Business Template */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">Merchants by business template</h3>
-                  <div className="flex items-center justify-center py-2">
-                    <div className="w-32 h-32 rounded-full border-8 border-indigo-600 border-t-emerald-500 border-r-amber-500 border-b-blue-400 flex items-center justify-center text-center">
-                      <div>
-                        <div className="text-xl font-black text-slate-900">245</div>
-                        <div className="text-[9px] text-slate-400 font-bold uppercase">MERCHANTS</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-slate-600"><span>Product selling</span><span className="font-bold">42%</span></div>
-                    <div className="flex justify-between text-slate-600"><span>Services</span><span className="font-bold">23%</span></div>
-                    <div className="flex justify-between text-slate-600"><span>Travel</span><span className="font-bold">17%</span></div>
-                    <div className="flex justify-between text-slate-600"><span>Other</span><span className="font-bold">18%</span></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Revenue by Plan & Operational Indicators */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">Revenue by subscription plan</h3>
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <div className="flex justify-between text-slate-700 font-semibold mb-1">
-                        <span>Starter</span>
-                        <span>₹82,000</span>
+                  <h3 className="font-bold text-slate-900 text-sm">Merchant distribution by business type</h3>
+                  <div className="space-y-2 text-xs">
+                    {Object.entries(
+                      merchants.reduce((acc, m) => {
+                        const key = m.type || 'Not set';
+                        acc[key] = (acc[key] || 0) + 1;
+                        return acc;
+                      }, {})
+                    ).map(([type, count]) => (
+                      <div key={type} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                        <span className="font-semibold text-slate-700">{type}</span>
+                        <span className="font-bold text-slate-900">{count}</span>
                       </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-400 h-full rounded-full" style={{ width: '25%' }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-slate-700 font-semibold mb-1">
-                        <span>Growth</span>
-                        <span>₹2,10,000</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '60%' }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-slate-700 font-semibold mb-1">
-                        <span>Pro</span>
-                        <span>₹1,33,000</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-800 h-full rounded-full" style={{ width: '40%' }} />
-                      </div>
-                    </div>
+                    ))}
+                    {merchants.length === 0 && <div className="text-slate-500">No merchant records available.</div>}
                   </div>
                 </div>
 
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">Operational indicators</h3>
-                  <div className="space-y-3 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm">28.4%</div>
-                        <div className="text-[11px] text-slate-400">Trial-to-paid conversion</div>
-                      </div>
-                      <span className="text-emerald-600 font-bold text-xs">+3.1 pts</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm">2.8%</div>
-                        <div className="text-[11px] text-slate-400">Subscription churn</div>
-                      </div>
-                      <span className="text-emerald-600 font-bold text-xs">-0.4 pts</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm">0.8%</div>
-                        <div className="text-[11px] text-slate-400">Failed integration events</div>
-                      </div>
-                      <span className="text-slate-500 font-medium text-xs">Within threshold</span>
-                    </div>
+                  <h3 className="font-bold text-slate-900 text-sm">Analytics limitations</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    The current backend does not expose time-series revenue, trial conversion, churn or per-plan revenue. These are left unavailable instead of being estimated.
+                  </p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">
+                    CRM leads: <strong>{livePlatformStats?.totalLeads ?? '—'}</strong><br />
+                    Active merchants: <strong>{livePlatformStats?.activeMerchants ?? merchants.filter(m => m.status === 'Active').length}</strong><br />
+                    Suspended merchants: <strong>{merchants.filter(m => m.status === 'Suspended').length}</strong>
                   </div>
                 </div>
               </div>
@@ -3628,93 +3441,14 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'tickets' && (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Manage merchant requests, incidents and service-level targets</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
-                    SLA settings
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> New ticket
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Support ticket management</p>
               </div>
-
-              {/* 4 Stat Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Open tickets</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">28</div>
-                  <div className="text-[11px] text-amber-600 font-medium mt-0.5">8 high priority</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">In progress</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">13</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Assigned to support</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Resolved this month</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">186</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">92% within SLA</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Median first response</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">42 min</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Target under 1 hour</div>
-                </div>
-              </div>
-
-              {/* Tickets Table */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] text-left text-xs">
-                    <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                      <tr>
-                        <th className="py-3 px-5">TICKET</th>
-                        <th className="py-3 px-4">SUBJECT</th>
-                        <th className="py-3 px-4">MERCHANT</th>
-                        <th className="py-3 px-4">PRIORITY</th>
-                        <th className="py-3 px-4">STATUS</th>
-                        <th className="py-3 px-4">CREATED</th>
-                        <th className="py-3 px-5">CATEGORY</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[
-                        { id: 'T-1245', subject: 'Payment not received', merchant: 'Desi Achar House', prio: 'High', status: 'Open', date: '12 Oct', cat: 'Billing' },
-                        { id: 'T-1244', subject: 'WhatsApp integration issue', merchant: 'Pixel Studio', prio: 'Medium', status: 'In progress', date: '12 Oct', cat: 'Integrations' },
-                        { id: 'T-1243', subject: 'Booking calendar error', merchant: 'Rajasthan Tours', prio: 'High', status: 'Open', date: '11 Oct', cat: 'Bookings' },
-                        { id: 'T-1242', subject: 'Subscription upgrade request', merchant: 'FreshMart', prio: 'Low', status: 'Resolved', date: '11 Oct', cat: 'Billing' },
-                        { id: 'T-1241', subject: 'Webhook delivery failed', merchant: 'Trendz Clothing', prio: 'Medium', status: 'In progress', date: '10 Oct', cat: 'Integrations' },
-                        { id: 'T-1240', subject: 'New template request', merchant: 'Event Planners', prio: 'Low', status: 'Open', date: '10 Oct', cat: 'Templates' },
-                        { id: 'T-1239', subject: 'Staff invitation not received', merchant: 'Glow Salon', prio: 'Medium', status: 'Resolved', date: '09 Oct', cat: 'Accounts' }
-                      ].map((t, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition">
-                          <td className="py-3.5 px-5 font-mono font-bold text-indigo-600">{t.id}</td>
-                          <td className="py-3.5 px-4 font-bold text-slate-900">{t.subject}</td>
-                          <td className="py-3.5 px-4 font-medium text-slate-600">{t.merchant}</td>
-                          <td className="py-3.5 px-4">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.prio === 'High' ? 'text-rose-700 bg-rose-50' : 'text-slate-600 bg-slate-100'}`}>
-                              {t.prio}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              t.status === 'Open'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : t.status === 'In progress'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                              {t.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-500 text-[11px]">{t.date}</td>
-                          <td className="py-3.5 px-5 font-semibold text-slate-700">{t.cat}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+                <LifeBuoy className="w-6 h-6 text-slate-400 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-900">Support ticket storage is not configured</h3>
+                <p className="text-xs text-slate-500 max-w-xl mx-auto">
+                  No ticket collection or support API exists in this backend. The previous ticket records and SLA metrics were hardcoded and have been removed. Connect a real support system before displaying ticket counts.
+                </p>
               </div>
             </div>
           )}
@@ -3723,124 +3457,47 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'staff' && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Manage platform team members and permission boundaries</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
-                    Permission matrix
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> Invite staff
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Platform team access model</p>
               </div>
 
-              {/* 4 Stat Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Platform staff</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">18</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Across 6 roles</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Active users</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">16</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">89% active</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Custom roles</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">6</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">2 changed this month</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Pending invitations</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">2</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Awaiting acceptance</div>
-                </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+                <Users className="w-6 h-6 text-slate-400 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-900">Platform staff directory is not exposed by the API</h3>
+                <p className="text-xs text-slate-500 max-w-xl mx-auto">
+                  The previous staff names, invitation counts and activity timestamps were hardcoded. No platform-staff listing endpoint exists yet, so those records have been removed. Merchant-scoped staff are managed inside each merchant workspace.
+                </p>
               </div>
 
-              {/* Staff Table */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] text-left text-xs">
-                    <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                      <tr>
-                        <th className="py-3 px-5">STAFF MEMBER</th>
-                        <th className="py-3 px-4">ROLE</th>
-                        <th className="py-3 px-4">ACCESS SCOPE</th>
-                        <th className="py-3 px-4">STATUS</th>
-                        <th className="py-3 px-4">LAST ACTIVITY</th>
-                        <th className="py-3 px-5 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[
-                        { name: 'Amit Kumar', email: 'amit@omniva.io', role: 'Platform Admin', scope: 'All platform', status: 'Active', last: '2 min ago' },
-                        { name: 'Neha Gupta', email: 'neha@omniva.io', role: 'Support Manager', scope: 'Support tickets', status: 'Active', last: '12 min ago' },
-                        { name: 'Vikas Sharma', email: 'vikas@omniva.io', role: 'Integration Manager', scope: 'Integrations', status: 'Active', last: '1 hour ago' },
-                        { name: 'Ritu Singh', email: 'ritu@omniva.io', role: 'Billing Manager', scope: 'Subscriptions', status: 'Active', last: '2 hours ago' },
-                        { name: 'Anjali Verma', email: 'anjali@omniva.io', role: 'Analyst', scope: 'Read-only reports', status: 'Inactive', last: '7 days ago' }
-                      ].map((s, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center border border-indigo-100">
-                                {s.name.charAt(0)}
-                              </div>
-                              <div>
-                                <div className="font-bold text-slate-900">{s.name}</div>
-                                <div className="text-[10px] text-slate-400">{s.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-slate-800">{s.role}</td>
-                          <td className="py-3 px-4 text-slate-600">{s.scope}</td>
-                          <td className="py-3 px-4">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
-                              {s.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-slate-500 text-[11px]">{s.last}</td>
-                          <td className="py-3 px-5 text-right text-slate-400">
-                            <MoreVertical className="w-4 h-4 ml-auto" />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Role Permission Matrix Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="p-4 px-6 border-b border-slate-200/80">
-                  <h3 className="font-bold text-slate-900 text-sm">Role permission matrix</h3>
-                  <p className="text-[11px] text-slate-400">Example access model — exact permissions should be configurable</p>
+                  <h3 className="font-bold text-slate-900 text-sm">Documented role boundary</h3>
+                  <p className="text-[11px] text-slate-400">This is the access policy enforced by the backend, not editable platform data.</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[650px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-6">PERMISSION</th>
-                        <th className="py-3 px-4">PLATFORM ADMIN</th>
-                        <th className="py-3 px-4">SUPPORT MANAGER</th>
-                        <th className="py-3 px-4">BILLING MANAGER</th>
-                        <th className="py-3 px-6">ANALYST</th>
+                        <th className="py-3 px-4">SUPER ADMIN</th>
+                        <th className="py-3 px-4">SUPER STAFF</th>
+                        <th className="py-3 px-4">MERCHANT OWNER</th>
+                        <th className="py-3 px-6">MERCHANT STAFF</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {[
-                        { perm: 'View merchants', admin: 'Full', supp: 'Limited', bill: 'Limited', ana: 'Read-only' },
-                        { perm: 'Manage subscriptions', admin: 'Full', supp: '—', bill: 'Full', ana: '—' },
-                        { perm: 'View system logs', admin: 'Full', supp: 'Limited', bill: 'Limited', ana: '—' },
-                        { perm: 'Manage integrations', admin: 'Full', supp: 'Limited', bill: '—', ana: '—' },
-                        { perm: 'Change platform settings', admin: 'Full', supp: '—', bill: '—', ana: '—' }
+                        { perm: 'View merchants', admin: 'Full', superStaff: 'Limited', owner: 'Own tenant', staff: 'Own tenant' },
+                        { perm: 'Merchant integration secrets', admin: 'Full', superStaff: 'No access', owner: 'Own tenant', staff: 'No access' },
+                        { perm: 'Platform statistics', admin: 'Full', superStaff: 'Full', owner: 'Own tenant', staff: 'Scoped' },
+                        { perm: 'Upgrade subscription', admin: 'Full', superStaff: 'Full', owner: 'Own tenant', staff: 'No access' },
+                        { perm: 'Manage merchant modules', admin: 'Full', superStaff: 'Full', owner: 'No access', staff: 'No access' },
                       ].map((row, i) => (
                         <tr key={i} className="hover:bg-slate-50 transition">
                           <td className="py-3 px-6 font-semibold text-slate-800">{row.perm}</td>
                           <td className="py-3 px-4 font-bold text-indigo-700">{row.admin}</td>
-                          <td className="py-3 px-4 text-slate-600">{row.supp}</td>
-                          <td className="py-3 px-4 text-slate-600">{row.bill}</td>
-                          <td className="py-3 px-6 text-slate-600">{row.ana}</td>
+                          <td className="py-3 px-4 text-slate-600">{row.superStaff}</td>
+                          <td className="py-3 px-4 text-slate-600">{row.owner}</td>
+                          <td className="py-3 px-6 text-slate-600">{row.staff}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3854,156 +3511,68 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'health' && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Monitor uptime, application performance and background jobs</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
-                    Incident history
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <RefreshCw className="w-3.5 h-3.5" /> Refresh
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Real response from <code>/api/health/deep</code></p>
+                <button
+                  onClick={loadHealthSnapshot}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                </button>
               </div>
 
-              {/* 4 Stat Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">API uptime</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">99.95%</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Last 30 days</div>
+              {healthError && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-800">
+                  {healthError}
                 </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Average response</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">124 ms</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Within SLA</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Error rate</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">0.08%</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">-0.02 pts</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Background jobs</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">99.8%</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Successful executions</div>
-                </div>
-              </div>
+              )}
 
-              {/* Row 2: API Response Time & System Status */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">API response time</h3>
-                  <div className="h-44 w-full flex items-end gap-2.5 pt-6 pb-2 px-2 border-b border-slate-100">
-                    {[110, 120, 115, 135, 140, 124, 130, 160, 145, 180].map((h, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                        <div style={{ height: `${(h / 200) * 100}%` }} className="w-full bg-indigo-600 rounded-t-md" />
-                        <span className="text-[9px] text-slate-400">{i * 2}h</span>
+              {!healthSnapshot && !healthError && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-xs text-slate-500">
+                  Loading the live health snapshot…
+                </div>
+              )}
+
+              {healthSnapshot && (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      ['Service status', healthSnapshot.status || 'Unknown', healthSnapshot.status === 'ready' ? 'text-emerald-600' : 'text-amber-600'],
+                      ['Database', healthSnapshot.database?.connected ? 'Connected' : 'Disconnected', healthSnapshot.database?.connected ? 'text-emerald-600' : 'text-rose-600'],
+                      ['Database latency', healthSnapshot.database?.latencyMs >= 0 ? `${healthSnapshot.database.latencyMs} ms` : 'Not measured', 'text-slate-900'],
+                      ['Process uptime', healthSnapshot.uptimeSeconds != null ? `${Math.floor(healthSnapshot.uptimeSeconds / 60)} min` : '—', 'text-slate-900'],
+                    ].map(([label, value, color]) => (
+                      <div key={label} className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
+                        <div className="text-xs text-slate-500 font-medium">{label}</div>
+                        <div className={`text-xl font-black mt-2 ${color}`}>{value}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">Live snapshot</div>
                       </div>
                     ))}
                   </div>
-                </div>
 
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-slate-900 text-sm">System status</h3>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Operational
-                    </span>
-                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
+                      <h3 className="font-bold text-slate-900 text-sm">Runtime</h3>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Platform</span><span className="font-bold text-slate-900">{healthSnapshot.platform || 'Omniva'}</span></div>
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Version</span><span className="font-bold text-slate-900">{healthSnapshot.version || '—'}</span></div>
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Node.js</span><span className="font-bold text-slate-900">{healthSnapshot.system?.nodeVersion || '—'}</span></div>
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Environment</span><span className="font-bold text-slate-900">{healthSnapshot.environment || 'Unknown'}</span></div>
+                        <div className="flex justify-between py-1"><span className="text-slate-600">Checked at</span><span className="font-bold text-slate-900">{healthSnapshot.timestamp ? new Date(healthSnapshot.timestamp).toLocaleString('en-IN') : '—'}</span></div>
+                      </div>
+                    </div>
 
-                  <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                      <Check className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 text-xs">All core systems operational</div>
-                      <div className="text-[10px] text-slate-400">Last checked moments ago</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">API service</span>
-                      <span className="font-bold text-emerald-600">Operational</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">Database</span>
-                      <span className="font-bold text-emerald-600">Operational</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">Background workers</span>
-                      <span className="font-bold text-emerald-600">Operational</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-600">Notification provider</span>
-                      <span className="font-bold text-amber-600">Degraded</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Incidents & Resource Usage */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
-                  <h3 className="font-bold text-slate-900 text-sm">Recent incidents</h3>
-                  <div className="space-y-2.5 text-xs">
-                    <div className="p-3 rounded-xl bg-amber-50/40 border border-amber-200/60">
-                      <div className="font-bold text-slate-800">WhatsApp message delivery degraded</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">Investigating · 10:39 AM · Owner: Integrations</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-emerald-50/40 border border-emerald-200/60">
-                      <div className="font-bold text-slate-800">Payment gateway latency normalized</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">Resolved · 09:12 AM</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                      <div className="font-bold text-slate-800">High webhook retries for courier</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">Monitoring · 08:47 AM</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="font-bold text-slate-900 text-sm">Resource usage</h3>
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                        <span>Database</span>
-                        <span>46%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: '46%' }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                        <span>File storage</span>
-                        <span>62%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-blue-500 h-full rounded-full" style={{ width: '62%' }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                        <span>API quota</span>
-                        <span>33%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: '33%' }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-slate-600 font-semibold mb-1">
-                        <span>Background queue</span>
-                        <span>22%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full" style={{ width: '22%' }} />
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-3">
+                      <h3 className="font-bold text-slate-900 text-sm">Memory and database</h3>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Heap used</span><span className="font-bold text-slate-900">{healthSnapshot.system?.memory?.heapUsedMb ?? '—'} MB</span></div>
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">Heap total</span><span className="font-bold text-slate-900">{healthSnapshot.system?.memory?.heapTotalMb ?? '—'} MB</span></div>
+                        <div className="flex justify-between py-1 border-b border-slate-100"><span className="text-slate-600">RSS</span><span className="font-bold text-slate-900">{healthSnapshot.system?.memory?.rssMb ?? '—'} MB</span></div>
+                        <div className="flex justify-between py-1"><span className="text-slate-600">Database connected</span><span className={`font-bold ${healthSnapshot.database?.connected ? 'text-emerald-600' : 'text-rose-600'}`}>{healthSnapshot.database?.connected ? 'Yes' : 'No'}</span></div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -4011,90 +3580,14 @@ export const SuperAdminDashboard = () => {
           {activeTab === 'logs' && (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Review platform activity, API events and integration failures</p>
-                <div className="flex items-center gap-2">
-                  <button className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-600">
-                    Retention policy
-                  </button>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" /> Export logs
-                  </button>
-                </div>
+                <p className="text-xs text-slate-500">Platform audit and event logs</p>
               </div>
-
-              {/* 4 Stat Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Events today</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">18,420</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">All platform events</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Failed events</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">14</div>
-                  <div className="text-[11px] text-rose-600 font-medium mt-0.5">0.08% of events</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">API p95 latency</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">124 ms</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Within target</div>
-                </div>
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Queued jobs</div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">32</div>
-                  <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Processing normally</div>
-                </div>
-              </div>
-
-              {/* Logs Table */}
-              <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[650px] text-left text-xs">
-                    <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                      <tr>
-                        <th className="py-3 px-5">TIMESTAMP</th>
-                        <th className="py-3 px-4">TYPE</th>
-                        <th className="py-3 px-6">MESSAGE</th>
-                        <th className="py-3 px-5 text-right">STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[
-                        { time: '14 Oct · 10:42:31', type: 'Webhook', msg: 'Payment verified for order ORD-001', status: 'Success' },
-                        { time: '14 Oct · 10:42:02', type: 'Meta CAPI', msg: 'Purchase event sent to Meta', status: 'Success' },
-                        { time: '14 Oct · 10:41:40', type: 'Integration', msg: 'WhatsApp message delivery failed', status: 'Failed' },
-                        { time: '14 Oct · 10:39:17', type: 'API request', msg: 'Lead created through external API', status: 'Success' },
-                        { time: '14 Oct · 10:38:02', type: 'Background job', msg: 'Daily report generated', status: 'Success' },
-                        { time: '14 Oct · 10:32:14', type: 'Authentication', msg: 'Failed sign-in attempt blocked', status: 'Warning' },
-                        { time: '14 Oct · 10:30:49', type: 'Subscription', msg: 'Renewal payment attempt failed', status: 'Warning' },
-                        { time: '14 Oct · 10:26:18', type: 'Webhook', msg: 'Courier status update received', status: 'Success' }
-                      ].map((log, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-5 font-mono text-slate-500 text-[11px]">{log.time}</td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
-                              {log.type}
-                            </span>
-                          </td>
-                          <td className="py-3 px-6 font-semibold text-slate-800">{log.msg}</td>
-                          <td className="py-3 px-5 text-right">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                log.status === 'Success'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : log.status === 'Failed'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
-                            >
-                              {log.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+                <Terminal className="w-6 h-6 text-slate-400 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-900">No platform log endpoint is configured</h3>
+                <p className="text-xs text-slate-500 max-w-xl mx-auto">
+                  The previous event counts, latency figures and log rows were hardcoded. They have been removed. Use infrastructure logs or add a persisted audit-log API before displaying platform events here.
+                </p>
               </div>
             </div>
           )}
@@ -4105,7 +3598,7 @@ export const SuperAdminDashboard = () => {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">Configure global preferences, security and communication defaults</p>
                 <button
-                  onClick={() => alert('Platform settings saved successfully!')}
+                  onClick={() => showAdminError('Platform-wide settings are not persisted by the backend yet. No values were saved.')}
                   className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                 >
                   Save changes
@@ -4270,7 +3763,7 @@ export const SuperAdminDashboard = () => {
 
                   <div className="pt-2 flex justify-end">
                     <button
-                      onClick={() => alert('Platform settings saved successfully!')}
+                      onClick={() => showAdminError('Platform-wide settings are not persisted by the backend yet. No values were saved.')}
                       className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs shadow-sm hover:bg-indigo-700 cursor-pointer"
                     >
                       Save changes
@@ -4339,7 +3832,7 @@ export const SuperAdminDashboard = () => {
                     onChange={(e) => setEditMerchantForm({ ...editMerchantForm, type: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="Product">📦 Product (Achar)</option>
+                    <option value="Product">📦 Product</option>
                     <option value="Travel">✈️ Travel (Tours)</option>
                     <option value="Service">📸 Service (Studio)</option>
                   </select>

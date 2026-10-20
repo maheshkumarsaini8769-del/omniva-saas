@@ -1,6 +1,18 @@
 const Tenant = require('../models/Tenant');
 const { sendCapiEvent } = require('../services/metaCapiService');
 
+// Status is derived from actual configuration, never hardcoded.
+const deriveStatus = (enabled, hasRequiredFields) => {
+  if (!enabled) return 'NOT_CONFIGURED';
+  return hasRequiredFields ? 'CONNECTED' : 'INCOMPLETE';
+};
+
+// Placeholder/bullet/mock values must not count as real credentials.
+const hasRealSecret = (value) =>
+  Boolean(value) &&
+  !String(value).startsWith('mock_') &&
+  !String(value).includes('••••');
+
 // @desc    Get merchant integrations configuration
 // @route   GET /api/integrations
 // @access  Protected (Merchant Admin/Owner)
@@ -11,37 +23,67 @@ const getIntegrations = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Tenant not found' });
     }
 
+    const metaEnabled = Boolean(tenant.integrations?.meta?.enabled);
+    const whatsappEnabled = Boolean(tenant.integrations?.whatsapp?.enabled);
+    const paymentEnabled = Boolean(tenant.integrations?.payment?.enabled);
+    const courierEnabled = Boolean(tenant.integrations?.courier?.enabled);
+    const webhooksEnabled = Boolean(tenant.integrations?.webhooks?.enabled);
+
     const defaultIntegrations = {
       meta: {
-        enabled: tenant.integrations?.meta?.enabled ?? true,
+        enabled: metaEnabled,
         pixelId: tenant.settings?.metaPixelId || tenant.integrations?.meta?.pixelId || '',
-        capiToken: tenant.settings?.metaCapiToken ? '••••••••' : (tenant.integrations?.meta?.capiToken || ''),
+        capiToken: tenant.settings?.metaCapiToken || tenant.integrations?.meta?.capiToken ? '••••••••' : '',
         testEventCode: tenant.integrations?.meta?.testEventCode || '',
-        status: tenant.integrations?.meta?.status || 'CONNECTED',
+        status: deriveStatus(
+          metaEnabled,
+          Boolean(
+            (tenant.settings?.metaPixelId || tenant.integrations?.meta?.pixelId) &&
+            hasRealSecret(tenant.settings?.metaCapiToken || tenant.integrations?.meta?.capiToken)
+          )
+        ),
       },
       whatsapp: {
-        enabled: tenant.integrations?.whatsapp?.enabled ?? true,
+        enabled: whatsappEnabled,
         senderPhone: tenant.integrations?.whatsapp?.senderPhone || tenant.contact?.phone || '',
-        status: tenant.integrations?.whatsapp?.status || 'CONNECTED',
+        status: deriveStatus(
+          whatsappEnabled,
+          Boolean(tenant.integrations?.whatsapp?.senderPhone)
+        ),
       },
       payment: {
-        enabled: tenant.integrations?.payment?.enabled ?? true,
+        enabled: paymentEnabled,
         provider: tenant.integrations?.payment?.provider || 'Razorpay',
         keyId: tenant.integrations?.payment?.keyId || '',
         keySecret: tenant.integrations?.payment?.keySecret ? '••••••••••••••••' : '',
-        status: tenant.integrations?.payment?.status || 'CONNECTED',
+        status: deriveStatus(
+          paymentEnabled,
+          Boolean(
+            tenant.integrations?.payment?.keyId &&
+            hasRealSecret(tenant.integrations?.payment?.keySecret)
+          )
+        ),
       },
       courier: {
-        enabled: tenant.integrations?.courier?.enabled ?? true,
-        provider: tenant.integrations?.courier?.provider || 'Delhivery',
+        enabled: courierEnabled,
+        provider: tenant.integrations?.courier?.provider || '',
         apiKey: tenant.integrations?.courier?.apiKey ? '••••••••' : '',
         pickupPincode: tenant.integrations?.courier?.pickupPincode || '',
-        status: tenant.integrations?.courier?.status || 'CONNECTED',
+        status: deriveStatus(
+          courierEnabled,
+          Boolean(
+            tenant.integrations?.courier?.provider &&
+            hasRealSecret(tenant.integrations?.courier?.apiKey)
+          )
+        ),
       },
       webhooks: {
-        enabled: tenant.integrations?.webhooks?.enabled ?? true,
+        enabled: webhooksEnabled,
         url: tenant.integrations?.webhooks?.url || '',
-        status: tenant.integrations?.webhooks?.status || 'CONNECTED',
+        status: deriveStatus(
+          webhooksEnabled,
+          Boolean(tenant.integrations?.webhooks?.url)
+        ),
       },
     };
 
@@ -74,7 +116,7 @@ const updateIntegrations = async (req, res) => {
     if (meta) {
       tenant.integrations.meta = {
         ...tenant.integrations.meta,
-        enabled: meta.enabled !== undefined ? Boolean(meta.enabled) : true,
+        enabled: meta.enabled !== undefined ? Boolean(meta.enabled) : false,
       };
       if (meta.pixelId !== undefined) {
         tenant.integrations.meta.pixelId = meta.pixelId.trim();
@@ -93,7 +135,7 @@ const updateIntegrations = async (req, res) => {
     if (whatsapp) {
       tenant.integrations.whatsapp = {
         ...tenant.integrations.whatsapp,
-        enabled: whatsapp.enabled !== undefined ? Boolean(whatsapp.enabled) : true,
+        enabled: whatsapp.enabled !== undefined ? Boolean(whatsapp.enabled) : false,
       };
       if (whatsapp.senderPhone !== undefined) {
         tenant.integrations.whatsapp.senderPhone = whatsapp.senderPhone.trim();
@@ -107,7 +149,7 @@ const updateIntegrations = async (req, res) => {
     if (payment) {
       tenant.integrations.payment = {
         ...tenant.integrations.payment,
-        enabled: payment.enabled !== undefined ? Boolean(payment.enabled) : true,
+        enabled: payment.enabled !== undefined ? Boolean(payment.enabled) : false,
       };
       if (payment.provider !== undefined) {
         tenant.integrations.payment.provider = payment.provider.trim();
@@ -124,7 +166,7 @@ const updateIntegrations = async (req, res) => {
     if (courier) {
       tenant.integrations.courier = {
         ...tenant.integrations.courier,
-        enabled: courier.enabled !== undefined ? Boolean(courier.enabled) : true,
+        enabled: courier.enabled !== undefined ? Boolean(courier.enabled) : false,
       };
       if (courier.provider !== undefined) {
         tenant.integrations.courier.provider = courier.provider.trim();
@@ -141,7 +183,7 @@ const updateIntegrations = async (req, res) => {
     if (webhooks) {
       tenant.integrations.webhooks = {
         ...tenant.integrations.webhooks,
-        enabled: webhooks.enabled !== undefined ? Boolean(webhooks.enabled) : true,
+        enabled: webhooks.enabled !== undefined ? Boolean(webhooks.enabled) : false,
       };
       if (webhooks.url !== undefined) {
         tenant.integrations.webhooks.url = webhooks.url.trim();
@@ -200,30 +242,46 @@ const testIntegration = async (req, res) => {
 
     if (serviceType === 'meta') {
       const pixelId = payload?.pixelId || tenant.integrations?.meta?.pixelId || tenant.settings?.metaPixelId;
+      const capiToken = payload?.capiToken || tenant.integrations?.meta?.capiToken || tenant.settings?.metaCapiToken;
+      if (!pixelId || !capiToken) {
+        return res.status(400).json({
+          success: false,
+          message: 'Meta Pixel ID and Conversions API token must be configured before testing',
+        });
+      }
       const result = await sendCapiEvent({
         tenant,
         eventName: 'Lead',
         eventId: `test_${Date.now()}`,
-        eventSourceUrl: `https://${tenant.slug}.omniva.io`,
-        userData: { email: 'test@customer.com', phone: '9876543210' },
-        customData: { currency: 'INR', value: 999 },
+        eventSourceUrl: req.headers.origin || process.env.FRONTEND_URL || undefined,
+        userData: { email: req.user?.email || '', phone: '' },
+        customData: { currency: 'INR', value: 0, contentName: 'Integration test event' },
       });
+      if (!result.success || result.mode === 'SIMULATION') {
+        return res.status(400).json({
+          success: false,
+          message: result.message || 'Meta credentials are not valid for a live test',
+          result,
+        });
+      }
       return res.json({
         success: true,
-        message: pixelId
-          ? `Meta Pixel (${pixelId}) & Conversions API test event dispatched successfully`
-          : 'Meta Pixel & Conversions API test event simulated successfully',
+        message: `Meta Pixel (${pixelId}) & Conversions API test event dispatched successfully`,
         timestamp: new Date().toLocaleTimeString(),
         result,
       });
     }
 
     if (serviceType === 'whatsapp') {
-      const rawPhone = payload?.senderPhone || tenant.integrations?.whatsapp?.senderPhone || tenant.contact?.phone || '9876543210';
-      const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
-      return res.json({
-        success: true,
-        message: `WhatsApp direct link ready for +91 ${cleanPhone}`,
+      const rawPhone = payload?.senderPhone || tenant.integrations?.whatsapp?.senderPhone || tenant.contact?.phone;
+      const cleanPhone = (rawPhone || '').replace(/\D/g, '').slice(-10);
+      if (!cleanPhone) {
+        return res.status(400).json({ success: false, message: 'A WhatsApp sender phone number is required' });
+      }
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: `A chat link can be generated for +91 ${cleanPhone}, but no WhatsApp Business API message was sent. Live verification is not configured.`,
         timestamp: new Date().toLocaleTimeString(),
         phone: cleanPhone,
         chatUrl: `https://wa.me/91${cleanPhone}?text=Hello%20from%20Omniva%20Store`,
@@ -231,22 +289,33 @@ const testIntegration = async (req, res) => {
     }
 
     if (serviceType === 'payment') {
-      const keyId = payload?.keyId || tenant.integrations?.payment?.keyId || 'rzp_live_key';
+      const keyId = payload?.keyId || tenant.integrations?.payment?.keyId;
+      if (!keyId) {
+        return res.status(400).json({ success: false, message: 'Razorpay Key ID is not configured' });
+      }
       const mode = keyId.startsWith('rzp_live_') ? 'Live Mode (Production)' : keyId.startsWith('rzp_test_') ? 'Test Mode (Sandbox)' : 'Custom Mode';
-      return res.json({
-        success: true,
-        message: `Razorpay payment gateway active [${mode}] with Key: ${keyId.slice(0, 12)}...`,
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: `Razorpay key format recognized [${mode}]. No live API request or charge was made, so this is not a connection verification.`,
         timestamp: new Date().toLocaleTimeString(),
         mode,
       });
     }
 
     if (serviceType === 'courier') {
-      const provider = payload?.provider || tenant.integrations?.courier?.provider || 'Delhivery';
-      const pincode = payload?.pickupPincode || tenant.integrations?.courier?.pickupPincode || '302020';
-      return res.json({
-        success: true,
-        message: `${provider} logistics verified. Express pickup active for pincode ${pincode} across 26,000+ Indian pin codes.`,
+      const provider = payload?.provider || tenant.integrations?.courier?.provider;
+      const pincode = payload?.pickupPincode || tenant.integrations?.courier?.pickupPincode;
+      if (!provider || !pincode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Courier provider and pickup pincode must be configured before testing',
+        });
+      }
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: `Courier fields are present for ${provider} at pincode ${pincode}. No courier API request or shipment was made, so serviceability was not verified.`,
         timestamp: new Date().toLocaleTimeString(),
         provider,
         pincode,
@@ -258,15 +327,16 @@ const testIntegration = async (req, res) => {
       if (!url) {
         return res.status(400).json({ success: false, message: 'Please enter a webhook URL first' });
       }
-      return res.json({
-        success: true,
-        message: `Test ping dispatched to webhook endpoint: ${url}`,
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: `Webhook URL is configured as ${url}. No external request was sent, so delivery was not verified.`,
         timestamp: new Date().toLocaleTimeString(),
         url,
       });
     }
 
-    res.json({ success: true, message: 'Integration test passed', timestamp: new Date().toLocaleTimeString() });
+    return res.status(400).json({ success: false, message: `Unknown integration type: ${serviceType}` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
