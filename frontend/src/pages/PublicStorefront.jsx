@@ -34,6 +34,58 @@ import {
   Check
 } from 'lucide-react';
 
+// Intelligent Search Synonyms & Multi-lingual Token Dictionary (Hindi + English)
+const SEARCH_SYNONYMS = {
+  aam: ['mango', 'aam', 'keri', 'kacha'],
+  mango: ['mango', 'aam', 'keri', 'pickle', 'achar'],
+  achar: ['pickle', 'achar', 'aachar', 'achari', 'jar'],
+  pickle: ['pickle', 'achar', 'aachar', 'achari'],
+  mirch: ['chilli', 'chili', 'mirch', 'mirchi', 'pepper', 'lal mirch', 'hari mirch', 'banarasi'],
+  chilli: ['chilli', 'chili', 'mirch', 'mirchi', 'pepper'],
+  lal: ['red', 'lal', 'laal', 'mirch', 'banarasi'],
+  hari: ['green', 'hari', 'mirch'],
+  nimbu: ['lemon', 'lime', 'nimbu', 'neembu', 'khatta'],
+  lemon: ['lemon', 'lime', 'nimbu', 'neembu'],
+  lahsun: ['garlic', 'lahsun', 'lasun'],
+  garlic: ['garlic', 'lahsun', 'lasun'],
+  haldi: ['turmeric', 'haldi'],
+  adrak: ['ginger', 'adrak'],
+  teekha: ['spicy', 'teekha', 'tikha', 'masaledar', 'chatpata', 'hot'],
+  spicy: ['spicy', 'teekha', 'tikha', 'masaledar', 'chatpata', 'hot'],
+  sweet: ['sweet', 'meetha', 'mitha', 'gud', 'jaggery', 'chutney'],
+  meetha: ['sweet', 'meetha', 'mitha', 'gud', 'jaggery'],
+  jar: ['jar', 'bottle', 'pack', 'dabba', 'kg', 'gm', '500g', '1kg', '250g'],
+  shoot: ['shoot', 'photo', 'photography', 'portrait', 'session', 'studio', 'video', 'film', 'cinematic'],
+  photo: ['photo', 'photography', 'shoot', 'portrait', 'camera', 'pic'],
+  wedding: ['wedding', 'pre-wedding', 'shaadi', 'shadi', 'marriage', 'engagement', 'bridal', 'cinematic'],
+  baby: ['baby', 'maternity', 'newborn', 'kids', 'toddler', 'milestone'],
+  cinematic: ['cinematic', 'video', 'film', 'teaser', 'drone', '4k', 'multicam'],
+  safari: ['safari', 'desert', 'tour', 'ride', 'camping', 'camel', 'dune', 'expedition', 'jeep'],
+  tour: ['tour', 'safari', 'trip', 'travel', 'holiday', 'package', 'guide'],
+  camel: ['camel', 'ride', 'safari', 'dune', 'sunset'],
+  camp: ['camp', 'camping', 'tent', 'night stay', 'stargazing', 'luxury']
+};
+
+const matchesSearchQuery = (searchableText, query) => {
+  if (!query || !query.trim()) return true;
+  const cleanQuery = query.toLowerCase().trim();
+  const tokens = cleanQuery.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const targetText = (searchableText || '').toLowerCase();
+
+  // If exact substring matches, pass immediately
+  if (targetText.includes(cleanQuery)) return true;
+
+  // All tokens must match either directly or via synonym
+  return tokens.every((token) => {
+    if (targetText.includes(token)) return true;
+    const syns = SEARCH_SYNONYMS[token];
+    if (syns && syns.some((s) => targetText.includes(s))) return true;
+    return false;
+  });
+};
+
 export const PublicStorefront = () => {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
@@ -1098,8 +1150,22 @@ export const PublicStorefront = () => {
   }
 
   const { store, categories, products } = storeData;
+  const isSearching = Boolean(searchQuery && searchQuery.trim());
+
   const filteredProducts = products.filter((p) => {
-    // 1. Category Filter
+    // 1. If actively searching, search across all items in catalog regardless of active category
+    if (isSearching) {
+      const name = p.name || '';
+      const desc = p.description || '';
+      const cat = p.categoryId?.name || p.category || '';
+      const variants = (p.variants || p.jars || []).map((v) => v.name || '').join(' ');
+      const tags = Array.isArray(p.tags) ? p.tags.join(' ') : '';
+      const price = String(p.price || '');
+      const searchable = `${name} ${desc} ${cat} ${variants} ${tags} ${price}`;
+      return matchesSearchQuery(searchable, searchQuery);
+    }
+
+    // 2. Category Filter (Active when NOT searching)
     const matchesCategory =
       selectedCategory === 'ALL' ||
       String(p.categoryId?._id) === String(selectedCategory) ||
@@ -1107,21 +1173,7 @@ export const PublicStorefront = () => {
       (p.categoryId?.name && p.categoryId.name === String(selectedCategory)) ||
       (p.category && p.category === String(selectedCategory));
 
-    if (!matchesCategory) return false;
-
-    // 2. Search Query Filter
-    if (searchQuery && searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const nameMatch = (p.name || '').toLowerCase().includes(q);
-      const descMatch = (p.description || '').toLowerCase().includes(q);
-      const catMatch = (p.category || p.categoryId?.name || '').toLowerCase().includes(q);
-      const variantMatch = (p.variants || p.jars || []).some(
-        (v) => (v.name || '').toLowerCase().includes(q)
-      );
-      return nameMatch || descMatch || catMatch || variantMatch;
-    }
-
-    return true;
+    return matchesCategory;
   });
 
   const isTravelStore =
@@ -1138,13 +1190,16 @@ export const PublicStorefront = () => {
     );
 
   const filteredPackages = (storeData?.packages || []).filter((pkg) => {
-    if (!searchQuery || !searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    const nameMatch = (pkg.name || '').toLowerCase().includes(q);
-    const descMatch = (pkg.description || '').toLowerCase().includes(q);
-    const catMatch = (pkg.category || '').toLowerCase().includes(q);
-    const delivMatch = (pkg.deliverables || []).some((d) => d.toLowerCase().includes(q));
-    return nameMatch || descMatch || catMatch || delivMatch;
+    if (isSearching) {
+      const name = pkg.name || '';
+      const desc = pkg.description || '';
+      const cat = pkg.category || '';
+      const delivMatch = Array.isArray(pkg.deliverables) ? pkg.deliverables.join(' ') : '';
+      const price = String(pkg.price || '');
+      const searchable = `${name} ${desc} ${cat} ${delivMatch} ${price}`;
+      return matchesSearchQuery(searchable, searchQuery);
+    }
+    return true;
   });
 
   const totalMatches = products.length > 0 ? filteredProducts.length : filteredPackages.length;
@@ -1285,7 +1340,7 @@ export const PublicStorefront = () => {
                 ? "Search shoot packages, films, themes... (e.g. Baby Shoot, Pre-Wedding, Cinematic)"
                 : isTravelStore
                 ? "Search tours, safaris, departures... (e.g. Desert Safari, Camel Ride, Camping)"
-                : "Search fresh pickles, jars, spices... (e.g. Aam, Lal Mirch, Garlic)"
+                : "Search fresh pickles, jars, spices... (e.g. Aam, Lal Mirch, Garlic, 500g)"
             }
             className="w-full py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 bg-transparent focus:outline-none"
           />
@@ -1306,22 +1361,57 @@ export const PublicStorefront = () => {
           )}
         </div>
 
+        {/* Quick Search Chips / Popular Suggestions */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mt-2.5 scrollbar-none text-xs">
+          <span className="text-[11px] font-bold text-slate-400 shrink-0 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-500" /> Popular:
+          </span>
+          {(isServiceStore
+            ? ['Pre-Wedding', 'Baby Shoot', 'Cinematic', 'Drone', '4K Video']
+            : isTravelStore
+            ? ['Desert Safari', 'Camel Ride', 'Camping', 'Sunset Dune', 'Jeep Tour']
+            : ['Aam Achar', 'Lal Mirch', 'Spicy Mango', 'Garlic', '500g Jar', 'Traditional']
+          ).map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setSearchQuery(tag)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition cursor-pointer shrink-0 ${
+                searchQuery.toLowerCase() === tag.toLowerCase()
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                  : 'bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border-slate-200'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="px-2.5 py-1 rounded-full text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition shrink-0 cursor-pointer"
+            >
+              Clear ✕
+            </button>
+          )}
+        </div>
+
         {/* Live Search Active Feedback Tag */}
         {searchQuery && (
           <div className="flex items-center justify-between mt-2 px-1 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 flex-wrap">
               <span>Searching for</span>
               <strong className="text-slate-900 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 font-semibold">
                 "{searchQuery}"
               </strong>
-              <span>({totalMatches} {isServiceStore ? 'packages' : 'items'})</span>
+              <span>({totalMatches} {isServiceStore ? 'packages' : 'items'} found across catalog)</span>
             </span>
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="text-indigo-600 hover:underline font-semibold cursor-pointer text-[11px]"
+              className="text-indigo-600 hover:underline font-semibold cursor-pointer text-[11px] shrink-0"
             >
-              Reset filter
+              Reset search
             </button>
           </div>
         )}
@@ -1473,88 +1563,111 @@ export const PublicStorefront = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPackages.map((pkg) => {
-                const pkgCover =
-                  pkg.images?.[0] ||
-                  'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
-                return (
-                  <div
-                    key={pkg._id}
-                    className="bg-white border border-slate-200/90 hover:border-indigo-400 rounded-3xl overflow-hidden flex flex-col justify-between shadow-xs hover:shadow-lg transition group"
-                  >
-                    <div className="relative w-full h-48 bg-slate-100 overflow-hidden">
-                      <img
-                        src={pkgCover}
-                        alt={pkg.name}
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src =
-                            'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
-                        }}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-black/30" />
-                      <div className="absolute top-3 left-3">
-                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/30">
-                          {pkg.category}
-                        </span>
-                      </div>
-                      <div className="absolute top-3 right-3">
-                        <span className="text-[10px] text-slate-200 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-700 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-indigo-400" /> {pkg.duration}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                      <div className="space-y-3">
-                        <h4 className="font-bold text-slate-900 text-base group-hover:text-indigo-600 transition">
-                          {pkg.name}
-                        </h4>
-                        {pkg.description && (
-                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                            {pkg.description}
-                          </p>
-                        )}
-                        {pkg.deliverables?.length > 0 && (
-                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-[11px] space-y-1.5">
-                            <div className="text-[10px] text-slate-400 font-semibold uppercase">
-                              Included Deliverables:
-                            </div>
-                            {pkg.deliverables.map((d, i) => (
-                              <div key={i} className="text-slate-600 flex items-center gap-1.5">
-                                <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
-                                <span>{d}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                        <div>
-                          <div className="text-lg font-black text-slate-900">₹{pkg.price}</div>
-                          <div className="text-[10px] text-emerald-400 font-medium">
-                            {pkg.advanceTokenPercent}% Token (₹{Math.round((pkg.price * pkg.advanceTokenPercent) / 100)})
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setSelectedPkg(pkg);
-                            setPlacedBooking(null);
-                            setIsBookingOpen(true);
+            {filteredPackages.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPackages.map((pkg) => {
+                  const pkgCover =
+                    pkg.images?.[0] ||
+                    'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
+                  return (
+                    <div
+                      key={pkg._id}
+                      className="bg-white border border-slate-200/90 hover:border-indigo-400 rounded-3xl overflow-hidden flex flex-col justify-between shadow-xs hover:shadow-lg transition group"
+                    >
+                      <div className="relative w-full h-48 bg-slate-100 overflow-hidden">
+                        <img
+                          src={pkgCover}
+                          alt={pkg.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src =
+                              'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
                           }}
-                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Calendar className="w-3.5 h-3.5" /> Book Dates
-                        </button>
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-black/30" />
+                        <div className="absolute top-3 left-3">
+                          <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-indigo-500/30">
+                            {pkg.category}
+                          </span>
+                        </div>
+                        <div className="absolute top-3 right-3">
+                          <span className="text-[10px] text-slate-200 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-700 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-indigo-400" /> {pkg.duration}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-3">
+                          <h4 className="font-bold text-slate-900 text-base group-hover:text-indigo-600 transition">
+                            {pkg.name}
+                          </h4>
+                          {pkg.description && (
+                            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                              {pkg.description}
+                            </p>
+                          )}
+                          {pkg.deliverables?.length > 0 && (
+                            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-[11px] space-y-1.5">
+                              <div className="text-[10px] text-slate-400 font-semibold uppercase">
+                                Included Deliverables:
+                              </div>
+                              {pkg.deliverables.map((d, i) => (
+                                <div key={i} className="text-slate-600 flex items-center gap-1.5">
+                                  <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  <span>{d}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div>
+                            <div className="text-lg font-black text-slate-900">₹{pkg.price}</div>
+                            <div className="text-[10px] text-emerald-400 font-medium">
+                              {pkg.advanceTokenPercent}% Token (₹{Math.round((pkg.price * pkg.advanceTokenPercent) / 100)})
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setSelectedPkg(pkg);
+                              setPlacedBooking(null);
+                              setIsBookingOpen(true);
+                            }}
+                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Calendar className="w-3.5 h-3.5" /> Book Dates
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs max-w-xl mx-auto">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto">
+                  <Search className="w-7 h-7 text-indigo-600" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-base">
+                    No packages found matching "{searchQuery}"
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed mt-1">
+                    Try searching for another keyword or clear the search to view all available experiences.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer active:scale-95"
+                >
+                  Clear Search &amp; View All
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1585,16 +1698,21 @@ export const PublicStorefront = () => {
             </div>
           </div>
         ) : (
-          <div className="py-12 sm:py-16 text-center space-y-3 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+          <div className="py-12 sm:py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs max-w-xl mx-auto">
             <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto">
               <Search className="w-7 h-7 text-indigo-600" />
             </div>
-            <h4 className="font-extrabold text-slate-900 text-base">No matching pickles found</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-              {searchQuery
-                ? `We couldn't find any items matching "${searchQuery}". Try searching for mango, mirch, amla or reset your search.`
-                : 'No products found in this category. Try selecting "All Delights".'}
-            </p>
+            <div>
+              <h4 className="font-extrabold text-slate-900 text-base">
+                {searchQuery ? `No items found matching "${searchQuery}"` : 'No products found'}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed mt-1">
+                {searchQuery
+                  ? "We couldn't find an exact match across our catalog. Try one of our popular categories below or reset search."
+                  : 'No products in this category. Try selecting "All Delights".'}
+              </p>
+            </div>
+
             <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
               {searchQuery && (
                 <button
@@ -1602,7 +1720,7 @@ export const PublicStorefront = () => {
                   onClick={() => setSearchQuery('')}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer active:scale-95"
                 >
-                  Clear Search
+                  Clear Search &amp; View All
                 </button>
               )}
               {selectedCategory !== 'ALL' && (
@@ -1615,6 +1733,30 @@ export const PublicStorefront = () => {
                 </button>
               )}
             </div>
+
+            {/* Quick Suggestions in Empty State */}
+            {searchQuery && (
+              <div className="pt-3 border-t border-slate-100">
+                <span className="text-[11px] text-slate-400 block mb-2 font-medium">Or try searching for:</span>
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  {(isServiceStore
+                    ? ['Pre-Wedding', 'Baby Shoot', 'Cinematic']
+                    : isTravelStore
+                    ? ['Desert Safari', 'Camel Ride', 'Camping']
+                    : ['Aam Achar', 'Lal Mirch', 'Garlic']
+                  ).map((sugg) => (
+                    <button
+                      key={sugg}
+                      type="button"
+                      onClick={() => setSearchQuery(sugg)}
+                      className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-lg transition border border-indigo-200/60 cursor-pointer"
+                    >
+                      {sugg}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

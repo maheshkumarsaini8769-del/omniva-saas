@@ -915,12 +915,10 @@ export const MerchantDashboard = () => {
       if (endDate && o.date > endDate) return false;
     }
     if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase().trim();
-      const matchCust = o.customer?.toLowerCase().includes(q);
-      const matchId = o.id?.toLowerCase().includes(q) || o.orderNumber?.toLowerCase().includes(q);
-      const matchPhone = o.phone?.includes(q);
-      const matchItem = o.itemSummary?.toLowerCase().includes(q);
-      if (!matchCust && !matchId && !matchPhone && !matchItem) return false;
+      const tokens = searchTerm.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const searchable = `${o.customer || ''} ${o.id || ''} ${o.orderNumber || ''} ${o.phone || ''} ${o.itemSummary || ''} ${o.email || ''} ${o.city || ''} ${o.status || ''} ${o.paymentMethod || ''}`.toLowerCase();
+      const match = tokens.every(t => searchable.includes(t));
+      if (!match) return false;
     }
     return true;
   });
@@ -4370,11 +4368,21 @@ export const MerchantDashboard = () => {
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search your business..."
+                placeholder={`Search ${activeTab.replace('-', ' ')}...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 w-52 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                className="pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 w-44 sm:w-60 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
 
             {/* Storefront Direct Action Button */}
@@ -5045,10 +5053,10 @@ export const MerchantDashboard = () => {
                     {/* ==================== 2. LEADS / CRM ==================== */}
           {activeTab === 'leads' && (() => {
             const filteredCrmLeads = crmLeads.filter((l) => {
-              const matchesSearch = !crmSearch || 
-                (l.name && l.name.toLowerCase().includes(crmSearch.toLowerCase())) ||
-                (l.phone && l.phone.includes(crmSearch)) ||
-                (l.campaignName && l.campaignName.toLowerCase().includes(crmSearch.toLowerCase()));
+              const effectiveSearch = (crmSearch || searchTerm || '').trim().toLowerCase();
+              const tokens = effectiveSearch.split(/\s+/).filter(Boolean);
+              const searchable = `${l.name || ''} ${l.phone || ''} ${l.email || ''} ${l.campaignName || ''} ${l.source || ''} ${l.status || ''} ${(l.notes || []).map(n => n.note).join(' ')}`.toLowerCase();
+              const matchesSearch = tokens.length === 0 || tokens.every(t => searchable.includes(t));
               const matchesStage = crmStageFilter === 'ALL' || l.status === crmStageFilter;
               const matchesSource = crmSourceFilter === 'ALL' || l.source === crmSourceFilter;
               return matchesSearch && matchesStage && matchesSource;
@@ -6046,11 +6054,12 @@ export const MerchantDashboard = () => {
                   <div className="text-[11px] text-slate-500 font-medium">
                     Showing <strong>{
                       productsList.filter(p => {
-                        if (selectedCategoryFilter !== 'ALL' && p.cat !== selectedCategoryFilter) return false;
                         if (searchTerm.trim()) {
-                          const q = searchTerm.toLowerCase().trim();
-                          return p.name?.toLowerCase().includes(q) || p.cat?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q);
+                          const tokens = searchTerm.toLowerCase().trim().split(/\s+/).filter(Boolean);
+                          const searchable = `${p.name || ''} ${p.cat || ''} ${p.sku || ''} ${p.price || ''}`.toLowerCase();
+                          return tokens.every(t => searchable.includes(t));
                         }
+                        if (selectedCategoryFilter !== 'ALL' && p.cat !== selectedCategoryFilter) return false;
                         return true;
                       }).length
                     }</strong> products
@@ -6076,11 +6085,12 @@ export const MerchantDashboard = () => {
                     <tbody className="divide-y divide-slate-100">
                       {productsList
                         .filter(p => {
-                          if (selectedCategoryFilter !== 'ALL' && p.cat !== selectedCategoryFilter) return false;
                           if (searchTerm.trim()) {
-                            const q = searchTerm.toLowerCase().trim();
-                            return p.name?.toLowerCase().includes(q) || p.cat?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q);
+                            const tokens = searchTerm.toLowerCase().trim().split(/\s+/).filter(Boolean);
+                            const searchable = `${p.name || ''} ${p.cat || ''} ${p.sku || ''} ${p.price || ''}`.toLowerCase();
+                            return tokens.every(t => searchable.includes(t));
                           }
+                          if (selectedCategoryFilter !== 'ALL' && p.cat !== selectedCategoryFilter) return false;
                           return true;
                         })
                         .map((p, idx) => (
@@ -8840,7 +8850,23 @@ export const MerchantDashboard = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {serviceBookingsList.map((item) => (
+                        {(() => {
+                          const filtered = serviceBookingsList.filter((item) => {
+                            if (!searchTerm.trim()) return true;
+                            const tokens = searchTerm.toLowerCase().trim().split(/\s+/).filter(Boolean);
+                            const searchable = `${item.client || ''} ${item.phone || ''} ${item.service || ''} ${item.status || ''} ${item.time || ''} ${item.date || ''}`.toLowerCase();
+                            return tokens.every((t) => searchable.includes(t));
+                          });
+                          if (filtered.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-slate-400">
+                                  No service bookings match your search "{searchTerm}".
+                                </td>
+                              </tr>
+                            );
+                          }
+                          return filtered.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50/80 transition">
                             <td className="py-3 px-5">
                               <div className="font-bold text-slate-900">{item.client}</div>
@@ -8901,7 +8927,8 @@ export const MerchantDashboard = () => {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                        ));
+                      })()}
                       </tbody>
                     </table>
                   </div>
@@ -8970,23 +8997,40 @@ export const MerchantDashboard = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {travelList.map((tr, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition">
-                          <td className="py-3 px-5">
-                            <div className="font-bold text-slate-900">{tr.customer}</div>
-                            <div className="text-[10px] text-slate-400">{tr.pkg}</div>
-                          </td>
-                          <td className="py-3 px-4 text-slate-600">{tr.pass}</td>
-                          <td className="py-3 px-4 font-bold text-slate-800">{tr.date}</td>
-                          <td className="py-3 px-4 text-slate-600">{tr.loc}</td>
-                          <td className="py-3 px-4">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tr.statusColor}`}>
-                              {tr.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-5 font-bold text-slate-800">{tr.pay}</td>
-                        </tr>
-                      ))}
+                      {(() => {
+                        const filtered = travelList.filter((tr) => {
+                          if (!searchTerm.trim()) return true;
+                          const tokens = searchTerm.toLowerCase().trim().split(/\s+/).filter(Boolean);
+                          const searchable = `${tr.customer || ''} ${tr.pkg || ''} ${tr.loc || ''} ${tr.status || ''} ${tr.date || ''} ${tr.pay || ''}`.toLowerCase();
+                          return tokens.every((t) => searchable.includes(t));
+                        });
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-slate-400">
+                                No safari or travel bookings match your search "{searchTerm}".
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return filtered.map((tr, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50 transition">
+                            <td className="py-3 px-5">
+                              <div className="font-bold text-slate-900">{tr.customer}</div>
+                              <div className="text-[10px] text-slate-400">{tr.pkg}</div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-600">{tr.pass}</td>
+                            <td className="py-3 px-4 font-bold text-slate-800">{tr.date}</td>
+                            <td className="py-3 px-4 text-slate-600">{tr.loc}</td>
+                            <td className="py-3 px-4">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tr.statusColor}`}>
+                                {tr.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-5 font-bold text-slate-800">{tr.pay}</td>
+                          </tr>
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
