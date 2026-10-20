@@ -215,6 +215,50 @@ const login = async (req, res) => {
         });
       }
 
+      if (normEmail === 'karan@desertsafari.in' && validPass) {
+        const token = generateToken({
+          id: '6ad2006e99f3c258ba9087d2',
+          role: 'MERCHANT_OWNER',
+          businessId: '6ad2006e99f3c258ba9087d1',
+        });
+        return res.json({
+          success: true,
+          message: 'Desert Safari Tours Login successful',
+          token,
+          user: {
+            id: '6ad2006e99f3c258ba9087d2',
+            name: 'Karan Rathore',
+            email: 'karan@desertsafari.in',
+            role: 'MERCHANT_OWNER',
+            phone: '+91 98299 11223',
+          },
+          tenant: {
+            id: '6ad2006e99f3c258ba9087d1',
+            businessName: 'Desert Safari Tours',
+            slug: 'desert-safari-tours-6085',
+            businessType: 'TRAVEL',
+            templateCode: 'TRAVEL',
+            enabledModules: {
+              automations: true,
+              crmLeads: true,
+              marketingAds: true,
+              products: false,
+              serviceBookings: false,
+              travelBookings: true,
+              inventory: false,
+              orders: false,
+            },
+            planTier: 'PRO',
+            status: 'ACTIVE',
+            branding: {
+              logo: '',
+              primaryColor: '#d97706',
+              secondaryColor: '#f59e0b',
+            },
+          },
+        });
+      }
+
       if (
         (normEmail === 'superadmin@omniva.io' || normEmail === 'superadmin@admin.com') &&
         validPass

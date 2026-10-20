@@ -11,7 +11,7 @@ import {
   Store, 
   Camera, 
   Crown, 
-  UserCheck
+  Compass
 } from 'lucide-react';
 
 
@@ -42,10 +42,23 @@ export const Login = () => {
     }
   };
 
-  const handleQuickDemo = (demoEmail, demoPassword) => {
+  const handleQuickDemo = async (demoEmail, demoPassword) => {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setError('');
+    setIsSubmitting(true);
+    try {
+      const data = await login(demoEmail, demoPassword);
+      if (data.user.role === 'SUPER_ADMIN') {
+        navigate('/admin');
+      } else {
+        navigate('/merchant');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Login failed');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -157,11 +170,11 @@ export const Login = () => {
 
               <button
                 type="button"
-                onClick={() => handleQuickDemo('neha@desirasoi.com', 'password123')}
-                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left text-slate-700 cursor-pointer"
+                onClick={() => handleQuickDemo('karan@desertsafari.in', 'password123')}
+                className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition text-left text-slate-700 cursor-pointer"
               >
-                <UserCheck className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="truncate">Staff Manager</span>
+                <Compass className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="truncate">Safari &amp; Travel Owner</span>
               </button>
             </div>
           </div>
@@ -171,7 +184,7 @@ export const Login = () => {
               to="/register"
               className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold transition"
             >
-              New Merchant? Register your business $\rightarrow$
+              New Merchant? Register your business &rarr;
             </Link>
           </div>
         </div>

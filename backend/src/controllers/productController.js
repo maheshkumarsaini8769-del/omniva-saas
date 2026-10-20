@@ -116,10 +116,11 @@ const getProducts = async (req, res) => {
     if (categoryId) filter.categoryId = categoryId;
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
     if (search) {
+      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } },
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { tags: { $in: [new RegExp(safeSearch, 'i')] } },
       ];
     }
 

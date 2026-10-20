@@ -139,7 +139,8 @@ const getLeads = async (req, res) => {
     }
 
     if (search) {
-      const searchRegex = new RegExp(search.trim(), 'i');
+      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(safeSearch, 'i');
       query.$or = [
         { name: searchRegex },
         { phone: searchRegex },

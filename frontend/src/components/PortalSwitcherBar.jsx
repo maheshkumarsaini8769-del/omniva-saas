@@ -50,11 +50,11 @@ export const PortalSwitcherBar = () => {
   };
 
   return (
-    <div className="w-full bg-white border-b border-slate-200 text-slate-700 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs select-none z-50 sticky top-0 shadow-xs">
+    <div className="w-full bg-white border-b border-slate-200 text-slate-700 px-3 py-1.5 flex items-center justify-between gap-2 text-xs select-none z-50 sticky top-0 shadow-xs overflow-x-auto no-scrollbar">
       {/* Left: Portals navigation */}
-      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1 hidden md:inline">
-          System Portals:
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1 hidden lg:inline">
+          Portals:
         </span>
 
         {/* 1. Super Admin Link */}
@@ -134,7 +134,7 @@ export const PortalSwitcherBar = () => {
       </div>
 
       {/* Right: Quick Role Switcher & Auth State */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {switching ? (
           <div className="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 border border-indigo-200">
             <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>

@@ -1124,18 +1124,64 @@ export const PublicStorefront = () => {
     return true;
   });
 
+  const isTravelStore =
+    (storeData?.store?.businessType === 'TRAVEL') ||
+    (store?.businessType === 'TRAVEL') ||
+    (store?.templateCode === 'TRAVEL');
+
+  const isServiceStore =
+    !isTravelStore && (
+      (storeData?.store?.businessType === 'SERVICE') ||
+      (store?.businessType === 'SERVICE') ||
+      (store?.templateCode === 'SERVICE') ||
+      (Boolean(storeData?.packages && storeData.packages.length > 0 && products.length === 0))
+    );
+
+  const filteredPackages = (storeData?.packages || []).filter((pkg) => {
+    if (!searchQuery || !searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const nameMatch = (pkg.name || '').toLowerCase().includes(q);
+    const descMatch = (pkg.description || '').toLowerCase().includes(q);
+    const catMatch = (pkg.category || '').toLowerCase().includes(q);
+    const delivMatch = (pkg.deliverables || []).some((d) => d.toLowerCase().includes(q));
+    return nameMatch || descMatch || catMatch || delivMatch;
+  });
+
+  const totalMatches = products.length > 0 ? filteredProducts.length : filteredPackages.length;
+
   return (
     <div className="min-h-screen bg-[#fafaf9] text-slate-800 flex flex-col selection:bg-indigo-500 selection:text-white pb-24">
       {/* Top Banner / Trust Bar */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white border-b border-emerald-600/40 py-1.5 px-3 sm:px-4 text-xs font-medium shadow-xs">
+      <div className={`text-white border-b py-1.5 px-3 sm:px-4 text-xs font-medium shadow-xs transition-colors ${
+        isServiceStore
+          ? 'bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 border-indigo-700/40'
+          : isTravelStore
+          ? 'bg-gradient-to-r from-cyan-950 via-blue-900 to-indigo-950 border-cyan-700/40'
+          : 'bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 border-emerald-600/40'
+      }`}>
         <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-2 text-[11px] sm:text-xs">
           <div className="flex items-center gap-3 truncate">
             <span className="flex items-center gap-1.5 font-bold text-white truncate">
-              <Truck className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
-              <span className="truncate">Free Express Delivery &gt; ₹499</span>
+              {isServiceStore ? (
+                <>
+                  <Camera className="w-3.5 h-3.5 text-purple-200 shrink-0" />
+                  <span className="truncate">Cinematic Studio &amp; Shoot Dates Available</span>
+                </>
+              ) : isTravelStore ? (
+                <>
+                  <MapPin className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
+                  <span className="truncate">Guided Expeditions &amp; Safari Departures</span>
+                </>
+              ) : (
+                <>
+                  <Truck className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                  <span className="truncate">Free Express Delivery &gt; ₹499</span>
+                </>
+              )}
             </span>
-            <span className="hidden md:flex items-center gap-1.5 text-emerald-100">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" /> 100% Secure Checkout &amp; COD
+            <span className="hidden md:flex items-center gap-1.5 text-slate-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+              {isServiceStore ? '100% Verified Crew & Advance Escrow' : isTravelStore ? '100% Verified Guides & Fixed Departures' : '100% Secure Checkout & COD'}
             </span>
             <span className="hidden lg:flex items-center gap-1.5 text-amber-300 font-semibold">
               <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" /> 4.9/5 Rated (2,400+ Reviews)
@@ -1160,7 +1206,13 @@ export const PublicStorefront = () => {
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 sm:px-6 md:px-8 py-2.5 sm:py-3 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 flex items-center justify-center font-bold text-white shadow-md shadow-indigo-600/30 border border-indigo-500/30 shrink-0">
-            <Store className="w-4 h-4 sm:w-5 sm:h-5" />
+            {isServiceStore ? (
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+            ) : isTravelStore ? (
+              <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
+            ) : (
+              <Store className="w-4 h-4 sm:w-5 sm:h-5" />
+            )}
           </div>
           <div className="min-w-0">
             <h1 className="font-extrabold text-slate-900 text-sm sm:text-base md:text-lg tracking-tight flex items-center gap-1.5 truncate">
@@ -1170,7 +1222,9 @@ export const PublicStorefront = () => {
               </span>
             </h1>
             <p className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
-              <span className="hidden xs:inline">Authentic Homemade Store</span>
+              <span className="hidden xs:inline">
+                {isServiceStore ? 'Photography & Cinematography Studio' : isTravelStore ? 'Guided Tours & Desert Expeditions' : 'Authentic Homemade Store'}
+              </span>
               <span className="hidden xs:inline w-1 h-1 rounded-full bg-slate-300"></span>
               <Link to="/orders/track" className="text-indigo-600 hover:text-indigo-700 hover:underline font-semibold flex items-center gap-1 shrink-0">
                 <Truck className="w-3 h-3" />
@@ -1190,27 +1244,29 @@ export const PublicStorefront = () => {
             title="Order directly on WhatsApp"
           >
             <MessageCircle className="w-4 h-4 fill-white/20 shrink-0" />
-            <span className="hidden md:inline font-extrabold">Order on </span>
+            <span className="hidden md:inline font-extrabold">{isServiceStore ? 'Enquire on ' : 'Order on '}</span>
             <span className="font-extrabold text-xs">WhatsApp</span>
           </button>
 
-          {/* Cart Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setCheckoutStep('CART');
-              setIsCartOpen(true);
-            }}
-            className="relative px-3 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span className="hidden sm:inline">Cart</span>
-            {cart.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-white text-indigo-900 text-[10px] font-black">
-                {cart.reduce((sum, item) => sum + item.quantity, 0)}
-              </span>
-            )}
-          </button>
+          {/* Cart Button (shown when products exist) */}
+          {products.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setCheckoutStep('CART');
+                setIsCartOpen(true);
+              }}
+              className="relative px-3 py-1.5 sm:px-3.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span className="hidden sm:inline">Cart</span>
+              {cart.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-white text-indigo-900 text-[10px] font-black">
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </header>
 
@@ -1224,7 +1280,13 @@ export const PublicStorefront = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search fresh pickles, jars, spices... (e.g. Aam, Lal Mirch, Garlic)"
+            placeholder={
+              isServiceStore
+                ? "Search shoot packages, films, themes... (e.g. Baby Shoot, Pre-Wedding, Cinematic)"
+                : isTravelStore
+                ? "Search tours, safaris, departures... (e.g. Desert Safari, Camel Ride, Camping)"
+                : "Search fresh pickles, jars, spices... (e.g. Aam, Lal Mirch, Garlic)"
+            }
             className="w-full py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 bg-transparent focus:outline-none"
           />
           {searchQuery && (
@@ -1239,7 +1301,7 @@ export const PublicStorefront = () => {
           )}
           {searchQuery && (
             <span className="hidden sm:inline-flex mr-3 text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200 shrink-0">
-              {filteredProducts.length} {filteredProducts.length === 1 ? 'match' : 'matches'}
+              {totalMatches} {totalMatches === 1 ? 'match' : 'matches'}
             </span>
           )}
         </div>
@@ -1252,7 +1314,7 @@ export const PublicStorefront = () => {
               <strong className="text-slate-900 bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 font-semibold">
                 "{searchQuery}"
               </strong>
-              <span>({filteredProducts.length} items)</span>
+              <span>({totalMatches} {isServiceStore ? 'packages' : 'items'})</span>
             </span>
             <button
               type="button"
@@ -1267,19 +1329,49 @@ export const PublicStorefront = () => {
 
       {/* Hero Banner */}
       <div className="max-w-6xl mx-auto px-4 pt-6 pb-2 w-full">
-        <div className="bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50 border border-amber-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
-          <div className="relative z-10 max-w-xl space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" /> Traditional Sun-Dried Recipe
+        {isServiceStore ? (
+          <div className="bg-gradient-to-br from-indigo-50 via-purple-50/40 to-slate-50 border border-indigo-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
+            <div className="relative z-10 max-w-xl space-y-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 border border-purple-300 text-purple-800 text-xs font-semibold">
+                <Camera className="w-3.5 h-3.5" /> Creative Cinematography &amp; Photo Studio
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                Capture Timeless Moments &amp; Cinematic Stories
+              </h2>
+              <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
+                Pre-wedding films, high-fashion portraits, baby milestones, and commercial brand visuals crafted with prime optics, professional lighting, and master color grading.
+              </p>
             </div>
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-              Handcrafted Pickles &amp; Pure Flavors
-            </h2>
-            <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
-              Made with cold-pressed mustard oil, whole aromatic spices, and sun-matured perfection. Delivered fresh to your doorstep across India.
-            </p>
           </div>
-        </div>
+        ) : isTravelStore ? (
+          <div className="bg-gradient-to-br from-cyan-50 via-blue-50/40 to-cyan-50 border border-cyan-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
+            <div className="relative z-10 max-w-xl space-y-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-100 border border-cyan-300 text-cyan-800 text-xs font-semibold">
+                <MapPin className="w-3.5 h-3.5" /> Guided Adventures &amp; Safari Expeditions
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                Explore Uncharted Trails &amp; Desert Safaris
+              </h2>
+              <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
+                Curated multi-day journeys, camel desert camping, wildlife tracking, and premium tour packages with verified expedition guides.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-br from-amber-50 via-orange-50/40 to-amber-50 border border-amber-200/80 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xs">
+            <div className="relative z-10 max-w-xl space-y-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5" /> Traditional Sun-Dried Recipe
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                Handcrafted Pickles &amp; Pure Flavors
+              </h2>
+              <p className="text-slate-600 text-xs md:text-sm leading-relaxed">
+                Made with cold-pressed mustard oil, whole aromatic spices, and sun-matured perfection. Delivered fresh to your doorstep across India.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Visual Category Showcase Bar */}
@@ -1360,17 +1452,29 @@ export const PublicStorefront = () => {
       {/* Product & Service Catalog Grid */}
       <main className="max-w-6xl mx-auto px-4 py-4 w-full space-y-8">
         {/* Service & Shoot Packages (if any) */}
-        {storeData.packages && storeData.packages.length > 0 && (
+        {filteredPackages && filteredPackages.length > 0 && (
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Camera className="w-5 h-5 text-indigo-400" /> Service &amp; Shoot Packages
+                {isTravelStore ? (
+                  <>
+                    <MapPin className="w-5 h-5 text-cyan-600" /> Tour &amp; Safari Departures
+                  </>
+                ) : (
+                  <>
+                    <Camera className="w-5 h-5 text-indigo-600" /> Service &amp; Shoot Packages
+                  </>
+                )}
               </h3>
-              <p className="text-xs text-slate-400">Select a package to check dates and reserve your slot.</p>
+              <p className="text-xs text-slate-500">
+                {isTravelStore
+                  ? 'Select an expedition package to view departures and reserve seats.'
+                  : 'Select a package to check dates and reserve your slot.'}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {storeData.packages.map((pkg) => {
+              {filteredPackages.map((pkg) => {
                 const pkgCover =
                   pkg.images?.[0] ||
                   'https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=600&auto=format&fit=crop&q=80';
@@ -1405,7 +1509,7 @@ export const PublicStorefront = () => {
 
                     <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                       <div className="space-y-3">
-                        <h4 className="font-bold text-white text-base group-hover:text-indigo-300 transition">
+                        <h4 className="font-bold text-slate-900 text-base group-hover:text-indigo-600 transition">
                           {pkg.name}
                         </h4>
                         {pkg.description && (
@@ -2212,8 +2316,10 @@ export const PublicStorefront = () => {
               <form onSubmit={handlePlaceBooking} className="space-y-5 text-xs">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div>
-                    <h3 className="font-bold text-slate-900 text-base">Book Shoot / Dates</h3>
-                    <p className="text-[11px] text-indigo-400 mt-0.5">{selectedPkg.name}</p>
+                    <h3 className="font-bold text-slate-900 text-base">
+                      {isTravelStore ? 'Book Expedition & Tour Dates' : 'Book Shoot / Dates'}
+                    </h3>
+                    <p className="text-[11px] text-indigo-500 font-semibold mt-0.5">{selectedPkg.name}</p>
                   </div>
                   <button
                     type="button"
@@ -2227,18 +2333,18 @@ export const PublicStorefront = () => {
                 {/* Package summary card */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Total Package Fee:</span>
+                    <span className="text-slate-500 font-medium">{isTravelStore ? 'Total Tour Fee:' : 'Total Package Fee:'}</span>
                     <span className="font-bold text-slate-900">₹{selectedPkg.price}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Advance Token Required ({selectedPkg.advanceTokenPercent}%):</span>
-                    <span className="font-bold text-emerald-400">
+                    <span className="text-slate-500 font-medium">Advance Token Required ({selectedPkg.advanceTokenPercent}%):</span>
+                    <span className="font-bold text-emerald-600">
                       ₹{Math.round((selectedPkg.price * selectedPkg.advanceTokenPercent) / 100)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-100">
-                    <span>Duration:</span>
-                    <span className="text-slate-700 font-semibold">{selectedPkg.duration}</span>
+                  <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200/60">
+                    <span>{isTravelStore ? 'Trip Duration:' : 'Duration:'}</span>
+                    <span className="text-slate-800 font-bold">{selectedPkg.duration}</span>
                   </div>
                 </div>
 
@@ -2280,7 +2386,9 @@ export const PublicStorefront = () => {
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-slate-700 block mb-1 font-semibold">Event / Shoot Date *</label>
+                      <label className="text-slate-700 block mb-1 font-semibold">
+                        {isTravelStore ? 'Departure Date *' : 'Event / Shoot Date *'}
+                      </label>
                       <input
                         type="date"
                         required
@@ -2305,10 +2413,12 @@ export const PublicStorefront = () => {
                   </div>
 
                   <div>
-                    <label className="text-slate-700 block mb-1 font-semibold">Shoot Venue / Location</label>
+                    <label className="text-slate-700 block mb-1 font-semibold">
+                      {isTravelStore ? 'Pickup City / Starting Point' : 'Shoot Venue / Location'}
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. Heritage Fort, Jaipur or Studio"
+                      placeholder={isTravelStore ? "e.g. Jaisalmer Railway Station or Desert Camp" : "e.g. Heritage Fort, Jaipur or Studio"}
                       value={bookingLocation}
                       onChange={(e) => setBookingLocation(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
@@ -2316,10 +2426,12 @@ export const PublicStorefront = () => {
                   </div>
 
                   <div>
-                    <label className="text-slate-700 block mb-1 font-semibold">Specific Requirements / Notes</label>
+                    <label className="text-slate-700 block mb-1 font-semibold">
+                      {isTravelStore ? 'Passenger Count & Special Requests' : 'Specific Requirements / Notes'}
+                    </label>
                     <textarea
                       rows="2"
-                      placeholder="Any specific themes, drone requirements, or questions..."
+                      placeholder={isTravelStore ? "e.g. 2 Adults, 1 Child. Need vegetarian campfire dinner, extra tent" : "Any specific themes, drone requirements, or questions..."}
                       value={bookingNotes}
                       onChange={(e) => setBookingNotes(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 focus:bg-white"
@@ -2331,13 +2443,13 @@ export const PublicStorefront = () => {
                   <button
                     type="submit"
                     disabled={isBookingSubmitting}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {isBookingSubmitting ? (
                       'Reserving Dates...'
                     ) : (
                       <>
-                        <span>Submit Booking Request</span>
+                        <span>{isTravelStore ? 'Reserve Tour Departure & Seats' : 'Submit Booking Request'}</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

@@ -836,6 +836,7 @@ const createPublicOrder = async (req, res) => {
         quantity: qty,
         subtotal: itemSubtotal,
         image: (product.images && product.images[0]) || '',
+        trackQuantity: Boolean(product.trackQuantity),
       });
     }
 
@@ -843,18 +844,44 @@ const createPublicOrder = async (req, res) => {
     const shippingFee = verifiedSubtotal >= 499 ? 0 : 50;
     const totalAmount = Math.max(0, verifiedSubtotal - appliedDiscount + shippingFee);
 
-    // Atomically decrement stock
+    // Atomically decrement stock with $gte check to eliminate TOCTOU race conditions
     for (const item of verifiedItems) {
       if (item.variantId) {
-        await Product.updateOne(
-          { _id: item.productId, 'variants._id': item.variantId },
-          { $inc: { 'variants.$.stockQuantity': -item.quantity } }
-        );
+        if (item.trackQuantity) {
+          const decResult = await Product.updateOne(
+            { _id: item.productId, 'variants._id': item.variantId, 'variants.stockQuantity': { $gte: item.quantity } },
+            { $inc: { 'variants.$.stockQuantity': -item.quantity } }
+          );
+          if (decResult.modifiedCount === 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient stock for ${item.name} (${item.variantName || 'selected variant'}). Another customer just completed their purchase!`,
+            });
+          }
+        } else {
+          await Product.updateOne(
+            { _id: item.productId, 'variants._id': item.variantId },
+            { $inc: { 'variants.$.stockQuantity': -item.quantity } }
+          );
+        }
       } else {
-        await Product.updateOne(
-          { _id: item.productId },
-          { $inc: { stockQuantity: -item.quantity } }
-        );
+        if (item.trackQuantity) {
+          const decResult = await Product.updateOne(
+            { _id: item.productId, stockQuantity: { $gte: item.quantity } },
+            { $inc: { stockQuantity: -item.quantity } }
+          );
+          if (decResult.modifiedCount === 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Insufficient stock for ${item.name}. Another customer just completed their purchase!`,
+            });
+          }
+        } else {
+          await Product.updateOne(
+            { _id: item.productId },
+            { $inc: { stockQuantity: -item.quantity } }
+          );
+        }
       }
     }
 

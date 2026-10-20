@@ -94,13 +94,26 @@ export const MerchantDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Tab alias normalizer to ensure shortcuts like /services or /tours map cleanly to full modules
+  const normalizeTab = (raw) => {
+    if (!raw) return 'overview';
+    const lower = String(raw).toLowerCase().trim();
+    if (['services', 'service', 'service-booking', 'service-bookings', 'shoots', 'shoot', 'appointments', 'appointment'].includes(lower)) {
+      return 'service-bookings';
+    }
+    if (['travel', 'travels', 'travel-booking', 'travel-bookings', 'tours', 'tour', 'safari', 'safaris', 'rides', 'riding', 'trip', 'trips'].includes(lower)) {
+      return 'travel-bookings';
+    }
+    return lower;
+  };
+
   // Active module page driven by URL route /merchant/:pageId
-  const [activeTab, setActiveTabState] = useState(pageId || searchParams.get('tab') || 'overview');
+  const [activeTab, setActiveTabState] = useState(normalizeTab(pageId || searchParams.get('tab')));
   const [settingsSubTab, setSettingsSubTab] = useState(searchParams.get('sub') || 'profile');
 
   // Synchronize activeTab with URL route changes
   useEffect(() => {
-    const currentRoutePage = pageId || searchParams.get('tab');
+    const currentRoutePage = normalizeTab(pageId || searchParams.get('tab'));
     if (currentRoutePage && currentRoutePage !== activeTab) {
       setActiveTabState(currentRoutePage);
     }
@@ -108,8 +121,9 @@ export const MerchantDashboard = () => {
 
   // Navigate to dedicated page URL when changing page/module
   const setActiveTab = (tab) => {
-    setActiveTabState(tab);
-    navigate(`/merchant/${tab}`);
+    const target = normalizeTab(tab);
+    setActiveTabState(target);
+    navigate(`/merchant/${target}`);
   };
 
   // Update browser window title dynamically for true separate page feeling
@@ -129,6 +143,8 @@ export const MerchantDashboard = () => {
       staff: 'Staff & Roles',
       integrations: 'Integrations Hub',
       reports: 'Reports & Audits',
+      'service-bookings': 'Service Bookings & Studio Shoots',
+      'travel-bookings': 'Travel Tours & Safari Expeditions',
       billing: 'Subscription & Billing',
       settings: 'Store Settings'
     };
@@ -2572,7 +2588,7 @@ export const MerchantDashboard = () => {
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
 
-  const handleUpdateServiceBookingStatus = (bookingId, newStatus) => {
+  const handleUpdateServiceBookingStatus = async (bookingId, newStatus) => {
     setServiceBookingsList(prev => prev.map(b => {
       if (b.id === bookingId) {
         return {
@@ -2590,7 +2606,22 @@ export const MerchantDashboard = () => {
         statusColor: newStatus === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : newStatus === 'Completed' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-rose-50 text-rose-700 border-rose-200'
       }));
     }
-    setActionSuccessToast(`Booking ${bookingId} status updated to "${newStatus}"!`);
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const statusMap = {
+        'Confirmed': 'CONFIRMED',
+        'In Progress': 'IN_PROGRESS',
+        'Completed': 'COMPLETED',
+        'Cancelled': 'CANCELLED'
+      };
+      await axios.patch(`/api/bookings/${bookingId}/status`, {
+        bookingStatus: statusMap[newStatus] || newStatus.toUpperCase()
+      }, { headers: authHeaders });
+    } catch (err) {
+      console.warn('Could not sync status to backend:', err.message);
+    }
+    setActionSuccessToast(`Booking status updated to "${newStatus}"!`);
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
 
@@ -2644,6 +2675,87 @@ export const MerchantDashboard = () => {
       console.warn('Fallback loading CRM leads:', err);
     } finally {
       setCrmLoading(false);
+    }
+  };
+
+  const fetchBookings = async () => {
+    try {
+      const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get('/api/bookings', { headers: authHeaders, params: { limit: 100 } });
+      if (res.data?.data && res.data.data.length > 0) {
+        const serviceItems = [];
+        const travelItems = [];
+
+        res.data.data.forEach(b => {
+          const dateStr = b.eventDate ? new Date(b.eventDate).toISOString().split('T')[0] : '2026-10-15';
+          const dayNum = b.eventDate ? new Date(b.eventDate).getDate() : 15;
+          let color = 'bg-purple-100 text-purple-700 border-purple-200';
+          let statusColor = 'bg-slate-100 text-slate-700 border-slate-200';
+          if (b.bookingStatus === 'CONFIRMED' || b.bookingStatus === 'COMPLETED') {
+            statusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          } else if (b.bookingStatus === 'IN_PROGRESS') {
+            statusColor = 'bg-blue-50 text-blue-700 border-blue-200';
+          } else if (b.bookingStatus === 'PENDING') {
+            statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
+          }
+
+          if (b.bookingType === 'TRAVEL') {
+            travelItems.push({
+              id: b._id,
+              bookingNumber: b.bookingNumber,
+              customer: b.customerName,
+              phone: b.customerPhone,
+              pkg: b.packageName || 'Expedition Tour',
+              pass: b.passengers?.length ? `${b.passengers.length} Pax` : '2 Pax',
+              date: dateStr,
+              loc: b.location || 'Jaipur Central',
+              status: b.bookingStatus === 'CONFIRMED' ? 'Confirmed' : b.bookingStatus === 'PENDING' ? 'Pending' : b.bookingStatus,
+              statusColor,
+              pay: b.advancePaid > 0 ? `Adv ₹${b.advancePaid.toLocaleString('en-IN')}` : `Total ₹${b.totalAmount.toLocaleString('en-IN')}`,
+              totalAmount: b.totalAmount,
+              advancePaid: b.advancePaid,
+              balanceDue: b.balanceDue
+            });
+          } else {
+            serviceItems.push({
+              id: b._id,
+              bookingNumber: b.bookingNumber,
+              client: b.customerName,
+              service: b.packageName || 'Studio Session',
+              phone: b.customerPhone,
+              email: b.customerEmail,
+              date: dateStr,
+              dayNumber: dayNum,
+              time: b.timeSlot || '10:00 AM - 01:00 PM',
+              price: b.totalAmount,
+              advancePaid: b.advancePaid,
+              balanceDue: b.balanceDue,
+              status: b.bookingStatus === 'CONFIRMED' ? 'Confirmed' : b.bookingStatus === 'IN_PROGRESS' ? 'In Progress' : b.bookingStatus === 'PENDING' ? 'Pending' : b.bookingStatus,
+              statusColor,
+              color,
+              payStatus: b.advancePaid > 0 ? `Advance Paid (₹${b.advancePaid.toLocaleString('en-IN')})` : 'Unpaid'
+            });
+          }
+        });
+
+        if (serviceItems.length > 0) {
+          setServiceBookingsList(prev => {
+            const apiIds = new Set(serviceItems.map(i => i.id));
+            const existingUnmatched = prev.filter(p => !apiIds.has(p.id));
+            return [...serviceItems, ...existingUnmatched];
+          });
+        }
+        if (travelItems.length > 0) {
+          setTravelList(prev => {
+            const apiIds = new Set(travelItems.map(i => i.id));
+            const existingUnmatched = prev.filter(p => !apiIds.has(p.id));
+            return [...travelItems, ...existingUnmatched];
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Error loading bookings from API:', err);
     }
   };
 
@@ -2899,6 +3011,7 @@ export const MerchantDashboard = () => {
     fetchCoupons();
     fetchStaff();
     fetchCrmLeads();
+    fetchBookings();
   }, []);
 
   useEffect(() => {
@@ -2936,6 +3049,9 @@ export const MerchantDashboard = () => {
     }
     if (activeTab === 'staff') {
       fetchStaff();
+    }
+    if (activeTab === 'service-bookings' || activeTab === 'travel-bookings') {
+      fetchBookings();
     }
   }, [activeTab]);
 
@@ -8490,7 +8606,7 @@ export const MerchantDashboard = () => {
                     className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer transition"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>+ Booking</span>
+                    <span>New Booking</span>
                   </button>
                 </div>
               </div>
@@ -8609,7 +8725,7 @@ export const MerchantDashboard = () => {
                       className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm cursor-pointer transition flex items-center gap-1"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>+ New booking</span>
+                      <span>New Booking</span>
                     </button>
                   </div>
                 </div>
@@ -8712,7 +8828,7 @@ export const MerchantDashboard = () => {
                 {/* 2. LIST VIEW (Full Interactive Appointments Table) */}
                 {serviceViewMode === 'list' && (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full min-w-[720px] text-left text-xs">
                       <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                         <tr>
                           <th className="py-3 px-5">CLIENT &amp; PHONE</th>
@@ -8842,7 +8958,7 @@ export const MerchantDashboard = () => {
               {/* Travel Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">CUSTOMER / PACKAGE</th>

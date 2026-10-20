@@ -133,11 +133,12 @@ const getBookings = async (req, res) => {
     if (bookingStatus) filter.bookingStatus = bookingStatus;
     if (bookingType) filter.bookingType = bookingType;
     if (search) {
+      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { bookingNumber: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerPhone: { $regex: search, $options: 'i' } },
-        { packageName: { $regex: search, $options: 'i' } },
+        { bookingNumber: { $regex: safeSearch, $options: 'i' } },
+        { customerName: { $regex: safeSearch, $options: 'i' } },
+        { customerPhone: { $regex: safeSearch, $options: 'i' } },
+        { packageName: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
@@ -331,9 +332,9 @@ const createPublicBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Business storefront not found or inactive' });
     }
 
-    let packageName = 'Custom Booking';
-    let totalAmount = 5000;
-    let advanceTokenPercent = 20;
+    let packageName = req.body.packageName || 'Custom Booking';
+    let totalAmount = Number(req.body.totalAmount) > 0 ? Number(req.body.totalAmount) : 5000;
+    let advanceTokenPercent = Number(req.body.advanceTokenPercent) > 0 ? Number(req.body.advanceTokenPercent) : 20;
 
     if (packageId) {
       const pkg = await ServicePackage.findOne({ _id: packageId, businessId: tenant._id, isAvailable: true });
@@ -345,8 +346,10 @@ const createPublicBooking = async (req, res) => {
     }
 
     // Required token advance calculation
-    const calculatedAdvance = Math.round((totalAmount * advanceTokenPercent) / 100);
-    const balanceDue = totalAmount - calculatedAdvance;
+    const calculatedAdvance = req.body.advancePaid !== undefined && Number(req.body.advancePaid) >= 0
+      ? Number(req.body.advancePaid)
+      : Math.round((totalAmount * advanceTokenPercent) / 100);
+    const balanceDue = Math.max(0, totalAmount - calculatedAdvance);
 
     const dateCode = Date.now().toString().slice(-6);
     const randCode = Math.floor(100 + Math.random() * 900);

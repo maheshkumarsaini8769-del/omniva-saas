@@ -65,10 +65,11 @@ const getOrders = async (req, res) => {
     if (orderStatus && orderStatus !== 'ALL') filter.orderStatus = orderStatus;
     if (paymentStatus && paymentStatus !== 'ALL') filter.paymentStatus = paymentStatus;
     if (search) {
+      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { orderNumber: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerPhone: { $regex: search, $options: 'i' } },
+        { orderNumber: { $regex: safeSearch, $options: 'i' } },
+        { customerName: { $regex: safeSearch, $options: 'i' } },
+        { customerPhone: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 

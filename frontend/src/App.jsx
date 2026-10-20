@@ -309,6 +309,14 @@ function App() {
           <Route path="/billing" element={<Navigate to="/merchant/billing" replace />} />
           <Route path="/settings" element={<Navigate to="/merchant/settings" replace />} />
           <Route path="/subscription" element={<Navigate to="/merchant/billing" replace />} />
+          <Route path="/services" element={<Navigate to="/merchant/service-bookings" replace />} />
+          <Route path="/shoots" element={<Navigate to="/merchant/service-bookings" replace />} />
+          <Route path="/service-bookings" element={<Navigate to="/merchant/service-bookings" replace />} />
+          <Route path="/travel" element={<Navigate to="/merchant/travel-bookings" replace />} />
+          <Route path="/tours" element={<Navigate to="/merchant/travel-bookings" replace />} />
+          <Route path="/safari" element={<Navigate to="/merchant/travel-bookings" replace />} />
+          <Route path="/riding" element={<Navigate to="/merchant/travel-bookings" replace />} />
+          <Route path="/travel-bookings" element={<Navigate to="/merchant/travel-bookings" replace />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

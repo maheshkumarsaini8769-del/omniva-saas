@@ -16,6 +16,9 @@ const sanitizeObject = (obj) => {
     }
     if (typeof val === 'object' && val !== null) {
       cleaned[key] = sanitizeObject(val);
+    } else if (typeof val === 'string') {
+      // Strip dangerous script tags to prevent stored XSS attacks
+      cleaned[key] = val.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').trim();
     } else {
       cleaned[key] = val;
     }

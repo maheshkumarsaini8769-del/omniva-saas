@@ -4,6 +4,8 @@ import axios from 'axios';
 import { useAuth } from '../context/useAuth';
 import { PortalSwitcherBar } from '../components/PortalSwitcherBar';
 import {
+  Menu,
+  X,
   LayoutDashboard,
   Building2,
   CreditCard,
@@ -71,6 +73,7 @@ export const SuperAdminDashboard = () => {
   const [merchantDetailsSubTab, setMerchantDetailsSubTab] = useState('overview');
   const [adminToast, setAdminToast] = useState('');
   const [merchantPage, setMerchantPage] = useState(1);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // ================= Merchant API Keys & Connectors Provisioning (Super Admin Managed) =================
   const [selectedApiMerchantId, setSelectedApiMerchantId] = useState('SUB-0021');
@@ -680,6 +683,7 @@ export const SuperAdminDashboard = () => {
         key={id}
         onClick={() => {
           setActiveTab(id);
+          setMobileSidebarOpen(false);
         }}
         className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
           isActive
@@ -712,18 +716,39 @@ export const SuperAdminDashboard = () => {
       )}
 
       {/* Main Flex Body */}
-      <div className="flex-1 flex min-w-0 overflow-hidden">
+      <div className="flex-1 flex min-w-0 overflow-hidden relative">
+        {/* Mobile Backdrop */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
+
         {/* 1. Left Light Sidebar (Omniva SAAS PLATFORM) */}
-        <aside className="w-64 bg-white flex flex-col shrink-0 select-none border-r border-slate-200 z-30 h-full overflow-hidden">
+        <aside
+          className={`${
+            mobileSidebarOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl animate-in slide-in-from-left duration-200' : 'hidden md:flex'
+          } w-64 bg-white flex-col shrink-0 select-none border-r border-slate-200 h-full overflow-hidden transition-all`}
+        >
         {/* Brand Header */}
-        <div className="p-5 flex items-center gap-3 border-b border-slate-100 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-500/20">
-            O
+        <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-500/20">
+              O
+            </div>
+            <div>
+              <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Omniva</div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SAAS PLATFORM</div>
+            </div>
           </div>
-          <div>
-            <div className="font-extrabold text-slate-900 text-base tracking-tight leading-tight">Omniva</div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">SAAS PLATFORM</div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Section Label */}
@@ -771,38 +796,48 @@ export const SuperAdminDashboard = () => {
       {/* 2. Main Light Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto">
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 py-3 flex items-center justify-between shrink-0">
-          <div>
-            <div className="text-[11px] font-medium text-slate-400 capitalize">
-              Platform / {activeTab.replace('-', ' ')}
+        <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-6 py-2.5 sm:py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+              title="Open Navigation Menu"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <div>
+              <div className="text-[10px] sm:text-[11px] font-medium text-slate-400 capitalize">
+                Platform / {activeTab.replace('-', ' ')}
+              </div>
+              <h1 className="text-base sm:text-xl font-extrabold text-slate-900 capitalize tracking-tight truncate max-w-[150px] xs:max-w-[220px] sm:max-w-none">
+                {activeTab === 'add-merchant'
+                  ? 'Add Merchant'
+                  : activeTab === 'merchant-details'
+                  ? selectedMerchant.name
+                  : activeTab.replace('-', ' ')}
+              </h1>
             </div>
-            <h1 className="text-xl font-extrabold text-slate-900 capitalize tracking-tight">
-              {activeTab === 'add-merchant'
-                ? 'Add Merchant'
-                : activeTab === 'merchant-details'
-                ? selectedMerchant.name
-                : activeTab.replace('-', ' ')}
-            </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search anything..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 w-56 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 w-44 md:w-56 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
               />
             </div>
 
             {/* Quick Actions */}
-            <button className="p-2 border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl bg-white hover:bg-slate-50 transition">
+            <button className="hidden xs:flex p-2 border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer">
               <SlidersHorizontal className="w-3.5 h-3.5" />
             </button>
-            <button className="p-2 border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl bg-white hover:bg-slate-50 transition">
+            <button className="p-2 border border-slate-200 text-slate-500 hover:text-slate-800 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer">
               <Bell className="w-3.5 h-3.5" />
             </button>
 
@@ -968,7 +1003,7 @@ export const SuperAdminDashboard = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full min-w-[600px] text-left text-xs">
                       <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                         <tr>
                           <th className="py-2.5 px-5">Business / Owner</th>
@@ -1174,7 +1209,7 @@ export const SuperAdminDashboard = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">BUSINESS / OWNER</th>
@@ -2367,7 +2402,7 @@ export const SuperAdminDashboard = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">MERCHANT / ID</th>
@@ -2577,7 +2612,7 @@ export const SuperAdminDashboard = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[600px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-6">FEATURE</th>
@@ -3368,7 +3403,7 @@ export const SuperAdminDashboard = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[800px] text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
                       <tr>
                         <th className="py-3 px-4">Merchant Business</th>
@@ -3631,7 +3666,7 @@ export const SuperAdminDashboard = () => {
               {/* Tickets Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">TICKET</th>
@@ -3726,7 +3761,7 @@ export const SuperAdminDashboard = () => {
               {/* Staff Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[700px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">STAFF MEMBER</th>
@@ -3782,7 +3817,7 @@ export const SuperAdminDashboard = () => {
                   <p className="text-[11px] text-slate-400">Example access model — exact permissions should be configurable</p>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[650px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-6">PERMISSION</th>
@@ -4014,7 +4049,7 @@ export const SuperAdminDashboard = () => {
               {/* Logs Table */}
               <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full min-w-[650px] text-left text-xs">
                     <thead className="bg-slate-50/70 border-b border-slate-200/80 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                       <tr>
                         <th className="py-3 px-5">TIMESTAMP</th>
