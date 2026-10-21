@@ -7,6 +7,10 @@ const { once } = require('events');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+// Use a unique value so the regression can prove it never reaches a browser.
+const PROBE_META_VERIFY_TOKEN = `phase9-verify-${Date.now().toString(36)}`;
+process.env.META_WEBHOOK_VERIFY_TOKEN = PROBE_META_VERIFY_TOKEN;
+
 const mongoose = require('mongoose');
 const { app } = require('../src/server');
 const Tenant = require('../src/models/Tenant');
@@ -186,7 +190,59 @@ const run = async () => {
     // ---------------------------------------------------------------------
     const ssrfTenant = await createTenant('ssrf');
     const ssrfOwner = await createOwner(ssrfTenant, 'ssrf');
+    const ssrfStaff = await createStaff(ssrfTenant, 'ssrf', 'ORDER_MANAGER');
     const ssrfToken = await login(ssrfOwner.email, 'ProbePass123!');
+    const ssrfStaffToken = await login(ssrfStaff.email, 'ProbePass123!');
+
+    const probeCapi = `probe-capi-${stamp}-secret`;
+    const probeWaToken = `probe-wa-${stamp}-secret`;
+    const probePaymentSecret = `probe-payment-${stamp}-secret`;
+    const probeWebhookSecret = `probe-webhook-${stamp}-secret`;
+    ssrfTenant.settings.metaCapiToken = probeCapi;
+    ssrfTenant.integrations.meta.capiToken = probeCapi;
+    ssrfTenant.integrations.whatsapp.accessToken = probeWaToken;
+    ssrfTenant.integrations.payment.keySecret = probePaymentSecret;
+    ssrfTenant.integrations.webhooks.secret = probeWebhookSecret;
+    await ssrfTenant.save();
+
+    const rawSecretTenant = await Tenant.collection.findOne({ _id: ssrfTenant._id });
+    check(
+      'Tenant integration credentials are encrypted at rest with AES-GCM',
+      rawSecretTenant?.settings?.metaCapiToken?.startsWith('enc:gcm:') &&
+        rawSecretTenant?.integrations?.whatsapp?.accessToken?.startsWith('enc:gcm:') &&
+        !JSON.stringify(rawSecretTenant).includes(probeCapi) &&
+        !JSON.stringify(rawSecretTenant).includes(probeWaToken),
+      'raw tenant document contains a plaintext credential'
+    );
+
+    const hydratedSecretTenant = await Tenant.findById(ssrfTenant._id);
+    check(
+      'Tenant secret getters decrypt credentials for server-side integrations',
+      hydratedSecretTenant?.settings?.metaCapiToken === probeCapi &&
+        hydratedSecretTenant?.integrations?.whatsapp?.accessToken === probeWaToken,
+      'decrypted credential did not match the stored value'
+    );
+
+    const ownerMeRes = await request('GET', '/auth/me', { token: ssrfToken });
+    const ownerMeJson = JSON.stringify(ownerMeRes.data || {});
+    check(
+      'Owner /auth/me masks tenant integration credentials',
+      ownerMeRes.status === 200 &&
+        !ownerMeJson.includes(probeCapi) &&
+        !ownerMeJson.includes(probeWaToken) &&
+        String(ownerMeRes.data?.tenant?.settings?.metaCapiToken || '').includes('••••'),
+      'owner profile leaked a credential'
+    );
+
+    const staffMeRes = await request('GET', '/auth/me', { token: ssrfStaffToken });
+    const staffMeJson = JSON.stringify(staffMeRes.data || {});
+    check(
+      'Staff /auth/me masks tenant integration credentials',
+      staffMeRes.status === 200 &&
+        !staffMeJson.includes(probeCapi) &&
+        !staffMeJson.includes(probeWaToken),
+      'staff profile leaked a credential'
+    );
 
     let ssrfHit = false;
     ssrfListener = http.createServer((req, res) => {
@@ -289,6 +345,98 @@ const run = async () => {
     });
     createdUserIds.push(superAdmin._id);
     const superAdminToken = await login(superAdmin.email, 'ProbePass123!');
+
+    const adminIntegrationsRes = await request(
+      'GET',
+      `/admin/merchants/${ssrfTenant._id}/integrations`,
+      { token: superAdminToken }
+    );
+    const adminIntegrationsJson = JSON.stringify(adminIntegrationsRes.data || {});
+    check(
+      'SUPER_ADMIN integration endpoint masks stored credentials',
+      adminIntegrationsRes.status === 200 &&
+        !adminIntegrationsJson.includes(probeCapi) &&
+        !adminIntegrationsJson.includes(probeWaToken) &&
+        String(adminIntegrationsRes.data?.integrations?.meta?.capiToken || '').includes('••••'),
+      adminIntegrationsRes.data?.message || 'admin integration endpoint leaked a credential'
+    );
+
+    const maskedRoundTrip = await request(
+      'PUT',
+      `/admin/merchants/${ssrfTenant._id}/integrations`,
+      {
+        token: superAdminToken,
+        body: { integrations: adminIntegrationsRes.data?.integrations || {} },
+      }
+    );
+    const tenantAfterMaskedRoundTrip = await Tenant.findById(ssrfTenant._id);
+    check(
+      'Masked admin integration round-trip preserves existing credentials',
+      maskedRoundTrip.status === 200 &&
+        tenantAfterMaskedRoundTrip?.settings?.metaCapiToken === probeCapi &&
+        tenantAfterMaskedRoundTrip?.integrations?.whatsapp?.accessToken === probeWaToken,
+      maskedRoundTrip.data?.message || 'masked save overwrote a stored credential'
+    );
+
+    const rotatedCapi = `probe-capi-rotated-${stamp}`;
+    const rotateRes = await request(
+      'PUT',
+      `/admin/merchants/${ssrfTenant._id}/integrations`,
+      {
+        token: superAdminToken,
+        body: { integrations: { meta: { capiToken: rotatedCapi } } },
+      }
+    );
+    const tenantAfterRotation = await Tenant.findById(ssrfTenant._id);
+    check(
+      'Admin credential rotation updates only the targeted secret',
+      rotateRes.status === 200 &&
+        tenantAfterRotation?.settings?.metaCapiToken === rotatedCapi &&
+        tenantAfterRotation?.integrations?.meta?.capiToken === rotatedCapi &&
+        tenantAfterRotation?.integrations?.whatsapp?.accessToken === probeWaToken,
+      rotateRes.data?.message || 'credential rotation was not isolated'
+    );
+
+    const metaSettingsRes = await request('GET', '/meta/settings', { token: ssrfToken });
+    const metaSettingsJson = JSON.stringify(metaSettingsRes.data || {});
+    check(
+      'Meta settings never expose the platform webhook verify token',
+      metaSettingsRes.status === 200 &&
+        !Object.prototype.hasOwnProperty.call(
+          metaSettingsRes.data?.settings || {},
+          'verifyToken'
+        ) &&
+        !metaSettingsJson.includes(PROBE_META_VERIFY_TOKEN) &&
+        metaSettingsRes.data?.settings?.verifyTokenConfigured === true,
+      metaSettingsRes.data?.message || 'verify token was exposed'
+    );
+
+    const maskedMetaSaveRes = await request('PUT', '/meta/settings', {
+      token: ssrfToken,
+      body: { metaCapiToken: '••••••••' },
+    });
+    const tenantAfterMaskedMetaSave = await Tenant.findById(ssrfTenant._id);
+    check(
+      'Masked Meta settings save keeps the existing CAPI token',
+      maskedMetaSaveRes.status === 200 &&
+        tenantAfterMaskedMetaSave?.settings?.metaCapiToken === rotatedCapi,
+      maskedMetaSaveRes.data?.message || 'masked Meta save overwrote the token'
+    );
+
+    const metaIntegrationRes = await request('GET', '/meta/integration', {
+      token: ssrfToken,
+    });
+    const metaIntegrationJson = JSON.stringify(metaIntegrationRes.data || {});
+    check(
+      'Meta integration status never exposes the platform webhook verify token',
+      metaIntegrationRes.status === 200 &&
+        !Object.prototype.hasOwnProperty.call(
+          metaIntegrationRes.data?.webhookInfo || {},
+          'verifyToken'
+        ) &&
+        !metaIntegrationJson.includes(PROBE_META_VERIFY_TOKEN),
+      metaIntegrationRes.data?.message || 'verify token was exposed'
+    );
 
     const plansRes = await request('GET', '/admin/plans', { token: superAdminToken });
     check(

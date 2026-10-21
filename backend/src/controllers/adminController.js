@@ -4,6 +4,13 @@ const Order = require('../models/Order');
 const Booking = require('../models/Booking');
 const Lead = require('../models/Lead');
 const { PLAN_LIMITS } = require('../config/plans');
+const {
+  isBlankSecret,
+  isMaskedSecret,
+  mergeTenantIntegrations,
+  redactIntegrationSecrets,
+  redactTenantSecrets,
+} = require('../utils/tenantSecrets');
 
 // @desc    Get all merchants for Super Admin
 // @route   GET /api/admin/merchants
@@ -135,7 +142,7 @@ const updateMerchantTemplate = async (req, res) => {
     res.json({
       success: true,
       message: `Merchant template updated to ${tenant.templateCode} successfully`,
-      data: tenant,
+      data: redactTenantSecrets(tenant),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -168,7 +175,7 @@ const updateMerchantModules = async (req, res) => {
     res.json({
       success: true,
       message: `Merchant modules updated successfully for ${tenant.businessName}`,
-      data: tenant,
+      data: redactTenantSecrets(tenant),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -240,7 +247,12 @@ const getMerchantIntegrations = async (req, res) => {
       success: true,
       businessName: tenant.businessName,
       slug: tenant.slug,
-      integrations: tenant.integrations || {},
+      // SUPER_ADMIN can provision credentials but never read them back.
+      integrations: redactIntegrationSecrets(
+        tenant.integrations?.toObject
+          ? tenant.integrations.toObject({ getters: false })
+          : tenant.integrations
+      ),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -258,19 +270,32 @@ const updateMerchantIntegrations = async (req, res) => {
     }
 
     const { integrations } = req.body;
-    if (!integrations || typeof integrations !== 'object') {
+    if (!integrations || typeof integrations !== 'object' || Array.isArray(integrations)) {
       return res.status(400).json({ success: false, message: 'integrations object is required' });
     }
 
-    tenant.integrations = {
-      ...tenant.integrations,
-      ...integrations,
-    };
+    const existingIntegrations =
+      tenant.integrations?.toObject
+        ? tenant.integrations.toObject({ getters: false })
+        : tenant.integrations || {};
 
-    // Also sync to settings if Meta keys are updated
-    if (integrations.meta) {
-      if (integrations.meta.pixelId) tenant.settings.metaPixelId = integrations.meta.pixelId;
-      if (integrations.meta.capiToken) tenant.settings.metaCapiToken = integrations.meta.capiToken;
+    // Deep-merge per connector so a partial admin update cannot erase unrelated
+    // fields. Blank or masked secret values mean "keep what is already stored".
+    tenant.integrations = mergeTenantIntegrations(existingIntegrations, integrations);
+
+    // Keep the legacy settings copy in sync only when a real new Meta token or
+    // pixel ID was supplied. Never copy a mask into the credential field.
+    if (integrations.meta && typeof integrations.meta === 'object') {
+      if (integrations.meta.pixelId !== undefined) {
+        tenant.settings.metaPixelId = String(integrations.meta.pixelId || '').trim();
+      }
+      if (
+        integrations.meta.capiToken !== undefined &&
+        !isBlankSecret(integrations.meta.capiToken) &&
+        !isMaskedSecret(integrations.meta.capiToken)
+      ) {
+        tenant.settings.metaCapiToken = String(integrations.meta.capiToken).trim();
+      }
     }
 
     await tenant.save();
@@ -278,7 +303,11 @@ const updateMerchantIntegrations = async (req, res) => {
     res.json({
       success: true,
       message: `Integrations & API keys successfully provisioned for ${tenant.businessName}`,
-      data: tenant.integrations,
+      data: redactIntegrationSecrets(
+        tenant.integrations?.toObject
+          ? tenant.integrations.toObject({ getters: false })
+          : tenant.integrations
+      ),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -551,7 +580,7 @@ const updateMerchantStatus = async (req, res) => {
     res.json({
       success: true,
       message: `Merchant status updated to ${status}`,
-      data: tenant,
+      data: redactTenantSecrets(tenant),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

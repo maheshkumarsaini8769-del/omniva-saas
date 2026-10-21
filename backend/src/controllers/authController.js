@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const Tenant = require('../models/Tenant');
 const generateToken = require('../utils/generateToken');
+const { redactTenantSecrets } = require('../utils/tenantSecrets');
 
 // Helper to generate URL slug
 const createSlug = (text) => {
@@ -234,7 +235,7 @@ const getMe = async (req, res) => {
     res.status(200).json({
       success: true,
       user,
-      tenant,
+      tenant: redactTenantSecrets(tenant),
     });
   } catch (error) {
     res.status(500).json({
@@ -571,7 +572,11 @@ const updateBusinessProfile = async (req, res) => {
       }
     }
     await tenant.save();
-    return res.status(200).json({ success: true, message: 'Business profile updated successfully', tenant });
+    return res.status(200).json({
+      success: true,
+      message: 'Business profile updated successfully',
+      tenant: redactTenantSecrets(tenant),
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

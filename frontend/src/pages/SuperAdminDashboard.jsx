@@ -2677,6 +2677,9 @@ export const SuperAdminDashboard = () => {
                     <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
                       Clients and merchants do not need to deal with developer consoles or raw API keys. Super Admin centrally configures, authenticates, and maintains Meta Conversions API (CAPI), WhatsApp Cloud API, Courier logistics, and Razorpay payment credentials on behalf of each merchant.
                     </p>
+                    <p className="text-[11px] text-indigo-800 max-w-3xl leading-relaxed font-medium">
+                      Stored secrets are encrypted at rest and shown only as a mask. Leave a masked field unchanged to keep the existing credential; enter a new value only when rotating it.
+                    </p>
                   </div>
                 </div>
 

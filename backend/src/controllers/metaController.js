@@ -2,6 +2,7 @@ const Tenant = require('../models/Tenant');
 const Order = require('../models/Order');
 const Lead = require('../models/Lead');
 const { sendCapiEvent } = require('../services/metaCapiService');
+const { isBlankSecret, isMaskedSecret } = require('../utils/tenantSecrets');
 
 // @desc    Get tenant Meta tracking settings
 // @route   GET /api/meta/settings
@@ -16,16 +17,20 @@ const getMetaSettings = async (req, res) => {
     const host = req.get('host') || 'localhost:5000';
     const protocol = req.protocol || 'http';
     const webhookUrl = `${protocol}://${host}/api/webhooks/meta?tenantSlug=${tenant.slug}`;
+    const capiToken =
+      tenant.settings?.metaCapiToken || tenant.integrations?.meta?.capiToken;
 
     res.status(200).json({
       success: true,
       settings: {
-        metaPixelId: tenant.settings?.metaPixelId || '',
-        hasCapiToken: !!tenant.settings?.metaCapiToken,
-        capiTokenMasked: tenant.settings?.metaCapiToken ? '••••••••••••••••' : '',
+        metaPixelId: tenant.settings?.metaPixelId || tenant.integrations?.meta?.pixelId || '',
+        hasCapiToken: !!capiToken,
+        capiTokenMasked: capiToken ? '••••••••••••••••' : '',
         webhookUrl,
-        verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
+        // The platform-level verify token is a server secret. Merchants only
+        // need to know whether webhook verification is configured.
         verifyTokenConfigured: Boolean(process.env.META_WEBHOOK_VERIFY_TOKEN),
+        webhookVerificationManagedByPlatform: true,
       },
     });
   } catch (error) {
@@ -46,10 +51,24 @@ const updateMetaSettings = async (req, res) => {
     }
 
     if (metaPixelId !== undefined) {
-      tenant.settings.metaPixelId = metaPixelId.trim();
+      const nextPixelId = String(metaPixelId || '').trim();
+      tenant.settings.metaPixelId = nextPixelId;
+      if (!tenant.integrations) tenant.integrations = {};
+      if (!tenant.integrations.meta) tenant.integrations.meta = {};
+      tenant.integrations.meta.pixelId = nextPixelId;
     }
-    if (metaCapiToken !== undefined) {
-      tenant.settings.metaCapiToken = metaCapiToken.trim();
+    // An empty or masked value means "keep the existing token". Never persist a
+    // UI placeholder as the credential.
+    if (
+      metaCapiToken !== undefined &&
+      !isBlankSecret(metaCapiToken) &&
+      !isMaskedSecret(metaCapiToken)
+    ) {
+      const nextToken = String(metaCapiToken).trim();
+      tenant.settings.metaCapiToken = nextToken;
+      if (!tenant.integrations) tenant.integrations = {};
+      if (!tenant.integrations.meta) tenant.integrations.meta = {};
+      tenant.integrations.meta.capiToken = nextToken;
     }
 
     await tenant.save();
@@ -211,10 +230,13 @@ const getAttributionAnalytics = async (req, res) => {
 
 
     const tenant = await Tenant.findById(req.businessId)
-      .select('settings.metaPixelId settings.metaCapiToken')
+      .select(
+        'settings.metaPixelId settings.metaCapiToken integrations.meta.pixelId integrations.meta.capiToken'
+      )
       .lean();
     const capiConfigured = Boolean(
-      tenant?.settings?.metaPixelId && tenant?.settings?.metaCapiToken
+      (tenant?.settings?.metaPixelId || tenant?.integrations?.meta?.pixelId) &&
+        (tenant?.settings?.metaCapiToken || tenant?.integrations?.meta?.capiToken)
     );
 
     res.json({

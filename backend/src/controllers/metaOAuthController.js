@@ -160,7 +160,9 @@ const getIntegrationStatus = async (req, res) => {
     }
     const tenantSlug = tenant.slug;
     const webhookUrl = `${protocol}://${host}/api/webhooks/meta?tenantSlug=${encodeURIComponent(tenantSlug)}`;
-    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || '';
+    // The platform owns the Meta app and its webhook verify token. Never send
+    // that server secret to a merchant browser.
+    const webhookInfo = { webhookUrl };
 
     const integration = await MetaIntegration.findOne({ businessId });
 
@@ -175,7 +177,7 @@ const getIntegrationStatus = async (req, res) => {
         totalLeadsImported: 0,
         lastSyncAt: null,
         syncLogs: [],
-        webhookInfo: { webhookUrl, verifyToken },
+        webhookInfo,
       });
     }
 
@@ -223,7 +225,7 @@ const getIntegrationStatus = async (req, res) => {
       lastSyncStatus: integration.lastSyncStatus,
       lastSyncError: integration.lastSyncError,
       syncLogs: (integration.syncLogs || []).slice(0, 15),
-      webhookInfo: { webhookUrl, verifyToken },
+      webhookInfo,
     });
   } catch (error) {
     console.error('[metaOAuthController] getIntegrationStatus error:', error.message);

@@ -45,7 +45,6 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
   const [expandedPages, setExpandedPages] = useState({});
   const [toastMessage, setToastMessage] = useState('');
   const [copiedWebhook, setCopiedWebhook] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false);
   const [errorBanner, setErrorBanner] = useState('');
 
   const showToast = (msg) => {
@@ -195,15 +194,10 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
     setExpandedPages((prev) => ({ ...prev, [pageId]: !prev[pageId] }));
   };
 
-  const copyToClipboard = (text, type) => {
+  const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    if (type === 'webhook') {
-      setCopiedWebhook(true);
-      setTimeout(() => setCopiedWebhook(false), 2000);
-    } else {
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
+    setCopiedWebhook(true);
+    setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
   if (loading) {
@@ -566,7 +560,7 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(integration?.webhookInfo?.webhookUrl || `${window.location.origin}/api/webhooks/meta`, 'webhook')}
+                onClick={() => copyToClipboard(integration?.webhookInfo?.webhookUrl || `${window.location.origin}/api/webhooks/meta`)}
                 className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 shrink-0 cursor-pointer"
                 title="Copy Callback URL"
               >
@@ -579,25 +573,13 @@ export const MetaAdsIntegration = ({ onLeadSynced }) => {
             <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
               Verify Token
             </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={integration?.webhookInfo?.verifyToken || ''}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 select-all focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  const token = integration?.webhookInfo?.verifyToken;
-                  if (token) copyToClipboard(token, 'token');
-                }}
-                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 shrink-0 cursor-pointer"
-                title="Copy Verify Token"
-              >
-                {copiedToken ? <Check className="w-4 h-4 text-emerald-600 font-bold" /> : <Copy className="w-4 h-4" />}
-              </button>
+            <div className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Managed securely by the platform administrator</span>
             </div>
+            <p className="text-[10px] text-slate-400 mt-1">
+              The platform webhook verify token is a server secret and is never sent to the browser.
+            </p>
           </div>
         </div>
       </div>

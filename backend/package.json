@@ -18,6 +18,7 @@
     "test:phase10": "node tests/phase10_hardening_test.js",
     "test:all": "node tests/phase2_test.js && node tests/phase3_test.js && node tests/phase4_test.js && node tests/phase5_test.js && node tests/phase6_test.js && node tests/phase7_test.js && node tests/phase8_test.js && node tests/phase9_security_test.js && node tests/phase10_hardening_test.js",
     "db:sync-indexes": "node scripts/syncIndexes.js",
+    "db:encrypt-secrets": "node scripts/encryptTenantSecrets.js",
     "db:backup": "node scripts/backup.js",
     "db:restore": "node scripts/restore.js"
   },

@@ -30,7 +30,7 @@ export const MetaTrackingSettings = () => {
     metaPixelId: '',
     capiTokenMasked: '',
     webhookUrl: '',
-    verifyToken: '',
+    verifyTokenConfigured: false,
     hasCapiToken: false,
   });
   const [metaPixelInput, setMetaPixelInput] = useState('');
@@ -41,7 +41,6 @@ export const MetaTrackingSettings = () => {
   const [testResult, setTestResult] = useState(null);
   const [testingCapi, setTestingCapi] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -67,7 +66,7 @@ export const MetaTrackingSettings = () => {
           metaPixelId: '',
           capiTokenMasked: '',
           webhookUrl: '',
-          verifyToken: '',
+          verifyTokenConfigured: false,
           hasCapiToken: false,
         });
         setMetaPixelInput('');
@@ -175,15 +174,10 @@ export const MetaTrackingSettings = () => {
     }
   };
 
-  const copyToClipboard = (text, type) => {
+  const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    if (type === 'webhook') {
-      setCopiedWebhook(true);
-      setTimeout(() => setCopiedWebhook(false), 2000);
-    } else {
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
+    setCopiedWebhook(true);
+    setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
   if (loading) {
@@ -307,7 +301,7 @@ export const MetaTrackingSettings = () => {
               />
               <button
                 type="button"
-                onClick={() => copyToClipboard(settings.webhookUrl, 'webhook')}
+                onClick={() => copyToClipboard(settings.webhookUrl)}
                 disabled={!settings.webhookUrl}
                 className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Copy Webhook URL"
@@ -322,23 +316,18 @@ export const MetaTrackingSettings = () => {
               Verify Token
             </label>
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={settings.verifyToken || ''}
-                placeholder="Verify token is not configured by the platform"
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none select-all"
-              />
-              <button
-                type="button"
-                onClick={() => copyToClipboard(settings.verifyToken, 'token')}
-                disabled={!settings.verifyToken}
-                className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Copy Verify Token"
-              >
-                {copiedToken ? <Check className="w-4 h-4 text-emerald-600 font-bold" /> : <Copy className="w-4 h-4" />}
-              </button>
+              <div className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {settings.verifyTokenConfigured
+                    ? 'Managed securely by the platform administrator'
+                    : 'Platform webhook verification is not configured yet'}
+                </span>
+              </div>
             </div>
+            <p className="text-[10px] text-slate-400 mt-1">
+              This server secret is never exposed to the browser.
+            </p>
           </div>
         </div>
 
@@ -348,7 +337,7 @@ export const MetaTrackingSettings = () => {
             Meta Webhook Instructions:
           </div>
           <p className="text-slate-600">
-            In <strong>Facebook Developers</strong> &rarr; <strong>Webhooks</strong> &rarr; select <strong>Page</strong> &rarr; subscribe to <strong>leadgen</strong> &amp; <strong>messages</strong>. Enter the Callback URL and Verify Token above to enable webhook lead ingestion.
+            In <strong>Facebook Developers</strong> &rarr; <strong>Webhooks</strong> &rarr; select <strong>Page</strong> &rarr; subscribe to <strong>leadgen</strong> &amp; <strong>messages</strong>. Use the Callback URL above. The platform administrator configures the matching Verify Token in the Meta app; it is never exposed to the browser.
           </p>
         </div>
       </div>

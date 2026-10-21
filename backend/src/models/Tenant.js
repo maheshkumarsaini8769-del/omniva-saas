@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { encryptedStringField } = require('../utils/tenantSecrets');
 
 const tenantSchema = new mongoose.Schema(
   {
@@ -94,7 +95,7 @@ const tenantSchema = new mongoose.Schema(
       whatsappAlerts: { type: Boolean, default: true },
       merchantUpiId: { type: String, default: '' },
       metaPixelId: { type: String, default: '' },
-      metaCapiToken: { type: String, default: '' },
+      metaCapiToken: encryptedStringField,
     },
     customDomain: {
       type: String,
@@ -106,7 +107,7 @@ const tenantSchema = new mongoose.Schema(
         // Empty until a merchant explicitly connects Meta. Avoid fake "live" state.
         enabled: { type: Boolean, default: false },
         pixelId: { type: String, default: '' },
-        capiToken: { type: String, default: '' },
+        capiToken: encryptedStringField,
         testEventCode: { type: String, default: '' },
         datasetId: { type: String, default: '' },
         status: { type: String, default: 'NOT_CONFIGURED' },
@@ -116,7 +117,7 @@ const tenantSchema = new mongoose.Schema(
         enabled: { type: Boolean, default: false },
         wabaId: { type: String, default: '' },
         phoneNumberId: { type: String, default: '' },
-        accessToken: { type: String, default: '' },
+        accessToken: encryptedStringField,
         senderPhone: { type: String, default: '' },
         status: { type: String, default: 'NOT_CONFIGURED' },
         lastSyncedAt: { type: Date, default: Date.now },
@@ -124,8 +125,8 @@ const tenantSchema = new mongoose.Schema(
       courier: {
         enabled: { type: Boolean, default: false },
         provider: { type: String, default: '' },
-        apiKey: { type: String, default: '' },
-        apiSecret: { type: String, default: '' },
+        apiKey: encryptedStringField,
+        apiSecret: encryptedStringField,
         pickupPincode: { type: String, default: '' },
         status: { type: String, default: 'NOT_CONFIGURED' },
         lastSyncedAt: { type: Date, default: Date.now },
@@ -134,8 +135,8 @@ const tenantSchema = new mongoose.Schema(
         enabled: { type: Boolean, default: false },
         provider: { type: String, default: 'Razorpay' },
         keyId: { type: String, default: '' },
-        keySecret: { type: String, default: '' },
-        webhookSecret: { type: String, default: '' },
+        keySecret: encryptedStringField,
+        webhookSecret: encryptedStringField,
         liveMode: { type: Boolean, default: false },
         status: { type: String, default: 'NOT_CONFIGURED' },
         lastSyncedAt: { type: Date, default: Date.now },
@@ -143,7 +144,7 @@ const tenantSchema = new mongoose.Schema(
       webhooks: {
         enabled: { type: Boolean, default: false },
         url: { type: String, default: '' },
-        secret: { type: String, default: '' },
+        secret: encryptedStringField,
         status: { type: String, default: 'NOT_CONFIGURED' },
       },
     },

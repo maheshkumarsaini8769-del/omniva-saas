@@ -31,6 +31,7 @@ const AutomationLog = require('../src/models/AutomationLog');
 const MetaIntegration = require('../src/models/MetaIntegration');
 const { encryptToken } = require('../src/utils/cryptoUtils');
 const { reviveLegacyValue } = require('../scripts/restore');
+const { SECRET_PATHS } = require('../scripts/encryptTenantSecrets');
 const { RateLimiter } = require('../src/middlewares/rateLimitMiddleware');
 
 const { ObjectId, MongoClient } = mongoose.mongo;
@@ -1390,8 +1391,17 @@ const run = async () => {
     );
 
     // ---------------------------------------------------------------------
-    // 15. Backup -> restore with type preservation and encrypted token fields
+    // 15. Secret migration and backup -> restore with type preservation
     // ---------------------------------------------------------------------
+    check(
+      'Tenant secret encryption migration module loads its model and paths',
+      Array.isArray(SECRET_PATHS) &&
+        SECRET_PATHS.length >= 8 &&
+        SECRET_PATHS.some((p) => p.join('.') === 'settings.metaCapiToken') &&
+        SECRET_PATHS.some((p) => p.join('.') === 'integrations.whatsapp.accessToken'),
+      `paths=${Array.isArray(SECRET_PATHS) ? SECRET_PATHS.length : 'missing'}`
+    );
+
     const legacyRevived = reviveLegacyValue({
       _id: '0123456789abcdef01234567',
       businessId: 'abcdefabcdefabcdefabcdef',

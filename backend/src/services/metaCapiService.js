@@ -38,8 +38,9 @@ const sendCapiEvent = async ({
   userData = {},
   customData = {},
 }) => {
-  const pixelId = tenant?.settings?.metaPixelId;
-  const capiToken = tenant?.settings?.metaCapiToken;
+  const pixelId = tenant?.settings?.metaPixelId || tenant?.integrations?.meta?.pixelId;
+  const capiToken =
+    tenant?.settings?.metaCapiToken || tenant?.integrations?.meta?.capiToken;
 
   const payload = {
     event_name: eventName,

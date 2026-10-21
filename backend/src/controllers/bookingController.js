@@ -692,7 +692,11 @@ const createPublicBooking = async (req, res) => {
     }
 
     // Fire Meta CAPI 'Schedule' event asynchronously
-    if (tenant.settings?.metaPixelId && tenant.settings?.metaCapiToken) {
+    const metaPixelId =
+      tenant.settings?.metaPixelId || tenant.integrations?.meta?.pixelId;
+    const metaCapiToken =
+      tenant.settings?.metaCapiToken || tenant.integrations?.meta?.capiToken;
+    if (metaPixelId && metaCapiToken) {
       sendCapiEvent({
         tenant,
         eventName: 'Schedule',

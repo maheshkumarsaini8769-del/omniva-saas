@@ -28,7 +28,7 @@ Production startup rejects missing, example, or weak values for the required sec
 | `CLIENT_URL` | Allowed origin for CORS and links | Yes |
 | `MASTER_SETUP_KEY` | Random key required to create the first Super Admin (`openssl rand -hex 32`) | Yes |
 | `TOKEN_ENCRYPTION_KEY` | 32-character or 64-character hex key for encrypting integration tokens | Yes |
-| `META_WEBHOOK_VERIFY_TOKEN` | Random private token configured in the Meta app webhook settings | Yes |
+| `META_WEBHOOK_VERIFY_TOKEN` | Platform-only secret configured in the Meta app webhook settings; never returned to merchant browsers | Yes |
 | `META_APP_ID` | Meta app ID | For Meta integration |
 | `META_APP_SECRET` | Meta app secret | For Meta integration |
 | `META_REDIRECT_URI` | Meta OAuth callback URL | For Meta integration |
@@ -111,9 +111,19 @@ A production-ready [Dockerfile](file:///home/mahesh/meta%20ads/Dockerfile) and [
    # Run the full regression suite before serving production traffic
    npm test
 
+   # Encrypt any legacy plaintext tenant integration credentials.
+   # The first command is a dry run; review the count, then apply.
+   npm run db:encrypt-secrets
+   npm run db:encrypt-secrets -- --apply
+
    # Create a type-preserving EJSON backup (never commit snapshots)
    npm run db:backup
    ```
+
+   `TOKEN_ENCRYPTION_KEY` must be set before the migration runs. Back it up in a
+   secrets manager: encrypted tenant credentials and Meta OAuth tokens cannot be
+   recovered if the key is lost. Rotating the key requires decrypting with the
+   old key and re-encrypting with the new one during a maintenance window.
 
    To restore a backup into an empty database, pass the snapshot directory
    explicitly. The restore command refuses to run without `--yes`, and refuses
@@ -220,6 +230,8 @@ Before exposing the platform publicly:
 6. Run `cd backend && npm run db:sync-indexes` against the production database. Confirm the `BookingCapacity` unique index exists before accepting bookings.
 7. Verify `/api/health` and `/api/health/deep`, then test login, storefront checkout, order tracking, Razorpay webhook delivery, and Meta webhook verification with real credentials.
 8. Keep `backend/backups/` private. Snapshots contain tenant and customer data and must be encrypted and access-controlled. Never commit a snapshot, and remove any snapshot files already tracked in Git.
-9. Test a backup-to-disposable-database restore. Verify tenant/user `ObjectId` references, `Date` fields, and encrypted Meta token values survive, then delete the test database and snapshot.
+9. Test a backup-to-disposable-database restore. Verify tenant/user `ObjectId` references, `Date` fields, and encrypted Meta token values survive, then delete the test database and snapshot. Restoring encrypted credentials requires the same `TOKEN_ENCRYPTION_KEY`; store that key securely and separately from the database backup.
 10. WhatsApp automation rules are business-initiated messages. Each `SEND_WHATSAPP` rule must specify an approved `whatsappTemplateName`, its language, and body-variable order. Rules without a template are deliberately skipped and logged; free-form text is not sent.
 11. Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy. Leaving it unset prevents clients from spoofing `X-Forwarded-For` rate-limit buckets.
+12. Run `cd backend && npm run db:encrypt-secrets -- --apply` after setting `TOKEN_ENCRYPTION_KEY`. Verify a raw tenant document stores integration credentials as `enc:gcm:` values, while `GET /api/auth/me` and the Super Admin integration endpoint only return masked strings.
+13. Confirm `GET /api/meta/settings` and `GET /api/meta/integration` never return `verifyToken`. The platform webhook verify token belongs only in the Meta app dashboard and server environment, not in a merchant browser.
