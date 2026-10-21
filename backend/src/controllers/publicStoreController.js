@@ -29,6 +29,15 @@ const normalizeIndianPhone = (value) => {
   return digits;
 };
 
+// Match orders/leads written before phone normalization without using a
+// substring regex (which can match another customer's longer number).
+const phoneLookupVariants = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  const last10 = digits.slice(-10);
+  if (!/^[6-9]\d{9}$/.test(last10)) return [];
+  return [...new Set([last10, `91${last10}`, `0${last10}`])];
+};
+
 // Restore stock when a multi-item decrement or the subsequent order insert fails.
 // Without this, an out-of-stock item later in the cart leaves earlier items
 // permanently decremented even though no order was created.
@@ -272,9 +281,11 @@ const createPublicOrder = async (req, res) => {
 
     for (const cartItem of items) {
       let product = null;
+      const suppliedValidId =
+        Boolean(cartItem.productId) && mongoose.Types.ObjectId.isValid(cartItem.productId);
 
       // Safe lookup: only query _id if cartItem.productId is a valid 24-char hex ObjectId
-      if (cartItem.productId && mongoose.Types.ObjectId.isValid(cartItem.productId)) {
+      if (suppliedValidId) {
         product = await Product.findOne({
           _id: cartItem.productId,
           businessId: tenant._id,
@@ -282,8 +293,18 @@ const createPublicOrder = async (req, res) => {
         });
       }
 
-      // Fallback lookup by name or slug (still scoped to this tenant).
-      // Only add defined values so an empty payload cannot match an arbitrary product.
+      // A valid id that no longer resolves means the product was deleted or
+      // made unavailable. Never substitute a different same-named product.
+      if (!product && suppliedValidId) {
+        return res.status(400).json({
+          success: false,
+          message: `Product ${cartItem.name || cartItem.productId} is no longer available`,
+        });
+      }
+
+      // Fallback lookup by name or slug for legacy carts that sent a slug
+      // instead of an id (still scoped to this tenant). Only add defined values
+      // so an empty payload cannot match an arbitrary product.
       if (!product) {
         const fallbackMatchers = [];
         if (cartItem.name) fallbackMatchers.push({ name: cartItem.name });
@@ -465,17 +486,8 @@ const createPublicOrder = async (req, res) => {
             quantity: item.quantity,
           });
         } else {
-          const decResult = await Product.updateOne(
-            { _id: item.productId, 'variants._id': item.variantId },
-            { $inc: { 'variants.$.stockQuantity': -item.quantity } }
-          );
-          if (decResult.matchedCount > 0) {
-            decrementedStock.push({
-              productId: item.productId,
-              variantId: item.variantId,
-              quantity: item.quantity,
-            });
-          }
+          // This product opts out of inventory tracking. Do not drive its
+          // stockQuantity negative or pretend it was decremented.
         }
       } else {
         if (item.trackQuantity) {
@@ -495,16 +507,7 @@ const createPublicOrder = async (req, res) => {
             quantity: item.quantity,
           });
         } else {
-          const decResult = await Product.updateOne(
-            { _id: item.productId },
-            { $inc: { stockQuantity: -item.quantity } }
-          );
-          if (decResult.matchedCount > 0) {
-            decrementedStock.push({
-              productId: item.productId,
-              quantity: item.quantity,
-            });
-          }
+          // This product opts out of inventory tracking. Leave stock untouched.
         }
       }
     }
@@ -522,10 +525,11 @@ const createPublicOrder = async (req, res) => {
     // Check for recent duplicate order with same phone number placed in last 24 hours
     let isDuplicateOrder = false;
     try {
-      if (cleanCustomerPhone.length === 10) {
+      const phoneVariants = phoneLookupVariants(cleanCustomerPhone);
+      if (phoneVariants.length) {
         const recentOrder = await Order.findOne({
           businessId: tenant._id,
-          customerPhone: { $regex: cleanCustomerPhone },
+          customerPhone: { $in: phoneVariants },
           createdAt: { $gte: new Date(Date.now() - 24 * 3600 * 1000) },
         });
         if (recentOrder) {
@@ -790,11 +794,11 @@ const trackPublicOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Order number and customer phone are required' });
     }
 
-    const cleanPhone = String(phone).replace(/\D/g, '');
+    const phoneVariants = phoneLookupVariants(phone);
 
-    // Reject empty/short input. An empty $regex would match every order
-    // sharing the supplied order number.
-    if (cleanPhone.length < 10) {
+    // Reject empty/invalid input. Never fall back to a substring regex: that
+    // can match a different customer whose number ends with the same digits.
+    if (!phoneVariants.length) {
       return res.status(400).json({
         success: false,
         message: 'Please provide the 10-digit mobile number used at checkout',
@@ -810,7 +814,7 @@ const trackPublicOrder = async (req, res) => {
 
     const orderQuery = {
       orderNumber: String(orderNumber).trim(),
-      customerPhone: { $regex: `${cleanPhone.slice(-10)}$` },
+      customerPhone: { $in: phoneVariants },
     };
 
     // Order numbers are unique per tenant, not across the whole platform.
@@ -890,7 +894,7 @@ const createPublicInquiry = async (req, res) => {
     // Check if lead already exists with this phone
     let lead = await Lead.findOne({
       businessId: tenant._id,
-      phone: { $regex: cleanPhone.slice(-10) },
+      phone: { $in: phoneLookupVariants(cleanPhone) },
     });
 
     const inquiryNote = `Storefront inquiry from ${String(phone).trim()}${productName ? ` about ${productName}` : ''}${productPrice ? ` (₹${productPrice})` : ''} via ${source}.${message ? ` Message: ${message}` : ''}`;

@@ -107,7 +107,31 @@ A production-ready [Dockerfile](file:///home/mahesh/meta%20ads/Dockerfile) and [
 
    # Create the indexes used by idempotent checkout and other models
    cd backend && npm run db:sync-indexes
+
+   # Run the full regression suite before serving production traffic
+   npm test
+
+   # Create a type-preserving EJSON backup (never commit snapshots)
+   npm run db:backup
    ```
+
+   To restore a backup into an empty database, pass the snapshot directory
+   explicitly. The restore command refuses to run without `--yes`, and refuses
+   to overwrite non-empty collections unless `--drop` is supplied:
+
+   ```bash
+   cd backend
+   npm run db:restore -- \
+     --snapshot backups/snapshot-2026-10-21T05-57-33-847Z \
+     --uri "$MONGODB_URI" \
+     --yes
+   # Recreate indexes after a restore
+   npm run db:sync-indexes
+   ```
+
+   Snapshots are written as EJSON v2 so `ObjectId`, `Date`, and encrypted
+   integration-token strings survive a restore. Legacy plain-JSON snapshots are
+   accepted on a best-effort basis, but new backups should always be EJSON.
 
 3. **Start Application with PM2**:
    ```bash
@@ -193,6 +217,9 @@ Before exposing the platform publicly:
 3. Confirm `.env` files are ignored and only `.env.example` is tracked.
 4. Set unique production values for `JWT_SECRET`, `MASTER_SETUP_KEY`, `TOKEN_ENCRYPTION_KEY`, `RAZORPAY_WEBHOOK_SECRET`, and `META_WEBHOOK_VERIFY_TOKEN`.
 5. Remove demo tenants, test merchants, and seeded accounts before production. Seeded test accounts use weak shared passwords and must never remain accessible.
-6. Run `cd backend && npm run db:sync-indexes` against the production database.
+6. Run `cd backend && npm run db:sync-indexes` against the production database. Confirm the `BookingCapacity` unique index exists before accepting bookings.
 7. Verify `/api/health` and `/api/health/deep`, then test login, storefront checkout, order tracking, Razorpay webhook delivery, and Meta webhook verification with real credentials.
-8. Keep `backend/backups/` private. Snapshots contain tenant and customer data and must be encrypted and access-controlled.
+8. Keep `backend/backups/` private. Snapshots contain tenant and customer data and must be encrypted and access-controlled. Never commit a snapshot, and remove any snapshot files already tracked in Git.
+9. Test a backup-to-disposable-database restore. Verify tenant/user `ObjectId` references, `Date` fields, and encrypted Meta token values survive, then delete the test database and snapshot.
+10. WhatsApp automation rules are business-initiated messages. Each `SEND_WHATSAPP` rule must specify an approved `whatsappTemplateName`, its language, and body-variable order. Rules without a template are deliberately skipped and logged; free-form text is not sent.
+11. Set `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy. Leaving it unset prevents clients from spoofing `X-Forwarded-For` rate-limit buckets.

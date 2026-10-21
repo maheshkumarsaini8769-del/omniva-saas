@@ -1,11 +1,106 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const ServicePackage = require('../models/ServicePackage');
 const Booking = require('../models/Booking');
+const BookingCapacity = require('../models/BookingCapacity');
 const Tenant = require('../models/Tenant');
 const Lead = require('../models/Lead');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
 const { buildAppUrl } = require('../utils/appUrl');
+
+const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+const MAX_BOOKING_YEARS_AHEAD = 5;
+
+const generateBookingNumber = () => {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `BK-${ts}-${rand}`;
+};
+
+const toDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseEventDate = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+// Reserve capacity with an atomic conditional increment. The first booking for
+// a package/date inserts the counter; all later bookings increment it only if
+// the requested units still fit.
+const reserveBookingCapacity = async ({ businessId, pkg, dateKey, units }) => {
+  const capacity = Number(pkg.maxCapacityPerDay);
+  if (!Number.isFinite(capacity) || capacity <= 0) {
+    return { required: false, reserved: false };
+  }
+  if (units > capacity) {
+    return { required: true, reserved: false, capacity };
+  }
+
+  const counterId = `${businessId}:${pkg._id.toString()}:${dateKey}`;
+  const query = {
+    _id: counterId,
+    $expr: { $lte: [{ $add: ['$reservedCount', units] }, capacity] },
+  };
+
+  let counter = await BookingCapacity.findOneAndUpdate(
+    query,
+    { $inc: { reservedCount: units }, $set: { capacity } },
+    { new: true }
+  );
+  if (counter) return { required: true, reserved: true, capacity };
+
+  const existing = await BookingCapacity.findOne({ _id: counterId });
+  if (existing) return { required: true, reserved: false, capacity };
+
+  try {
+    counter = await BookingCapacity.create({
+      _id: counterId,
+      businessId,
+      packageId: pkg._id,
+      dateKey,
+      capacity,
+      reservedCount: units,
+    });
+    return { required: true, reserved: true, capacity };
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    counter = await BookingCapacity.findOneAndUpdate(
+      query,
+      { $inc: { reservedCount: units }, $set: { capacity } },
+      { new: true }
+    );
+    return counter
+      ? { required: true, reserved: true, capacity }
+      : { required: true, reserved: false, capacity };
+  }
+};
+
+const releaseBookingCapacity = async (booking) => {
+  if (!booking?.capacityReserved || !booking.packageId || !booking.capacityDateKey) {
+    return;
+  }
+  const units = Math.max(1, Number(booking.capacityUnits) || 1);
+  try {
+    await BookingCapacity.updateOne(
+      {
+        businessId: booking.businessId,
+        packageId: booking.packageId,
+        dateKey: booking.capacityDateKey,
+        reservedCount: { $gte: units },
+      },
+      { $inc: { reservedCount: -units } }
+    );
+  } catch (error) {
+    console.warn('[Booking Capacity Release Warning]:', error.message);
+  }
+};
 
 // ==================== PACKAGES ====================
 
@@ -192,14 +287,43 @@ const updateBookingStatus = async (req, res) => {
       note,
     } = req.body;
 
+    if (bookingStatus && !BOOKING_STATUSES.includes(bookingStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking status' });
+    }
+
     const booking = await Booking.findOne({ _id: req.params.id, businessId: req.businessId });
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    if (booking.bookingStatus === 'CANCELLED' && bookingStatus && bookingStatus !== 'CANCELLED') {
+      return res.status(409).json({
+        success: false,
+        message: 'A cancelled booking cannot be reopened. Ask the customer to submit a new request.',
+      });
+    }
+
     const updater = req.user ? `${req.user.name} (${req.user.role})` : 'Merchant Admin';
 
     if (bookingStatus && bookingStatus !== booking.bookingStatus) {
+      if (bookingStatus === 'CANCELLED') {
+        // Claim the release once so concurrent cancellations cannot free the
+        // same capacity twice.
+        const capacityClaim = await Booking.findOneAndUpdate(
+          {
+            _id: booking._id,
+            businessId: booking.businessId,
+            capacityReleased: { $ne: true },
+          },
+          { $set: { capacityReleased: true } },
+          { new: true }
+        );
+        if (capacityClaim?.capacityReserved) {
+          await releaseBookingCapacity(capacityClaim);
+        }
+        booking.capacityReleased = true;
+      }
+
       booking.bookingStatus = bookingStatus;
       booking.timeline.push({
         status: bookingStatus,
@@ -335,6 +459,30 @@ const createPublicBooking = async (req, res) => {
       });
     }
 
+    const parsedEventDate = parseEventDate(eventDate);
+    if (!parsedEventDate) {
+      return res.status(400).json({ success: false, message: 'Enter a valid booking date' });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const requestedDate = new Date(parsedEventDate);
+    requestedDate.setHours(0, 0, 0, 0);
+    if (requestedDate < today) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking date cannot be in the past',
+      });
+    }
+    const latestAllowedDate = new Date(today);
+    latestAllowedDate.setFullYear(latestAllowedDate.getFullYear() + MAX_BOOKING_YEARS_AHEAD);
+    if (requestedDate > latestAllowedDate) {
+      return res.status(400).json({
+        success: false,
+        message: `Booking date cannot be more than ${MAX_BOOKING_YEARS_AHEAD} years in the future`,
+      });
+    }
+
     // Match createPublicOrder: normalize and validate Indian mobile numbers.
     let cleanCustomerPhone = String(customerPhone).replace(/\D/g, '');
     if (cleanCustomerPhone.length === 12 && cleanCustomerPhone.startsWith('91')) {
@@ -357,6 +505,7 @@ const createPublicBooking = async (req, res) => {
     let packageName = 'Custom Booking Request';
     let totalAmount = 0;
     let advanceTokenPercent = 0;
+    let selectedPackage = null;
 
     if (packageId) {
       if (!mongoose.Types.ObjectId.isValid(packageId)) {
@@ -370,11 +519,36 @@ const createPublicBooking = async (req, res) => {
       if (!pkg) {
         return res.status(404).json({ success: false, message: 'Service package not found or unavailable' });
       }
+      selectedPackage = pkg;
       packageName = pkg.name;
       totalAmount = Number(pkg.price) || 0;
       advanceTokenPercent = Number.isFinite(Number(pkg.advanceTokenPercent))
         ? Number(pkg.advanceTokenPercent)
         : 0;
+    }
+
+    // Reserve the package's daily capacity before creating the booking. This
+    // is atomic, so concurrent requests cannot both take the last slot.
+    const capacityDateKey = toDateKey(requestedDate);
+    const capacityUnits =
+      tenant.businessType === 'TRAVEL' && Array.isArray(passengers) && passengers.length > 0
+        ? passengers.length
+        : 1;
+    let capacityReservation = { required: false, reserved: false };
+
+    if (selectedPackage) {
+      capacityReservation = await reserveBookingCapacity({
+        businessId: tenant._id,
+        pkg: selectedPackage,
+        dateKey: capacityDateKey,
+        units: capacityUnits,
+      });
+      if (capacityReservation.required && !capacityReservation.reserved) {
+        return res.status(409).json({
+          success: false,
+          message: `The selected date is fully booked${capacityReservation.capacity ? ` (capacity: ${capacityReservation.capacity} per day)` : ''}. Please choose another date.`,
+        });
+      }
     }
 
     // A public booking request is not a payment. Prices come from the package,
@@ -383,9 +557,7 @@ const createPublicBooking = async (req, res) => {
     const expectedAdvance = Math.round((totalAmount * advanceTokenPercent) / 100);
     const balanceDue = totalAmount;
 
-    const dateCode = Date.now().toString().slice(-6);
-    const randCode = Math.floor(100 + Math.random() * 900);
-    const bookingNumber = `BK-${dateCode}-${randCode}`;
+    let bookingNumber = generateBookingNumber();
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     const userAgent = req.headers['user-agent'] || '';
@@ -396,37 +568,75 @@ const createPublicBooking = async (req, res) => {
       userAgent: attribution.userAgent || userAgent,
     };
 
-    const booking = await Booking.create({
-      businessId: tenant._id,
-      bookingNumber,
-      bookingType: tenant.businessType === 'TRAVEL' ? 'TRAVEL' : 'SERVICE',
-      packageId: packageId || null,
-      packageName,
-      customerName,
-      customerPhone: cleanCustomerPhone,
-      customerEmail: customerEmail || '',
-      eventDate: new Date(eventDate),
-      timeSlot,
-      location,
-      totalAmount,
-      advancePaid: 0,
-      advanceTokenPercent,
-      expectedAdvance,
-      balanceDue,
-      paymentStatus: 'UNPAID',
-      bookingStatus: 'PENDING',
-      passengers: Array.isArray(passengers) ? passengers : [],
-      notes,
-      attribution: enrichedAttribution,
-      timeline: [
-        {
-          status: 'PENDING',
-          note: `Booking request received for ${packageName} on ${new Date(eventDate).toDateString()}`,
-          updatedBy: 'Customer Online',
-          timestamp: new Date(),
-        },
-      ],
-    });
+    let booking = null;
+    let lastBookingError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        booking = await Booking.create({
+          businessId: tenant._id,
+          bookingNumber,
+          bookingType: tenant.businessType === 'TRAVEL' ? 'TRAVEL' : 'SERVICE',
+          packageId: packageId || null,
+          packageName,
+          customerName,
+          customerPhone: cleanCustomerPhone,
+          customerEmail: customerEmail || '',
+          eventDate: parsedEventDate,
+          timeSlot,
+          location,
+          totalAmount,
+          advancePaid: 0,
+          advanceTokenPercent,
+          expectedAdvance,
+          balanceDue,
+          paymentStatus: 'UNPAID',
+          bookingStatus: 'PENDING',
+          capacityReserved: Boolean(capacityReservation.required && capacityReservation.reserved),
+          capacityDateKey,
+          capacityUnits,
+          passengers: Array.isArray(passengers) ? passengers : [],
+          notes,
+          attribution: enrichedAttribution,
+          timeline: [
+            {
+              status: 'PENDING',
+              note: `Booking request received for ${packageName} on ${parsedEventDate.toDateString()}`,
+              updatedBy: 'Customer Online',
+              timestamp: new Date(),
+            },
+          ],
+        });
+        break;
+      } catch (bookingErr) {
+        lastBookingError = bookingErr;
+        const isNumberCollision =
+          bookingErr.code === 11000 &&
+          Boolean(
+            bookingErr.keyPattern?.bookingNumber ||
+              String(bookingErr.message || '').includes('bookingNumber')
+          );
+        if (isNumberCollision && attempt < 2) {
+          bookingNumber = generateBookingNumber();
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (!booking) {
+      if (capacityReservation.required && capacityReservation.reserved) {
+        await BookingCapacity.updateOne(
+          {
+            businessId: tenant._id,
+            packageId: selectedPackage._id,
+            dateKey: capacityDateKey,
+            reservedCount: { $gte: capacityUnits },
+          },
+          { $inc: { reservedCount: -capacityUnits } }
+        );
+      }
+      throw lastBookingError;
+    }
 
     // Fire Automation Engine Event
     await triggerAutomation({
@@ -451,7 +661,7 @@ const createPublicBooking = async (req, res) => {
       if (existingLead) {
         existingLead.budget = Math.max(Number(existingLead.budget) || 0, Number(totalAmount) || 0);
         existingLead.notes.push({
-          note: `Booking request ${bookingNumber} placed for ${packageName} on ${new Date(eventDate).toDateString()}`,
+          note: `Booking request ${bookingNumber} placed for ${packageName} on ${parsedEventDate.toDateString()}`,
           authorName: 'Online Booking System',
           createdAt: new Date(),
         });

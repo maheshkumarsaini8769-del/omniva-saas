@@ -117,6 +117,25 @@ const bookingSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true,
     },
+    // Capacity is reserved atomically at booking creation and released once on
+    // cancellation. Without this, two customers can book the same limited slot.
+    capacityReserved: {
+      type: Boolean,
+      default: false,
+    },
+    capacityReleased: {
+      type: Boolean,
+      default: false,
+    },
+    capacityDateKey: {
+      type: String,
+      default: '',
+    },
+    capacityUnits: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
     assignedStaff: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

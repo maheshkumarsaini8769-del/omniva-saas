@@ -1,11 +1,15 @@
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { app } = require('../src/server');
 const { authRateLimiter, checkoutRateLimiter } = require('../src/middlewares/rateLimitMiddleware');
-const { runBackup } = require('../scripts/backup');
+
+const execFileAsync = promisify(execFile);
+const { ObjectId, MongoClient } = mongoose.mongo;
 
 let server;
 let merchantAToken;
@@ -155,22 +159,60 @@ const runTests = async () => {
       authRateLimiter.resetAll();
     });
 
-    // 5. Automated Database Backup Execution
-    await test('5. Operations: Automated DB Backup creates timestamped snapshot with manifest', async () => {
-      await runBackup();
-
+    // 5. Automated Database Backup Execution (against a disposable probe DB,
+    // never the tenant database, so test snapshots cannot persist PII).
+    await test('5. Operations: Automated DB Backup creates timestamped EJSON snapshot with manifest', async () => {
+      const [baseUri, query] = mongoUri.split('?');
+      const lastSlash = baseUri.lastIndexOf('/');
+      const probeDbName = `omniva_phase8_backup_${Date.now().toString(36)}`;
+      const probeUri = `${baseUri.slice(0, lastSlash)}/${probeDbName}${query ? `?${query}` : ''}`;
       const backupsDir = path.resolve(__dirname, '../backups');
-      if (!fs.existsSync(backupsDir)) throw new Error('Backups directory not created');
+      let snapshotDir = '';
+      let client;
 
-      const snapshotDirs = fs.readdirSync(backupsDir).filter((f) => f.startsWith('snapshot-'));
-      if (snapshotDirs.length === 0) throw new Error('No snapshot directories found');
+      try {
+        client = new MongoClient(probeUri);
+        await client.connect();
+        await client.db().collection('backup_probe').insertOne({
+          _id: new ObjectId(),
+          label: 'phase8 backup probe',
+          createdAt: new Date(),
+        });
 
-      const latestSnapshot = path.join(backupsDir, snapshotDirs[snapshotDirs.length - 1]);
-      const manifestPath = path.join(latestSnapshot, 'manifest.json');
-      if (!fs.existsSync(manifestPath)) throw new Error('Manifest not generated in snapshot');
+        if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
+        const before = new Set(
+          fs.readdirSync(backupsDir).filter((name) => name.startsWith('snapshot-'))
+        );
+        await execFileAsync(process.execPath, [path.resolve(__dirname, '../scripts/backup.js')], {
+          cwd: path.resolve(__dirname, '..'),
+          env: { ...process.env, MONGODB_URI: probeUri },
+          timeout: 120000,
+        });
+        const created = fs
+          .readdirSync(backupsDir)
+          .filter((name) => name.startsWith('snapshot-') && !before.has(name));
+        if (created.length !== 1) throw new Error(`Expected one new snapshot, got ${created.length}`);
 
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (manifest.totalDocuments <= 0) throw new Error('Archived 0 documents in snapshot');
+        snapshotDir = path.join(backupsDir, created[0]);
+        const manifestPath = path.join(snapshotDir, 'manifest.json');
+        if (!fs.existsSync(manifestPath)) throw new Error('Manifest not generated in snapshot');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        if (manifest.format !== 'EJSON' || manifest.formatVersion !== 2) {
+          throw new Error('Snapshot is not type-preserving EJSON v2');
+        }
+        if (manifest.totalDocuments !== 1) {
+          throw new Error(`Expected 1 probe document, archived ${manifest.totalDocuments}`);
+        }
+      } finally {
+        if (client) await client.close();
+        const dropClient = new MongoClient(probeUri);
+        await dropClient.connect();
+        await dropClient.db().dropDatabase();
+        await dropClient.close();
+        if (snapshotDir && fs.existsSync(snapshotDir)) {
+          fs.rmSync(snapshotDir, { recursive: true, force: true });
+        }
+      }
     });
 
     // 6. Grand Master Regression Across All Phases (Phases 1-7)

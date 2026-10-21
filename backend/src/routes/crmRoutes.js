@@ -13,12 +13,15 @@ const {
   getCRMStats,
   convertLeadToOrder,
 } = require('../controllers/crmController');
-const { protect, tenantScope } = require('../middlewares/authMiddleware');
+const { protect, authorize, tenantScope } = require('../middlewares/authMiddleware');
 const { enforceQuota } = require('../middlewares/quotaMiddleware');
 const moduleGate = require('../middlewares/moduleGate');
+const { CRM_ROLES } = require('../config/merchantRoles');
 
-// All CRM routes are strictly guarded by JWT authentication and Multi-Tenant Isolation
+// All CRM routes are strictly guarded by JWT authentication, role checks, and
+// Multi-Tenant Isolation. Inventory staff must not read customer PII.
 router.use(protect);
+router.use(authorize(...CRM_ROLES));
 router.use(tenantScope);
 router.use(moduleGate('crmLeads'));
 

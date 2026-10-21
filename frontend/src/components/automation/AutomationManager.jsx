@@ -56,6 +56,9 @@ export const AutomationManager = () => {
     actionType: 'SEND_WHATSAPP',
     actionTarget: 'customer',
     actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been confirmed. We will dispatch your order shortly. Thank you!',
+    whatsappTemplateName: '',
+    whatsappTemplateLanguage: 'en',
+    whatsappTemplateVariables: '',
   });
 
   const getToken = () => localStorage.getItem('omniva_token') || localStorage.getItem('token') || '';
@@ -235,6 +238,10 @@ export const AutomationManager = () => {
       showToast('Please enter a rule name.', true);
       return;
     }
+    if (form.actionType === 'SEND_WHATSAPP' && !form.whatsappTemplateName.trim()) {
+      showToast('WhatsApp rules require an approved Meta template name.', true);
+      return;
+    }
 
     const payload = {
       name: form.name.trim(),
@@ -248,6 +255,16 @@ export const AutomationManager = () => {
         type: form.actionType,
         target: form.actionTarget,
         template: form.actionTemplate,
+        ...(form.actionType === 'SEND_WHATSAPP'
+          ? {
+              whatsappTemplateName: form.whatsappTemplateName.trim(),
+              whatsappTemplateLanguage: form.whatsappTemplateLanguage.trim() || 'en',
+              whatsappTemplateVariables: form.whatsappTemplateVariables
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            }
+          : {}),
       },
       isActive: editingRule ? editingRule.isActive : true,
     };
@@ -294,6 +311,9 @@ export const AutomationManager = () => {
       actionType: preset.actionType,
       actionTarget: preset.actionTarget,
       actionTemplate: preset.actionTemplate,
+      whatsappTemplateName: '',
+      whatsappTemplateLanguage: 'en',
+      whatsappTemplateVariables: '',
     });
     setShowCreateModal(true);
   };
@@ -443,6 +463,9 @@ export const AutomationManager = () => {
                 actionType: 'SEND_WHATSAPP',
                 actionTarget: 'customer',
                 actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} is confirmed. Thank you!',
+                whatsappTemplateName: '',
+                whatsappTemplateLanguage: 'en',
+                whatsappTemplateVariables: '',
               });
               setShowCreateModal(true);
             }}
@@ -648,6 +671,11 @@ export const AutomationManager = () => {
                               actionType: rule.action?.type || 'SEND_WHATSAPP',
                               actionTarget: rule.action?.target || 'customer',
                               actionTemplate: rule.action?.template || '',
+                              whatsappTemplateName: rule.action?.whatsappTemplateName || '',
+                              whatsappTemplateLanguage: rule.action?.whatsappTemplateLanguage || 'en',
+                              whatsappTemplateVariables: Array.isArray(rule.action?.whatsappTemplateVariables)
+                                ? rule.action.whatsappTemplateVariables.join(', ')
+                                : '',
                             });
                             setShowCreateModal(true);
                           }}
@@ -679,6 +707,11 @@ export const AutomationManager = () => {
                         <span className="text-slate-400 font-semibold mr-1.5">Action Template:</span>
                         {rule.action?.template}
                       </div>
+                      {rule.action?.type === 'SEND_WHATSAPP' && !rule.action?.whatsappTemplateName && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800">
+                          Not sendable yet: configure an approved Meta WhatsApp template on this rule. Omniva will log a skip instead of sending free-form text.
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -838,6 +871,49 @@ export const AutomationManager = () => {
                   </select>
                 </div>
               </div>
+
+              {form.actionType === 'SEND_WHATSAPP' && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-3">
+                  <div>
+                    <label className="font-bold text-slate-800 block mb-1">
+                      Approved WhatsApp Template Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. order_confirmation"
+                      value={form.whatsappTemplateName}
+                      onChange={(e) => setForm({ ...form, whatsappTemplateName: e.target.value })}
+                      className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                    <p className="text-[10px] text-emerald-800 mt-1">
+                      Meta requires an approved template for business-initiated messages. Free-form text is only valid inside an open 24-hour customer-service window, so Omniva will skip a WhatsApp action that has no template name.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-800 block mb-1">Template Language</label>
+                      <input
+                        type="text"
+                        value={form.whatsappTemplateLanguage}
+                        onChange={(e) => setForm({ ...form, whatsappTemplateLanguage: e.target.value })}
+                        placeholder="en"
+                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-800 block mb-1">Body Variables (in order)</label>
+                      <input
+                        type="text"
+                        value={form.whatsappTemplateVariables}
+                        onChange={(e) => setForm({ ...form, whatsappTemplateVariables: e.target.value })}
+                        placeholder="customerName, orderNumber, totalAmount"
+                        className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1">

@@ -13,6 +13,7 @@ const models = [
   'Product',
   'Order',
   'Booking',
+  'BookingCapacity',
   'Lead',
   'Coupon',
   'ServicePackage',

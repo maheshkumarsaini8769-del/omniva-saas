@@ -5,9 +5,12 @@ const {
   updateIntegrations,
   testIntegration,
 } = require('../controllers/integrationController');
-const { protect, tenantScope } = require('../middlewares/authMiddleware');
+const { protect, authorize, tenantScope } = require('../middlewares/authMiddleware');
+const { OWNER_ROLES } = require('../config/merchantRoles');
 
+// Payment keys, WhatsApp tokens, and courier credentials are owner-only.
 router.use(protect);
+router.use(authorize(...OWNER_ROLES));
 router.use(tenantScope);
 
 router.route('/')

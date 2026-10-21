@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { EJSON } = require('bson');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -25,13 +26,17 @@ const runBackup = async () => {
     const colName = colInfo.name;
     const docs = await mongoose.connection.db.collection(colName).find({}).toArray();
     const filePath = path.join(backupDir, `${colName}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(docs, null, 2));
+    // EJSON preserves ObjectId, Date, Decimal128, and Binary values. Plain
+    // JSON would turn references into strings and make a restore corrupt data.
+    fs.writeFileSync(filePath, EJSON.stringify(docs, null, 2));
     console.log(`  ✓ Exported ${colName}: ${docs.length} documents -> ${filePath}`);
     totalDocs += docs.length;
   }
 
   const manifest = {
     platform: 'Omniva SaaS Platform',
+    format: 'EJSON',
+    formatVersion: 2,
     timestamp: new Date().toISOString(),
     collectionsCount: collections.length,
     totalDocuments: totalDocs,

@@ -26,7 +26,13 @@ router.post('/setup-superadmin', setupSuperAdmin);
 
 // Protected routes
 router.get('/me', protect, getMe);
-router.put('/business-profile', protect, tenantScope, updateBusinessProfile);
+router.put(
+  '/business-profile',
+  protect,
+  authorize('MERCHANT_OWNER'),
+  tenantScope,
+  updateBusinessProfile
+);
 
 // Merchant staff management (Owner only, strictly isolated to req.businessId)
 router.post('/staff', protect, authorize('MERCHANT_OWNER'), tenantScope, enforceQuota('staff'), createStaff);

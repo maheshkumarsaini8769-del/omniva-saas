@@ -1,8 +1,44 @@
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const Coupon = require('../models/Coupon');
 const { triggerAutomation } = require('../services/automationEngine');
 const { buildAppUrl } = require('../utils/appUrl');
+
+const ORDER_STATUSES = ['NEW', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+const PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED', 'REFUNDED'];
+const OWNER_ROLES = ['SUPER_ADMIN', 'SUPER_STAFF', 'MERCHANT_OWNER'];
+
+const hasStaffPermission = (user, permission) =>
+  Array.isArray(user?.customPermissions) && user.customPermissions.includes(permission);
+
+const assertOrderUpdateAllowed = (user, { orderStatus, paymentStatus, duplicateResolved }) => {
+  if (!user || OWNER_ROLES.includes(user.role)) return null;
+
+  if (paymentStatus !== undefined) {
+    return 'Only the business owner can change payment status';
+  }
+  if (duplicateResolved !== undefined) {
+    return 'Only the business owner can resolve duplicate-order flags';
+  }
+
+  if (!orderStatus) return null;
+
+  if (user.role === 'ORDER_MANAGER') {
+    if (['CONFIRMED', 'PROCESSING'].includes(orderStatus)) return null;
+    if (orderStatus === 'CANCELLED' && hasStaffPermission(user, 'orders:cancel')) return null;
+    return 'Order managers can confirm or process orders. Cancellation requires explicit permission.';
+  }
+
+  if (user.role === 'INVENTORY_STAFF') {
+    if (['SHIPPED', 'DELIVERED'].includes(orderStatus)) return null;
+    if (orderStatus === 'CANCELLED' && hasStaffPermission(user, 'orders:cancel')) return null;
+    return 'Inventory staff can only mark orders shipped or delivered. Cancellation requires explicit permission.';
+  }
+
+  return 'This staff role is not allowed to update orders';
+};
+
 // @desc    Get all orders for merchant with optional status & date filtering
 // @route   GET /api/orders
 // @access  Private (Merchant Admin/Staff)
@@ -113,6 +149,13 @@ const updateOrderStatus = async (req, res) => {
     const { orderStatus, paymentStatus, courierPartner, trackingNumber, note, duplicateResolved } = req.body;
     const updater = req.user ? `${req.user.name} (${req.user.role})` : 'Merchant Admin';
 
+    if (orderStatus && !ORDER_STATUSES.includes(orderStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status' });
+    }
+    if (paymentStatus && !PAYMENT_STATUSES.includes(paymentStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment status' });
+    }
+
     if (mongoose.connection.readyState !== 1) {
       return res.status(503).json({
         success: false,
@@ -125,7 +168,29 @@ const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    const permissionError = assertOrderUpdateAllowed(req.user, {
+      orderStatus,
+      paymentStatus,
+      duplicateResolved,
+    });
+    if (permissionError) {
+      return res.status(403).json({ success: false, message: permissionError });
+    }
+
     const previousStatus = order.orderStatus;
+
+    if (previousStatus === 'CANCELLED' && orderStatus && orderStatus !== 'CANCELLED') {
+      return res.status(409).json({
+        success: false,
+        message: 'A cancelled order cannot be reopened. Create a new order instead.',
+      });
+    }
+    if (previousStatus === 'CANCELLED' && orderStatus === 'CANCELLED') {
+      return res.status(409).json({
+        success: false,
+        message: 'This order is already cancelled. No stock or coupon change was made.',
+      });
+    }
 
     if (duplicateResolved !== undefined) {
       order.duplicateResolved = Boolean(duplicateResolved);
@@ -177,6 +242,24 @@ const updateOrderStatus = async (req, res) => {
             } catch (stockErr) {
               console.warn('[Order Cancel Stock Restoration Warning]:', stockErr.message);
             }
+          }
+        }
+
+        // Return the coupon use claimed at checkout. Legacy orders have no
+        // couponUsageRestored flag, so couponCode is the source of truth.
+        if (order.couponCode && !order.couponUsageRestored) {
+          try {
+            await Coupon.updateOne(
+              {
+                businessId: order.businessId,
+                code: order.couponCode,
+                usageCount: { $gt: 0 },
+              },
+              { $inc: { usageCount: -1 } }
+            );
+            order.couponUsageRestored = true;
+          } catch (couponErr) {
+            console.warn('[Order Cancel Coupon Restoration Warning]:', couponErr.message);
           }
         }
       }

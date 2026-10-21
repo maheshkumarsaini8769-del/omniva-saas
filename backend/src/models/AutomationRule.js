@@ -44,6 +44,24 @@ const automationRuleSchema = new mongoose.Schema(
         type: String,
         default: 'Automated notification from Omniva: {{message}}',
       },
+      // Meta Cloud API only permits free-form business-initiated messages
+      // inside an open customer-service window. Automations therefore send an
+      // approved template by default. These fields identify that template.
+      whatsappTemplateName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      whatsappTemplateLanguage: {
+        type: String,
+        default: 'en',
+        trim: true,
+      },
+      // Ordered body variables, e.g. ['customerName', 'orderNumber'].
+      whatsappTemplateVariables: {
+        type: [String],
+        default: [],
+      },
     },
     isActive: {
       type: Boolean,

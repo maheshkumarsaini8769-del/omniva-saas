@@ -145,6 +145,12 @@ const orderSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    // A coupon use is claimed before order creation. Cancellation must return
+    // that use exactly once, including for legacy orders that predate this flag.
+    couponUsageRestored: {
+      type: Boolean,
+      default: false,
+    },
     totalAmount: {
       type: Number,
       required: true,

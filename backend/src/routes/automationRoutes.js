@@ -11,17 +11,10 @@ const {
   testTriggerRule,
 } = require('../controllers/automationController');
 
-const allowedMerchantRoles = [
-  'SUPER_ADMIN',
-  'SUPER_STAFF',
-  'MERCHANT_OWNER',
-  'ORDER_MANAGER',
-  'INVENTORY_STAFF',
-  'MARKETING_STAFF',
-];
+const { MARKETING_ROLES } = require('../config/merchantRoles');
 
 router.use(protect);
-router.use(authorize(...allowedMerchantRoles));
+router.use(authorize(...MARKETING_ROLES));
 router.use(tenantScope);
 router.use(moduleGate('automations'));
 

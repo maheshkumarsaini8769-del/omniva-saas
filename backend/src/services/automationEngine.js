@@ -151,11 +151,40 @@ const triggerAutomation = async ({
             // would send from the wrong number and mask a missing tenant setup.
             const accessToken = wa.accessToken;
             const phoneNumberId = wa.phoneNumberId;
+            const templateName = String(rule.action?.whatsappTemplateName || '').trim();
+            const templateLanguage = String(rule.action?.whatsappTemplateLanguage || 'en').trim() || 'en';
+            const templateVariables = Array.isArray(rule.action?.whatsappTemplateVariables)
+              ? rule.action.whatsappTemplateVariables
+              : [];
 
             if (!accessToken || !phoneNumberId) {
               skippedReason = 'Merchant has not configured WhatsApp Business API credentials';
+            } else if (!templateName) {
+              // Meta rejects free-form text for business-initiated messages
+              // outside the 24-hour customer-service window. Do not make a
+              // request that is guaranteed to fail in production.
+              skippedReason =
+                'Approved WhatsApp template is required for business-initiated messages. Set action.whatsappTemplateName.';
             } else {
-              const to = customerPhone.length === 10 ? `91${customerPhone}` : customerPhone;
+              const last10 = customerPhone.slice(-10);
+              const to = customerPhone.startsWith('91') && customerPhone.length === 12
+                ? customerPhone
+                : `91${last10}`;
+              const bodyParameters = templateVariables
+                .map((variable) => String(variable || '').trim())
+                .filter(Boolean)
+                .map((variable) => ({
+                  type: 'text',
+                  text: interpolateTemplate(`{{${variable}}}`, data),
+                }));
+              const template = {
+                name: templateName,
+                language: { code: templateLanguage },
+              };
+              if (bodyParameters.length > 0) {
+                template.components = [{ type: 'body', parameters: bodyParameters }];
+              }
+
               const response = await fetch(
                 `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
                 {
@@ -167,8 +196,8 @@ const triggerAutomation = async ({
                   body: JSON.stringify({
                     messaging_product: 'whatsapp',
                     to,
-                    type: 'text',
-                    text: { body: interpolatedMessage },
+                    type: 'template',
+                    template,
                   }),
                   signal: AbortSignal.timeout(5000),
                 }

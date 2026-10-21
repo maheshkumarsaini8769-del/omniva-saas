@@ -18,8 +18,9 @@ const {
   manualSync,
   disconnectIntegration,
 } = require('../controllers/metaOAuthController');
-const { protect, tenantScope } = require('../middlewares/authMiddleware');
+const { protect, authorize, tenantScope } = require('../middlewares/authMiddleware');
 const moduleGate = require('../middlewares/moduleGate');
+const { OWNER_ROLES, MARKETING_ROLES, ANALYTICS_ROLES } = require('../config/merchantRoles');
 
 // Public Meta Webhook endpoints (for Meta Graph API callbacks)
 router.get('/webhooks/meta', verifyWebhook);
@@ -29,16 +30,16 @@ router.post('/webhooks/meta', handleMetaWebhook);
 router.get('/meta/oauth/callback', handleOAuthCallback);
 
 // Protected Merchant Meta Lead Ads OAuth & Sync Endpoints
-router.get('/meta/oauth/url', protect, tenantScope, moduleGate('marketingAds'), initiateOAuth);
-router.get('/meta/integration', protect, tenantScope, moduleGate('marketingAds'), getIntegrationStatus);
-router.patch('/meta/integration/pages', protect, tenantScope, moduleGate('marketingAds'), updatePageSelection);
-router.post('/meta/integration/sync', protect, tenantScope, moduleGate('marketingAds'), manualSync);
-router.post('/meta/integration/disconnect', protect, tenantScope, moduleGate('marketingAds'), disconnectIntegration);
+router.get('/meta/oauth/url', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), initiateOAuth);
+router.get('/meta/integration', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), getIntegrationStatus);
+router.patch('/meta/integration/pages', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), updatePageSelection);
+router.post('/meta/integration/sync', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), manualSync);
+router.post('/meta/integration/disconnect', protect, authorize(...OWNER_ROLES), tenantScope, moduleGate('marketingAds'), disconnectIntegration);
 
 // Protected Merchant Meta Tracking configuration endpoints (CAPI / Pixel)
-router.get('/meta/settings', protect, tenantScope, moduleGate('marketingAds'), getMetaSettings);
-router.put('/meta/settings', protect, tenantScope, moduleGate('marketingAds'), updateMetaSettings);
-router.post('/meta/test-capi', protect, tenantScope, moduleGate('marketingAds'), testCapiDispatch);
-router.get('/meta/analytics', protect, tenantScope, moduleGate('marketingAds'), getAttributionAnalytics);
+router.get('/meta/settings', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), getMetaSettings);
+router.put('/meta/settings', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), updateMetaSettings);
+router.post('/meta/test-capi', protect, authorize(...MARKETING_ROLES), tenantScope, moduleGate('marketingAds'), testCapiDispatch);
+router.get('/meta/analytics', protect, authorize(...ANALYTICS_ROLES), tenantScope, moduleGate('marketingAds'), getAttributionAnalytics);
 
 module.exports = router;
