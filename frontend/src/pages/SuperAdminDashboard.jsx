@@ -186,7 +186,7 @@ const mapAdminMerchant = (t) => ({
   id: t._id,
   realDbId: t._id,
   displayId: `M-${String(t._id).slice(-6).toUpperCase()}`,
-  gstin: t.gstinNumber || '',
+  gstin: t.settings?.gstinNumber || '',
   slug: t.slug || '',
   templateCode: t.templateCode || '',
   name: t.businessName || 'Unnamed merchant',

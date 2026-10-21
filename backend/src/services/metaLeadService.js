@@ -317,12 +317,15 @@ const ingestLeadRecord = async (businessId, parsedData, pageContext = {}) => {
     });
   }
 
-  // Fallback deduplication: same phone + same campaign within last 24 hours
-  if (!existing && parsedData.phone) {
+  const cleanPhone = String(parsedData.phone || '').replace(/[^0-9]/g, '').slice(-10);
+  const cleanEmail = String(parsedData.email || '').trim().toLowerCase();
+
+  // Fallback deduplication: same normalized phone within the last 24 hours.
+  if (!existing && cleanPhone) {
     const oneDayAgo = new Date(Date.now() - 24 * 3600 * 1000);
     existing = await Lead.findOne({
       businessId,
-      phone: parsedData.phone,
+      phone: cleanPhone,
       createdAt: { $gte: oneDayAgo },
     });
   }
@@ -331,13 +334,11 @@ const ingestLeadRecord = async (businessId, parsedData, pageContext = {}) => {
     return { success: true, isNew: false, leadId: existing._id, existing: true };
   }
 
-  const cleanPhone = String(parsedData.phone || '').replace(/[^0-9]/g, '').slice(-10);
-
   const newLead = await Lead.create({
     businessId,
     name: parsedData.name,
-    phone: cleanPhone || parsedData.phone,
-    email: parsedData.email || '',
+    phone: cleanPhone,
+    email: cleanEmail,
     source: 'META_ADS',
     metaLeadId: parsedData.metaLeadId,
     metaPageId: pageContext.pageId || '',

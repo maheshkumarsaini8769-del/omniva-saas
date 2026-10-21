@@ -241,14 +241,7 @@ export const PublicStorefront = () => {
           );
         }
         setStoreData(data.data);
-        const storeSettings = data.data?.store?.settings || {};
-        setPaymentMethod(
-          storeSettings.enableCOD !== false
-            ? 'COD'
-            : storeSettings.enableOnlinePay !== false
-            ? 'ONLINE'
-            : 'COD'
-        );
+        setPaymentMethod('COD');
       } catch (err) {
         setStoreData(null);
         setError(err.message || 'Unable to load this storefront right now.');
@@ -402,8 +395,8 @@ export const PublicStorefront = () => {
   const shippingFee = cart.length === 0 ? 0 : isFreeShipping ? 0 : configuredShippingFee;
   const totalAmount = cart.length === 0 ? 0 : discountedSubtotal + shippingFee;
   const codEnabled = storeData?.store?.settings?.enableCOD !== false;
-  const onlinePaymentEnabled = storeData?.store?.settings?.enableOnlinePay !== false;
-  const hasPaymentMethod = codEnabled || onlinePaymentEnabled;
+  // Online payment is disabled until Razorpay checkout is wired end-to-end.
+  const hasPaymentMethod = codEnabled;
 
   const handleApplyCoupon = (codeToApply) => {
     setCouponError('');
@@ -620,7 +613,12 @@ export const PublicStorefront = () => {
       return;
     }
 
-    const cleanPhone = customerPhone.replace(/\D/g, '');
+    let cleanPhone = customerPhone.replace(/\D/g, '');
+    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.slice(2);
+    } else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+      cleanPhone = cleanPhone.slice(1);
+    }
     if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       alert('⚠️ Invalid Mobile Number! Please enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).');
       return;
@@ -808,9 +806,9 @@ export const PublicStorefront = () => {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
               {isServiceStore || isTravelStore
                 ? 'Booking requests confirmed by the business'
-                : store.settings?.enableCOD
+                : codEnabled
                 ? 'Cash on Delivery available'
-                : 'Online payment available'}
+                : 'Checkout currently unavailable'}
             </span>
           </div>
 
@@ -1827,39 +1825,23 @@ export const PublicStorefront = () => {
                         Payment Mode
                       </label>
                       {hasPaymentMethod ? (
-                        <div className={`grid ${codEnabled && onlinePaymentEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-                          {codEnabled && (
-                            <button
-                              type="button"
-                              onClick={() => setPaymentMethod('COD')}
-                              className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                                paymentMethod === 'COD'
-                                  ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 font-bold shadow-xs'
-                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="text-xs font-bold text-slate-900">Cash on Delivery</div>
-                              <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Pay upon delivery</div>
-                            </button>
-                          )}
-                          {onlinePaymentEnabled && (
-                            <button
-                              type="button"
-                              onClick={() => setPaymentMethod('ONLINE')}
-                              className={`p-3 rounded-xl border text-left transition cursor-pointer ${
-                                paymentMethod === 'ONLINE'
-                                  ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 text-slate-900 font-bold shadow-xs'
-                                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="text-xs font-bold text-slate-900">UPI / Online Pay</div>
-                              <div className="text-[10px] text-indigo-600 mt-0.5 font-medium">GooglePay, PhonePe</div>
-                            </button>
-                          )}
+                        <div className="grid grid-cols-1 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentMethod('COD')}
+                            className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                              paymentMethod === 'COD'
+                                ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900 font-bold shadow-xs'
+                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="text-xs font-bold text-slate-900">Cash on Delivery</div>
+                            <div className="text-[10px] text-emerald-600 mt-0.5 font-medium">Pay upon delivery</div>
+                          </button>
                         </div>
                       ) : (
                         <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800">
-                          This store has not enabled Cash on Delivery or online payment. Checkout is unavailable.
+                          Cash on Delivery is not enabled for this store. Checkout is unavailable.
                         </div>
                       )}
                     </div>

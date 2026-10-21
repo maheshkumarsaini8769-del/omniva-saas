@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const Tenant = require('../models/Tenant');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
@@ -9,6 +10,24 @@ const Coupon = require('../models/Coupon');
 const { sendCapiEvent } = require('../services/metaCapiService');
 const { triggerAutomation } = require('../services/automationEngine');
 const { buildAppUrl } = require('../utils/appUrl');
+
+// Collision-resistant order number: base36 timestamp plus three random bytes.
+const generateOrderNumber = () => {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `ORD-${ts}-${rand}`;
+};
+
+// Canonical Indian mobile input for both order storage and CRM matching.
+const normalizeIndianPhone = (value) => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  } else if (digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  return digits;
+};
 
 // Restore stock when a multi-item decrement or the subsequent order insert fails.
 // Without this, an out-of-stock item later in the cart leaves earlier items
@@ -159,12 +178,7 @@ const createPublicOrder = async (req, res) => {
     }
 
     // Strict Indian Mobile Number Validation (10 digits starting with 6-9, handles +91 / 91 / 0 prefix)
-    let cleanCustomerPhone = (customerPhone || '').toString().replace(/\D/g, '');
-    if (cleanCustomerPhone.length === 12 && cleanCustomerPhone.startsWith('91')) {
-      cleanCustomerPhone = cleanCustomerPhone.slice(2);
-    } else if (cleanCustomerPhone.length === 11 && cleanCustomerPhone.startsWith('0')) {
-      cleanCustomerPhone = cleanCustomerPhone.slice(1);
-    }
+    const cleanCustomerPhone = normalizeIndianPhone(customerPhone);
 
     if (cleanCustomerPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanCustomerPhone)) {
       return res.status(400).json({
@@ -182,10 +196,8 @@ const createPublicOrder = async (req, res) => {
       });
     }
 
-    // Generate unique order number
-    const dateCode = Date.now().toString().slice(-6);
-    const randCode = Math.floor(100 + Math.random() * 900);
-    const orderNumber = `ORD-${dateCode}-${randCode}`;
+    // Collision-resistant order number; collisions are retried below.
+    let orderNumber = generateOrderNumber();
     // Discount is always derived server-side from a validated coupon.
     let appliedDiscount = 0;
     let validatedCoupon = null;
@@ -415,14 +427,19 @@ const createPublicOrder = async (req, res) => {
     const totalAmount = Math.max(0, verifiedSubtotal - appliedDiscount + shippingFee);
 
     const normalizedPaymentMethod = String(paymentMethod || '').toUpperCase();
-    if (!['COD', 'ONLINE'].includes(normalizedPaymentMethod)) {
+    // No Razorpay order is created and no checkout is initiated in this flow.
+    // Reject ONLINE so a customer is never told they paid when they did not.
+    if (normalizedPaymentMethod === 'ONLINE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Online payment is currently unavailable. Please choose Cash on Delivery (COD).',
+      });
+    }
+    if (normalizedPaymentMethod !== 'COD') {
       return res.status(400).json({ success: false, message: 'Unsupported payment method' });
     }
-    if (normalizedPaymentMethod === 'COD' && tenant.settings?.enableCOD === false) {
+    if (tenant.settings?.enableCOD === false) {
       return res.status(400).json({ success: false, message: 'Cash on Delivery is not enabled for this store' });
-    }
-    if (normalizedPaymentMethod === 'ONLINE' && tenant.settings?.enableOnlinePay === false) {
-      return res.status(400).json({ success: false, message: 'Online payment is not enabled for this store' });
     }
 
     // Atomically decrement stock with $gte check to eliminate TOCTOU race conditions.
@@ -505,11 +522,10 @@ const createPublicOrder = async (req, res) => {
     // Check for recent duplicate order with same phone number placed in last 24 hours
     let isDuplicateOrder = false;
     try {
-      const cleanCustomerDigits = customerPhone.replace(/\D/g, '').slice(-10);
-      if (cleanCustomerDigits.length >= 10) {
+      if (cleanCustomerPhone.length === 10) {
         const recentOrder = await Order.findOne({
           businessId: tenant._id,
-          customerPhone: { $regex: cleanCustomerDigits },
+          customerPhone: { $regex: cleanCustomerPhone },
           createdAt: { $gte: new Date(Date.now() - 24 * 3600 * 1000) },
         });
         if (recentOrder) {
@@ -555,41 +571,62 @@ const createPublicOrder = async (req, res) => {
       couponReserved = true;
     }
 
-    // Create Order. If this fails, put back every unit we just decremented.
-    let order;
-    try {
-      order = await Order.create({
-        businessId: tenant._id,
-        orderNumber,
-        idempotencyKey: idempotencyKey || undefined,
-        customerName,
-        customerPhone,
-        customerEmail: customerEmail || '',
-        shippingAddress,
-        items: verifiedItems,
-        subtotal: verifiedSubtotal,
-        shippingFee,
-        discount: appliedDiscount,
-        couponCode: cleanCouponCode,
-        totalAmount,
-        paymentMethod: normalizedPaymentMethod,
-        paymentStatus: 'PENDING',
-        orderStatus: 'NEW',
-        stockDecremented: decrementedStock.length > 0,
-        attribution: enrichedAttribution,
-        notes: notes || '',
-        timeline: [
-          {
-            status: 'NEW',
-            note: isDuplicateOrder
-              ? `Order placed online via storefront (${normalizedPaymentMethod}) - [Fraud Flag: Duplicate phone in 24h]`
-              : `Order placed online via storefront (${normalizedPaymentMethod})`,
-            updatedBy: 'Customer',
-            timestamp: new Date(),
-          },
-        ],
-      });
-    } catch (orderErr) {
+    // Create Order. Retry only on an order-number collision; keep stock and
+    // coupon reservations in place for those retries. On final failure, restore
+    // both before returning or surfacing the error.
+    let order = null;
+    let lastOrderErr = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        order = await Order.create({
+          businessId: tenant._id,
+          orderNumber,
+          idempotencyKey: idempotencyKey || undefined,
+          customerName,
+          customerPhone: cleanCustomerPhone,
+          customerEmail: customerEmail || '',
+          shippingAddress: { ...shippingAddress, pincode: cleanPincode },
+          items: verifiedItems,
+          subtotal: verifiedSubtotal,
+          shippingFee,
+          discount: appliedDiscount,
+          couponCode: cleanCouponCode,
+          totalAmount,
+          paymentMethod: normalizedPaymentMethod,
+          paymentStatus: 'PENDING',
+          orderStatus: 'NEW',
+          stockDecremented: decrementedStock.length > 0,
+          attribution: enrichedAttribution,
+          notes: notes || '',
+          timeline: [
+            {
+              status: 'NEW',
+              note: isDuplicateOrder
+                ? `Order placed online via storefront (${normalizedPaymentMethod}) - [Fraud Flag: Duplicate phone in 24h]`
+                : `Order placed online via storefront (${normalizedPaymentMethod})`,
+              updatedBy: 'Customer',
+              timestamp: new Date(),
+            },
+          ],
+        });
+        break;
+      } catch (orderErr) {
+        lastOrderErr = orderErr;
+        const isOrderNumberDuplicate =
+          orderErr.code === 11000 &&
+          Boolean(
+            orderErr.keyPattern?.orderNumber ||
+              String(orderErr.message || '').includes('orderNumber')
+          );
+        if (isOrderNumberDuplicate && attempt < 2) {
+          orderNumber = generateOrderNumber();
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (!order) {
       await restoreDecrementedStock(decrementedStock);
       if (couponReserved) {
         try {
@@ -604,7 +641,7 @@ const createPublicOrder = async (req, res) => {
 
       // A concurrent retry with the same idempotency key won the unique index.
       // Return that order instead of surfacing a 500 or creating a duplicate.
-      if (orderErr.code === 11000 && idempotencyKey) {
+      if (lastOrderErr.code === 11000 && idempotencyKey) {
         const existingOrder = await Order.findOne({
           businessId: tenant._id,
           idempotencyKey,
@@ -629,7 +666,7 @@ const createPublicOrder = async (req, res) => {
         }
       }
 
-      throw orderErr;
+      throw lastOrderErr;
     }
 
     // Fire Automation Engine Event (Trigger -> Condition -> Action)
@@ -662,8 +699,7 @@ const createPublicOrder = async (req, res) => {
 
     // Sync Customer / Order into CRM Lead Pipeline
     try {
-      const cleanPhone = customerPhone.replace(/\D/g, '');
-      const existingLead = await Lead.findOne({ businessId: tenant._id, phone: cleanPhone });
+      const existingLead = await Lead.findOne({ businessId: tenant._id, phone: cleanCustomerPhone });
 
       if (existingLead) {
         existingLead.status = 'WON';
@@ -678,7 +714,7 @@ const createPublicOrder = async (req, res) => {
         await Lead.create({
           businessId: tenant._id,
           name: customerName,
-          phone: cleanPhone,
+          phone: cleanCustomerPhone,
           email: customerEmail || '',
           source: 'WEBSITE',
           campaignName: enrichedAttribution.utmCampaign || '',
@@ -831,8 +867,8 @@ const createPublicInquiry = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Phone number is required for inquiry' });
     }
 
-    const cleanPhone = String(phone).replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
+    const cleanPhone = normalizeIndianPhone(phone);
+    if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit mobile number' });
     }
 

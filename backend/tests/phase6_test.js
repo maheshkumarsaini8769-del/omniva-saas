@@ -304,7 +304,7 @@ const runTests = async () => {
               quantity: 2, // Total = ₹640 (Above ₹500 threshold)
             },
           ],
-          paymentMethod: 'ONLINE',
+          paymentMethod: 'COD',
         }),
       });
       const data = await res.json();

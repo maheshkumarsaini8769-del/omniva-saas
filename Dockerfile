@@ -24,11 +24,11 @@ ENV NODE_ENV=production
 ENV PORT=5000
 
 # Copy backend source & dependencies
-COPY --from=backend-deps /app/backend/node_modules ./backend/node_modules
-COPY backend/ ./backend
+COPY --chown=node:node --from=backend-deps /app/backend/node_modules ./backend/node_modules
+COPY --chown=node:node backend/ ./backend
 
 # Copy compiled frontend assets to /app/frontend/dist
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --chown=node:node --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 5000
 

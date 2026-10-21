@@ -10,7 +10,12 @@ const { PLAN_LIMITS } = require('../config/plans');
 // @access  Private (SUPER_ADMIN, SUPER_STAFF)
 const getAllMerchants = async (req, res) => {
   try {
-    const tenants = await Tenant.find().sort({ createdAt: -1 }).lean();
+    // Do not spread integration credentials or the legacy CAPI token to
+    // SUPER_STAFF. Secrets are available only via the SUPER_ADMIN-only endpoint.
+    const tenants = await Tenant.find()
+      .select('-integrations -settings.metaCapiToken')
+      .sort({ createdAt: -1 })
+      .lean();
 
     const enriched = await Promise.all(
       tenants.map(async (t) => {

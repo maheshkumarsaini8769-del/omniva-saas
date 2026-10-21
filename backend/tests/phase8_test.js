@@ -99,6 +99,30 @@ const runTests = async () => {
       await Lead.findByIdAndDelete(data.lead._id);
     });
 
+    // 3b. Stored XSS vectors are stripped from string inputs.
+    await test('3b. Security: Stored XSS payloads are stripped from string inputs', async () => {
+      const Lead = require('../src/models/Lead');
+      const res = await fetch(`${BASE_URL}/crm/leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${merchantAToken}`,
+        },
+        body: JSON.stringify({
+          name: '<img src=x onerror=alert(1)>',
+          phone: '9888877778',
+          source: 'WEBSITE',
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      const lead = await Lead.findById(data.lead._id);
+      if (/onerror|javascript:/i.test(lead.name)) {
+        throw new Error(`Sanitizer left an XSS vector in the stored name: ${lead.name}`);
+      }
+      await Lead.findByIdAndDelete(data.lead._id);
+    });
+
     // 4. Rate Limiting on Authentication (Brute Force Defense)
     await test('4. Security: Authentication Brute Force Protection enforces 429 RATE_LIMIT_EXCEEDED', async () => {
       authRateLimiter.resetAll();

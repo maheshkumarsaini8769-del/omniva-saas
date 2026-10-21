@@ -8,11 +8,14 @@ const Order = require('../src/models/Order');
 const Product = require('../src/models/Product');
 const Category = require('../src/models/Category');
 const Lead = require('../src/models/Lead');
+const User = require('../src/models/User');
 const { PLAN_LIMITS } = require('../src/config/plans');
 
 let server;
 let merchantAToken;
 let merchantBToken;
+let superAdminToken;
+let superAdminId;
 let merchantATenantId;
 let merchantBTenantId;
 let merchantASlug;
@@ -70,6 +73,25 @@ const runTests = async () => {
       if (!dataB.success || !dataB.token) throw new Error('Merchant B login failed');
       merchantBToken = dataB.token;
       merchantBTenantId = dataB.tenant.id;
+
+      // Plan changes require platform approval, so the test needs a real
+      // SUPER_ADMIN session for the approval path.
+      const superAdminEmail = `phase7-superadmin-${Date.now()}@example.com`;
+      const superAdmin = await User.create({
+        name: 'Phase 7 Super Admin',
+        email: superAdminEmail,
+        password: 'Phase7Pass123!',
+        role: 'SUPER_ADMIN',
+      });
+      superAdminId = superAdmin._id;
+      const adminRes = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: superAdminEmail, password: 'Phase7Pass123!' }),
+      });
+      const adminData = await adminRes.json();
+      if (!adminData.success || !adminData.token) throw new Error('Super Admin login failed');
+      superAdminToken = adminData.token;
     });
 
     // Ensure test product exists
@@ -118,15 +140,27 @@ const runTests = async () => {
       if (data.data.usage?.leads === undefined) throw new Error('Missing leads usage stats');
     });
 
-    // 4. Merchant A sets STARTER plan
-    await test('4. Merchant upgrades/switches to STARTER plan (POST /api/subscriptions/upgrade)', async () => {
-      const res = await fetch(`${BASE_URL}/subscriptions/upgrade`, {
+    // 4. Merchant cannot self-upgrade; Super Admin sets STARTER plan
+    await test('4. Merchant self-upgrade is rejected; Super Admin sets STARTER plan', async () => {
+      const selfUpgrade = await fetch(`${BASE_URL}/subscriptions/upgrade`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${merchantAToken}`,
         },
         body: JSON.stringify({ planTier: 'STARTER', billingCycle: 'MONTHLY' }),
+      });
+      if (selfUpgrade.status !== 403) {
+        throw new Error(`Expected merchant self-upgrade to be 403, got ${selfUpgrade.status}`);
+      }
+
+      const res = await fetch(`${BASE_URL}/admin/merchants/${merchantATenantId}/template`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${superAdminToken}`,
+        },
+        body: JSON.stringify({ planTier: 'STARTER' }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
@@ -177,19 +211,19 @@ const runTests = async () => {
       if (data.code !== 'QUOTA_EXCEEDED') throw new Error(`Expected code QUOTA_EXCEEDED, got ${data.code}`);
     });
 
-    // 6. Plan Upgrade: Merchant A upgrades to GROWTH plan (500 orders limit)
-    await test('6. Upgrade to GROWTH plan lifts quota limit immediately', async () => {
-      const res = await fetch(`${BASE_URL}/subscriptions/upgrade`, {
-        method: 'POST',
+    // 6. Super Admin moves Merchant A to GROWTH (500 orders limit)
+    await test('6. Super Admin approval lifts quota limit with GROWTH plan', async () => {
+      const res = await fetch(`${BASE_URL}/admin/merchants/${merchantATenantId}/template`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${merchantAToken}`,
+          Authorization: `Bearer ${superAdminToken}`,
         },
-        body: JSON.stringify({ planTier: 'GROWTH', billingCycle: 'MONTHLY' }),
+        body: JSON.stringify({ planTier: 'GROWTH' }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      if (data.data.planTier !== 'GROWTH') throw new Error('Upgrade to GROWTH failed');
+      if (data.data.planTier !== 'GROWTH') throw new Error('Plan change to GROWTH failed');
     });
 
     // 7. Quota Relief: Order placement succeeds now that plan is GROWTH
@@ -310,6 +344,9 @@ const runTests = async () => {
     });
 
   } finally {
+    if (superAdminId) {
+      await User.deleteOne({ _id: superAdminId }).catch(() => {});
+    }
     if (server) server.close();
     await mongoose.disconnect();
   }

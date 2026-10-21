@@ -147,11 +147,13 @@ const triggerAutomation = async ({
           } else {
             const tenant = await Tenant.findById(businessId).select('integrations.whatsapp');
             const wa = tenant?.integrations?.whatsapp || {};
-            const accessToken = wa.accessToken || process.env.WHATSAPP_ACCESS_TOKEN;
-            const phoneNumberId = wa.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
+            // Use only the merchant's own credentials. A platform-level fallback
+            // would send from the wrong number and mask a missing tenant setup.
+            const accessToken = wa.accessToken;
+            const phoneNumberId = wa.phoneNumberId;
 
             if (!accessToken || !phoneNumberId) {
-              skippedReason = 'WhatsApp Cloud API credentials are not configured';
+              skippedReason = 'Merchant has not configured WhatsApp Business API credentials';
             } else {
               const to = customerPhone.length === 10 ? `91${customerPhone}` : customerPhone;
               const response = await fetch(

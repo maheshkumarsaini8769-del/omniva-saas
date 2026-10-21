@@ -43,9 +43,17 @@ const leadSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
       trim: true,
       index: true,
+      default: '',
+      // Meta lead forms may omit a phone number. Require at least one usable
+      // contact channel, but never invent a phone number.
+      validate: {
+        validator: function () {
+          return Boolean(this.phone && this.phone.trim()) || Boolean(this.email && this.email.trim());
+        },
+        message: 'A lead must have at least a phone number or an email address',
+      },
     },
     email: {
       type: String,

@@ -202,7 +202,7 @@ const runTests = async () => {
     await test('5. Public Order Placement (COD) with real-time Stock Deduction', async () => {
       const orderPayload = {
         customerName: 'Aarav Sharma',
-        customerPhone: '9876543210',
+        customerPhone: '+919876543210',
         customerEmail: 'aarav.sharma@gmail.com',
         shippingAddress: {
           street: 'Flat 402, Sunshine Apartments, Sector 62',
@@ -265,6 +265,25 @@ const runTests = async () => {
       }
     });
 
+    // 5b. ONLINE checkout is rejected until real payment initiation exists.
+    await test('5b. Reject ONLINE payment with an explicit COD-only message', async () => {
+      const res = await fetch(`${BASE_URL}/public/store/${merchantASlug}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: 'Online Buyer',
+          customerPhone: '+919999999999',
+          shippingAddress: { street: 'Test Rd', city: 'Delhi', state: 'Delhi', pincode: '110001' },
+          items: [{ productId: productA2Id, quantity: 1 }],
+          paymentMethod: 'ONLINE',
+        }),
+      });
+      const data = await res.json();
+      if (res.status !== 400 || !/online payment is currently unavailable/i.test(data.message || '')) {
+        throw new Error(`Expected ONLINE checkout to be rejected, got ${res.status}: ${data.message}`);
+      }
+    });
+
     // 6. Insufficient Stock Validation
     await test('6. Reject Order when Stock is Insufficient', async () => {
       const orderPayload = {
@@ -298,6 +317,10 @@ const runTests = async () => {
 
     // 7. Automatic CRM Lead Sync from Commerce Order
     await test('7. Verify Automatic CRM Lead Creation & Attribution Sync', async () => {
+      const storedOrder = await Order.findById(createdOrderId);
+      if (storedOrder.customerPhone !== '9876543210') {
+        throw new Error(`Expected normalized order phone, got ${storedOrder.customerPhone}`);
+      }
       const lead = await Lead.findOne({ businessId: merchantATenantId, phone: '9876543210' });
       if (!lead) throw new Error('Lead was not automatically created in CRM for order customer');
       if (lead.status !== 'WON') throw new Error(`Expected status WON, got ${lead.status}`);

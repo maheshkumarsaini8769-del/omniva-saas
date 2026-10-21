@@ -1,0 +1,16 @@
+# Never send local secrets, PII snapshots, VCS data, or build output to the daemon.
+.git
+.gitignore
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+backend/backups
+backend/uploads
+backend/tests
+*.log
+*.swp
+.DS_Store

@@ -4,16 +4,33 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
+const readStoredItem = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const parseStoredJson = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    // Corrupted localStorage must not crash the entire app.
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Storage may be unavailable (private mode); continue logged out.
+    }
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('omniva_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [tenant, setTenant] = useState(() => {
-    const saved = localStorage.getItem('omniva_tenant');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState(() => localStorage.getItem('omniva_token') || null);
+  const [user, setUser] = useState(() => parseStoredJson('omniva_user'));
+  const [tenant, setTenant] = useState(() => parseStoredJson('omniva_tenant'));
+  const [token, setToken] = useState(() => readStoredItem('omniva_token') || null);
   const [loading, setLoading] = useState(true);
 
   // Setup Axios interceptor

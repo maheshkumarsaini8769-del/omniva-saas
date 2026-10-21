@@ -188,6 +188,64 @@ async function runPhase3Tests() {
     ingestedLead?.campaignName
   );
 
+  // 5b. Email-only Meta lead must be accepted without inventing a phone number.
+  const emailOnlyLeadId = 'META_EMAIL_' + Date.now();
+  const emailOnlyLeadName = 'Email Only Meta ' + Date.now().toString().slice(-4);
+  const emailOnlyAddress = `email-only-${Date.now()}@example.com`;
+  global.__phase3LeadPayload = {
+    id: emailOnlyLeadId,
+    created_time: new Date().toISOString(),
+    campaign_name: 'Email-only Lead Form',
+    ad_name: 'Email Capture Creative',
+    form_id: '99887767',
+    form_name: 'Email Only Form',
+    platform: 'fb',
+    field_data: [
+      { name: 'full_name', values: [emailOnlyLeadName] },
+      { name: 'email', values: [emailOnlyAddress] },
+    ],
+  };
+  const emailOnlyWebhookRes = await request(
+    {
+      hostname: '127.0.0.1',
+      port: 5000,
+      path: `/api/webhooks/meta?tenantSlug=${slugA}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    },
+    {
+      entry: [
+        {
+          id: pageId,
+          changes: [
+            {
+              field: 'leadgen',
+              value: { leadgen_id: emailOnlyLeadId, form_id: '99887767' },
+            },
+          ],
+        },
+      ],
+    }
+  );
+  if (emailOnlyWebhookRes.status !== 200) {
+    throw new Error(`Email-only Meta webhook failed with ${emailOnlyWebhookRes.status}`);
+  }
+  const emailOnlySearch = await request({
+    hostname: '127.0.0.1',
+    port: 5000,
+    path: `/api/crm/leads?search=${encodeURIComponent(emailOnlyLeadName)}`,
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + tokenA },
+  });
+  const emailOnlyLead = emailOnlySearch.data.leads?.[0];
+  if (!emailOnlyLead || emailOnlyLead.email !== emailOnlyAddress) {
+    throw new Error('Email-only Meta lead was not persisted with its email address');
+  }
+  if (emailOnlyLead.phone) {
+    throw new Error('Email-only Meta lead should not invent a phone number');
+  }
+  console.log('Test 5b: Email-only Meta lead persisted -> Phone: (empty), Email:', emailOnlyLead.email);
+
   // 6. Cross-Tenant Check: Merchant B must NOT see this Meta lead
   const leadsB = await request({
     hostname: '127.0.0.1',

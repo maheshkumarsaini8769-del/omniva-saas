@@ -263,6 +263,20 @@ const run = async () => {
       secretRes.status === 403,
       `status ${secretRes.status}`
     );
+    const merchantListRes = await request('GET', '/admin/merchants', {
+      token: superStaffToken,
+    });
+    const listedTenant = merchantListRes.data?.data?.find(
+      (t) => String(t._id) === String(ssrfTenant._id)
+    );
+    check(
+      'Merchant list omits integration credentials and CAPI tokens',
+      merchantListRes.status === 200 &&
+        Boolean(listedTenant) &&
+        !Object.prototype.hasOwnProperty.call(listedTenant, 'integrations') &&
+        !listedTenant.settings?.metaCapiToken,
+      merchantListRes.data?.message || 'secrets leaked in merchant list'
+    );
 
     // ---------------------------------------------------------------------
     // 3b. SUPER_ADMIN admin data endpoints and profile authorization
@@ -794,7 +808,7 @@ const run = async () => {
     );
 
     // ---------------------------------------------------------------------
-    // 11. Only the merchant owner can change plans, and quota windows survive
+    // 11. Merchant plan changes require platform approval; quota windows survive
     // ---------------------------------------------------------------------
     const planTenant = await createTenant('plan', 'STARTER');
     const planOwner = await createOwner(planTenant, 'plan');
@@ -824,9 +838,9 @@ const run = async () => {
       staffUpgrade.status === 403
     );
     check(
-      'Owner plan change preserves the current quota period',
-      ownerUpgrade.status === 200 &&
-        planAfter.planTier === 'PRO' &&
+      'Merchant owner cannot self-upgrade before billing is integrated',
+      ownerUpgrade.status === 403 &&
+        planAfter.planTier === 'STARTER' &&
         new Date(planAfter.subscription.currentPeriodStart).getTime() === oldPeriodStart.getTime(),
       `status=${ownerUpgrade.status}, plan=${planAfter.planTier}, start=${planAfter.subscription?.currentPeriodStart}`
     );

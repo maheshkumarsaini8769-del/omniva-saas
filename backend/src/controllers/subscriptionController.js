@@ -73,6 +73,15 @@ const getSubscriptionUsage = async (req, res) => {
 // @access  Private (Merchant Owner / Admin)
 const upgradePlan = async (req, res) => {
   try {
+    // Defense in depth: even if the route authorization changes, a merchant
+    // cannot grant itself a paid plan before billing is integrated.
+    if (req.user && req.user.role === 'MERCHANT_OWNER') {
+      return res.status(403).json({
+        success: false,
+        message: 'Plan changes require platform admin approval. Contact support to upgrade your subscription.',
+      });
+    }
+
     const { planTier, billingCycle = 'MONTHLY' } = req.body;
 
     if (!planTier || !PLAN_LIMITS[planTier]) {

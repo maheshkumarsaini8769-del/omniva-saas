@@ -132,6 +132,10 @@ export const CrmPipeline = () => {
 
   const handleOpenConvertModal = () => {
     if (!selectedLead) return;
+    if (!selectedLead.phone) {
+      alert('Add a phone number to this lead before converting it to an order.');
+      return;
+    }
     setConvertFormData({
       // customFields is a Mongoose Map; prefer .get() and fall back for plain objects.
       street: selectedLead.customFields?.get?.('address') || selectedLead.customFields?.address || '',
@@ -389,7 +393,7 @@ export const CrmPipeline = () => {
                           
                           {/* 1-Click WhatsApp Quick Action */}
                           <a
-                            href={`https://wa.me/91${lead.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(lead.name)},%20regarding%20your%20enquiry...`}
+                            href={`https://wa.me/91${(lead.phone || '').replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(lead.name)},%20regarding%20your%20enquiry...`}
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -450,7 +454,7 @@ export const CrmPipeline = () => {
                   <td className="py-3 px-4 text-slate-500">{lead.assignedToName || 'Unassigned'}</td>
                   <td className="py-3 px-4 text-right">
                     <a
-                      href={`https://wa.me/91${lead.phone.replace(/\D/g, '')}`}
+                      href={`https://wa.me/91${(lead.phone || '').replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -643,7 +647,7 @@ export const CrmPipeline = () => {
                 <PackageCheck className="w-4 h-4 text-emerald-300" /> ⚡ Convert Lead to Order (1-Click)
               </button>
               <a
-                href={`https://wa.me/91${selectedLead.phone.replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(selectedLead.name)}`}
+                href={`https://wa.me/91${(selectedLead.phone || '').replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(selectedLead.name)}`}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition"

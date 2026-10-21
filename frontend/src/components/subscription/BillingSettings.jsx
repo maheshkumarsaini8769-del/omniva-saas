@@ -104,35 +104,13 @@ export const BillingSettings = () => {
     fetchBillingData();
   }, []);
 
-  const handleUpgrade = async (tier) => {
-    try {
-      setUpgrading(true);
-      setUpgradeSuccess('');
-      setUpgradeError('');
-      const token = getToken();
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
-      const res = await fetch(`${API_BASE}/upgrade`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ planTier: tier, billingCycle: 'MONTHLY' }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || `Plan change failed with status ${res.status}`);
-      }
-
-      setUpgradeSuccess(data.message || `Plan changed to ${tier}.`);
-      fetchBillingData();
-    } catch (err) {
-      setUpgradeError(err.message || 'Unable to change plan.');
-    } finally {
-      setUpgrading(false);
-    }
+  const handleUpgrade = async () => {
+    setUpgrading(true);
+    setUpgradeSuccess('');
+    setUpgradeError(
+      'Plan changes require platform admin approval. Contact support to upgrade your subscription.'
+    );
+    setUpgrading(false);
   };
 
   if (loading) {
@@ -407,7 +385,7 @@ export const BillingSettings = () => {
                 </div>
 
                 <button
-                  onClick={() => handleUpgrade(p.tier)}
+                  onClick={() => handleUpgrade()}
                   disabled={isCurrent || upgrading}
                   className={`w-full py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                     isCurrent
