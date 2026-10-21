@@ -35,6 +35,14 @@ Production startup rejects missing, example, or weak values for the required sec
 | `META_GRAPH_API_VERSION` | Graph API version used for Meta calls (default `v21.0`) | Optional |
 | `META_GRAPH_API_BASE_URL` | Graph API base URL; override only for Meta sandbox or tests (default `https://graph.facebook.com`) | Optional |
 | `META_GRAPH_TIMEOUT_MS` | Hard timeout for a single Meta Graph API request in ms (default `10000`) | Optional |
+| `R2_ACCOUNT_ID` | Cloudflare account id that owns the media bucket | For image uploads |
+| `R2_ACCESS_KEY_ID` | R2 API token id (Object Read & Write) | For image uploads |
+| `R2_SECRET_ACCESS_KEY` | R2 API token secret | For image uploads |
+| `R2_BUCKET_NAME` | Bucket that stores product media | For image uploads |
+| `R2_PUBLIC_URL` | Public bucket URL used to serve product images | For image uploads |
+| `STORAGE_DRIVER` | `r2` for production, `local` for development (default: `r2` when R2 is configured) | Optional |
+| `STORAGE_LOCAL_DIR` | Local disk folder for the development storage driver | Optional |
+| `UPLOAD_MAX_PER_HOUR` | Image uploads allowed per tenant per hour (default `20`) | Optional |
 | `META_ACCESS_TOKEN` | Optional global fallback System User token | Optional |
 | `RAZORPAY_KEY_ID` | Razorpay Key ID | For online payments |
 | `RAZORPAY_KEY_SECRET` | Razorpay Key Secret | For online payments |
@@ -113,6 +121,10 @@ A production-ready [Dockerfile](file:///home/mahesh/meta%20ads/Dockerfile) and [
 
    # Run the full regression suite before serving production traffic
    npm test
+
+   # Optional: lint the frontend sources (catches use-before-declaration bugs
+   # that blank the dashboard at runtime but never fail the build)
+   cd frontend && npm run lint && cd ..
 
    # Encrypt any legacy plaintext tenant integration credentials.
    # The first command is a dry run; review the count, then apply.
@@ -251,6 +263,34 @@ Delivery rules that are enforced server-side: body parameters always match the
 approved template count and order, `5xx`/`429` responses are retried three
 times with backoff, `4xx` responses are never retried, and every send is
 recorded in the automation log with the Meta message id.
+
+### 4.2 Product Image Storage (Cloudflare R2)
+
+Merchants must be able to upload a photo from their phone. Images are stored in
+Cloudflare R2 (10GB free tier) and served from the bucket's public domain.
+
+1. Create a bucket, e.g. `omniva-media`, and an R2 API token with
+   **Object Read & Write** access.
+2. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+   `R2_BUCKET_NAME` and `R2_PUBLIC_URL` in the production environment. The
+   public URL is the `https://pub-….r2.dev` domain of the bucket.
+3. Keep `STORAGE_DRIVER=r2`. If it is missing, the app falls back to the local
+   disk driver and logs a loud warning in production, because images would be
+   lost on the next container replacement.
+4. Every upload is resized server-side with `sharp` into 200x200 (thumb),
+   600x600 (card) and 1200x1200 (full) WebP images. EXIF data, including GPS
+   coordinates, is stripped. The untouched original is kept alongside.
+5. Uploads are limited to 5MB, to jpeg/png/webp, and to 20 per tenant per hour
+   (`UPLOAD_MAX_PER_HOUR`).
+
+Existing products that still store a plain image URL keep working. To convert
+them to the size-aware format run the migration (dry run first):
+
+```bash
+cd backend
+npm run db:migrate-product-images
+npm run db:migrate-product-images -- --apply
+```
 
 
 ---

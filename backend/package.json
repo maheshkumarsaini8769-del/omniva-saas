@@ -17,9 +17,12 @@
     "test:phase9": "node tests/phase9_security_test.js",
     "test:phase10": "node tests/phase10_hardening_test.js",
     "test:phase11": "node tests/phase11_whatsapp_template_test.js",
-    "test:all": "node tests/phase2_test.js && node tests/phase3_test.js && node tests/phase4_test.js && node tests/phase5_test.js && node tests/phase6_test.js && node tests/phase7_test.js && node tests/phase8_test.js && node tests/phase9_security_test.js && node tests/phase10_hardening_test.js && node tests/phase11_whatsapp_template_test.js",
+    "test:phase12": "node tests/phase12_image_upload_test.js",
+    "test:phase13": "node tests/phase13_frontend_safety_test.js",
+    "test:all": "node tests/phase2_test.js && node tests/phase3_test.js && node tests/phase4_test.js && node tests/phase5_test.js && node tests/phase6_test.js && node tests/phase7_test.js && node tests/phase8_test.js && node tests/phase9_security_test.js && node tests/phase10_hardening_test.js && node tests/phase11_whatsapp_template_test.js && node tests/phase12_image_upload_test.js && node tests/phase13_frontend_safety_test.js",
     "db:sync-indexes": "node scripts/syncIndexes.js",
     "db:encrypt-secrets": "node scripts/encryptTenantSecrets.js",
+    "db:migrate-product-images": "node scripts/migrateProductImages.js",
     "db:backup": "node scripts/backup.js",
     "db:restore": "node scripts/restore.js"
   },
@@ -32,6 +35,8 @@
   "author": "Omniva",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1154.0",
+    "@aws-sdk/s3-request-presigner": "^3.1154.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^18.0.7",
@@ -40,6 +45,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.2",
     "morgan": "^1.12.1",
+    "multer": "^2.4.0",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

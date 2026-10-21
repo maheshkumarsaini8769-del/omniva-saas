@@ -297,6 +297,9 @@ export const SuperAdminDashboard = () => {
     }));
   };
 
+  // Merchants Data
+  const [merchants, setMerchants] = useState([]);
+
   const handleToggleManagedBySuperAdmin = (merchantId) => {
     const current = merchantApiStore[merchantId] || createEmptySuperAdminIntegrationConfig();
     const nextValue = !current.managedBySuperAdmin;
@@ -432,9 +435,6 @@ export const SuperAdminDashboard = () => {
   const [req2FA, setReq2FA] = useState(true);
   const [alertFailures, setAlertFailures] = useState(true);
   const [allowUnverifiedDomains, setAllowUnverifiedDomains] = useState(false);
-
-  // Merchants Data
-  const [merchants, setMerchants] = useState([]);
 
   const [livePlatformStats, setLivePlatformStats] = useState(null);
   const [platformPlans, setPlatformPlans] = useState(null);

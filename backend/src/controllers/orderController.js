@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getPrimaryImageUrl } = require('../utils/productImages');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Coupon = require('../models/Coupon');
@@ -798,7 +799,7 @@ const getExecutiveOverview = async (req, res) => {
           stockQuantity: stock,
           status: 'OUT_OF_STOCK',
           alertLevel: 'CRITICAL',
-          image: p.images?.[0] || '',
+          image: getPrimaryImageUrl(p.images),
         });
       } else if (isLow) {
         lowStockCount++;
@@ -810,7 +811,7 @@ const getExecutiveOverview = async (req, res) => {
           stockQuantity: stock,
           status: 'LOW_STOCK',
           alertLevel: 'WARNING',
-          image: p.images?.[0] || '',
+          image: getPrimaryImageUrl(p.images),
         });
       } else {
         healthyStockCount++;

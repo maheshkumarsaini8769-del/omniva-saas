@@ -1,5 +1,7 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const { normalizeProductImages, getImageStorageKeys } = require('../utils/productImages');
+const { deleteImage } = require('../services/storageService');
 
 const mongoose = require('mongoose');
 
@@ -196,7 +198,7 @@ const createProduct = async (req, res) => {
       description: description || '',
       price: Number(price),
       compareAtPrice: Number(compareAtPrice || 0),
-      images: Array.isArray(images) ? images : (images ? [images] : []),
+      images: normalizeProductImages(Array.isArray(images) ? images : (images ? [images] : [])),
       variants: Array.isArray(variants) ? variants : [],
       stockQuantity: stockQuantity !== undefined ? Number(stockQuantity) : 100,
       trackQuantity: trackQuantity !== undefined ? Boolean(trackQuantity) : true,
@@ -262,6 +264,20 @@ const deleteProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
+
+    // Remove the stored image objects for this product. A storage failure must
+    // not block the product deletion, so it is logged and ignored.
+    const storageKeys = getImageStorageKeys(product.images);
+    if (storageKeys.length > 0) {
+      Promise.all(
+        storageKeys.map((key) =>
+          deleteImage(key).catch((storageError) => {
+            console.warn('[Product Delete] Image cleanup failed:', storageError.message);
+          })
+        )
+      ).catch(() => {});
+    }
+
     res.json({ success: true, message: 'Product deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

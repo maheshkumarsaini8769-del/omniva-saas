@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/useAuth';
 import { NO_IMAGE_PLACEHOLDER } from '../../utils/imagePlaceholder';
+import { getImageUrl } from '../../utils/productImages';
+import { ImageUploader } from './ImageUploader';
 import {
   Package,
   Plus,
@@ -35,7 +37,7 @@ export const ProductCatalog = () => {
   const [prodComparePrice, setProdComparePrice] = useState('');
   const [prodStock, setProdStock] = useState('');
   const [prodDesc, setProdDesc] = useState('');
-  const [prodImage, setProdImage] = useState('');
+  const [prodImages, setProdImages] = useState([]);
   const [variants, setVariants] = useState([]);
 
   // Temp variant input
@@ -130,7 +132,7 @@ export const ProductCatalog = () => {
           compareAtPrice: Number(prodComparePrice || 0),
           stockQuantity: Number(prodStock),
           description: prodDesc,
-          images: prodImage ? [prodImage] : [],
+          images: prodImages,
           variants,
         }),
       });
@@ -141,7 +143,7 @@ export const ProductCatalog = () => {
         setProdPrice('');
         setProdComparePrice('');
         setProdDesc('');
-        setProdImage('');
+        setProdImages([]);
         setVariants([]);
         fetchData();
       } else {
@@ -246,7 +248,7 @@ export const ProductCatalog = () => {
           </div>
         ) : (
           products.map((prod) => {
-            const prodImg = prod.images?.[0] || NO_IMAGE_PLACEHOLDER;
+            const prodImg = getImageUrl(prod.images, 'card') || NO_IMAGE_PLACEHOLDER;
             return (
               <div
                 key={prod._id}
@@ -426,29 +428,10 @@ export const ProductCatalog = () => {
                 </div>
               </div>
 
-              {/* Product Photo URL & Quick Presets */}
+              {/* Product Photos */}
               <div className="space-y-2">
-                <label className="text-slate-700 font-medium block mb-1">Product Photo URL</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={prodImage}
-                  onChange={(e) => setProdImage(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:bg-white"
-                />
-                {prodImage && (
-                  <div className="relative w-full h-28 rounded-xl overflow-hidden border border-slate-200 mt-2 bg-slate-100">
-                    <img
-                      src={prodImage}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                    <div className="absolute bottom-1 right-2 bg-black/70 px-2 py-0.5 rounded text-[10px] text-emerald-400">
-                      Live Preview
-                    </div>
-                  </div>
-                )}
+                <label className="text-slate-700 font-medium block mb-1">Product Photos</label>
+                <ImageUploader value={prodImages} onChange={setProdImages} />
               </div>
 
               <div>

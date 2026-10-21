@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeProductImages } = require('../utils/productImages');
 
 const variantSchema = new mongoose.Schema(
   {
@@ -85,8 +86,11 @@ const productSchema = new mongoose.Schema(
       min: 0,
     },
     images: {
-      type: [String],
+      // Each entry is { thumb, card, full, key, alt }. Legacy products store a
+      // plain URL string, so the array is mixed and normalised on write.
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
+      set: (value) => normalizeProductImages(value),
     },
     variants: {
       type: [variantSchema],

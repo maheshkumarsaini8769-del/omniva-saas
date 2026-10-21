@@ -117,11 +117,6 @@ export const IntegrationsManager = () => {
     }
   };
 
-  useEffect(() => {
-    fetchIntegrations();
-    fetchWhatsappTemplates();
-  }, []);
-
   // Load the WhatsApp template catalogue and the merchant's approved-name mapping.
   const fetchWhatsappTemplates = async () => {
     try {
@@ -152,6 +147,12 @@ export const IntegrationsManager = () => {
       setTemplatesLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchIntegrations();
+    fetchWhatsappTemplates();
+  }, []);
+
 
   const handleSaveWhatsappTemplates = async () => {
     try {

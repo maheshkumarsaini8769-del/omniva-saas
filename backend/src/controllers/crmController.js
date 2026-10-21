@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getPrimaryImageUrl } = require('../utils/productImages');
 const Lead = require('../models/Lead');
 const User = require('../models/User');
 const Order = require('../models/Order');
@@ -700,7 +701,7 @@ const convertLeadToOrder = async (req, res) => {
       targetProductId = prod._id;
       itemName = prod.name;
       itemPrice = Number(prod.price) || 0;
-      itemImage = prod.images?.[0] || '';
+      itemImage = getPrimaryImageUrl(prod.images);
       productForStock = prod;
 
       if (prod.variants && prod.variants.length > 0) {

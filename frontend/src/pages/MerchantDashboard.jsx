@@ -89,6 +89,8 @@ import { BillingSettings } from '../components/subscription/BillingSettings';
 import { AutomationManager } from '../components/automation/AutomationManager';
 import { IntegrationsManager } from '../components/integrations/IntegrationsManager';
 import { NO_IMAGE_PLACEHOLDER } from '../utils/imagePlaceholder';
+import { getImageUrl } from '../utils/productImages';
+import { ImageUploader } from '../components/products/ImageUploader';
 
 
 const formatDateInput = (value) => {
@@ -200,6 +202,14 @@ export const MerchantDashboard = () => {
   const [startDate, setStartDate] = useState(monthStartStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Products State (so Add Product updates catalog immediately).
+  // This must stay above every use of `productsList`: the component body
+  // derives the low stock and out of stock lists from it, and reading a
+  // `const` before its declaration throws a temporal dead zone error that
+  // blanks the whole dashboard.
+  const [productsList, setProductsList] = useState([]);
+  const products = productsList;
 
   // Interactive Visual Calendar Range Picker State
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -344,6 +354,17 @@ export const MerchantDashboard = () => {
     }
   ]);
 
+  // Rich Orders State with Full Lifecycle & Customer Details.
+  // Declared early: the dashboard derives order analytics from it during
+  // render, and reading a const before its declaration throws a temporal
+  // dead zone error that blanks the whole dashboard.
+  const [ordersList, setOrdersList] = useState([]);
+
+  const defaultCrmLeads = [];
+
+  // CRM Leads State
+  const [crmLeads, setCrmLeads] = useState(defaultCrmLeads);
+
   const handleSendAiMessage = (queryText) => {
     const q = (queryText || aiUserPrompt).trim();
     if (!q) return;
@@ -406,9 +427,6 @@ export const MerchantDashboard = () => {
       setIsAiThinking(false);
     }, 450);
   };
-
-  // Rich Orders State with Full Lifecycle & Customer Details
-  const [ordersList, setOrdersList] = useState([]);
 
   // Categories Showcase State with Authentic Photos
   const [categoriesList, setCategoriesList] = useState([]);
@@ -1261,10 +1279,6 @@ export const MerchantDashboard = () => {
     { key: 'LOST', label: 'Lost / Closed', badgeColor: 'bg-slate-100 text-slate-600 border-slate-200', dotColor: 'bg-slate-400' }
   ];
 
-  const defaultCrmLeads = [];
-
-  // CRM Leads State
-  const [crmLeads, setCrmLeads] = useState(defaultCrmLeads);
   const [crmLoading, setCrmLoading] = useState(false);
   const [crmSearch, setCrmSearch] = useState('');
   const [crmStageFilter, setCrmStageFilter] = useState('ALL');
@@ -1299,10 +1313,6 @@ export const MerchantDashboard = () => {
 
   // Meta Ads Real-Time Syncing State
   const [syncingMeta, setSyncingMeta] = useState(false);
-
-  // Products State (so Add Product updates catalog immediately)
-  const [productsList, setProductsList] = useState([]);
-  const products = productsList;
 
 
   // Inventory State (so Adjust Stock updates stock immediately)
@@ -1433,6 +1443,9 @@ export const MerchantDashboard = () => {
     img: '', // Starts empty - choose a real product image before publishing
     jars: DEFAULT_JAR_PRESETS.map(j => ({ ...j }))
   });
+  // Uploaded product images (thumb / card / full). Uploaded images are stored
+  // in Cloudflare R2, not as data URLs inside the product record.
+  const [newProductImages, setNewProductImages] = useState([]);
 
   // Edit Product Modal State
   const [showEditProductModal, setShowEditProductModal] = useState(false);
@@ -1453,6 +1466,7 @@ export const MerchantDashboard = () => {
     vis: 'Published',
     jars: DEFAULT_JAR_PRESETS.map(j => ({ ...j }))
   });
+  const [editProductImages, setEditProductImages] = useState([]);
 
   // Coupons & Promo Offers State
   const [couponsList, setCouponsList] = useState([]);
@@ -1638,7 +1652,7 @@ export const MerchantDashboard = () => {
     setActionSuccessToast('Customers CSV directory exported successfully!');
     setTimeout(() => setActionSuccessToast(''), 4000);
   };
-  const fetchCrmLeads = async () => {
+  async function fetchCrmLeads() {
     setCrmLoading(true);
     try {
       const token = localStorage.getItem('omniva_token');
@@ -1652,7 +1666,7 @@ export const MerchantDashboard = () => {
     } finally {
       setCrmLoading(false);
     }
-  };
+  }
 
   const fetchBookings = async () => {
     try {
@@ -1768,7 +1782,7 @@ export const MerchantDashboard = () => {
           const catName = catObj?.name || (typeof p.categoryId === 'string' ? p.categoryId : '');
           const rawPrice = Number(p.price) || 0;
           const rawStock = Number(p.stockQuantity) || 0;
-          const imgUrl = (Array.isArray(p.images) && p.images[0]) || p.image || '';
+          const imgUrl = getImageUrl(p.images, 'thumb') || p.image || '';
 
           const jars = (p.variants && p.variants.length > 0)
             ? p.variants.map((v, idx) => ({
@@ -1798,6 +1812,7 @@ export const MerchantDashboard = () => {
             statusColor: p.trackQuantity === false || rawStock > 10 ? 'bg-emerald-50 text-emerald-700' : (rawStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
             vis: p.isAvailable ? 'Published' : 'Hidden',
             img: imgUrl,
+            images: Array.isArray(p.images) ? p.images : [],
             jars: jars
           };
         });
@@ -1921,7 +1936,7 @@ export const MerchantDashboard = () => {
     };
   };
 
-  const fetchOrders = async () => {
+  async function fetchOrders() {
     try {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       if (!token) {
@@ -1948,7 +1963,7 @@ export const MerchantDashboard = () => {
       console.warn('Error fetching orders from backend:', err);
       return false;
     }
-  };
+  }
 
   useEffect(() => {
     fetchProductsAndCategories();
@@ -2013,7 +2028,7 @@ export const MerchantDashboard = () => {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  const fetchStaff = async () => {
+  async function fetchStaff() {
     try {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       if (!token) return;
@@ -2074,7 +2089,7 @@ export const MerchantDashboard = () => {
     } catch (e) {
       console.warn('Staff fetch notice:', e.message);
     }
-  };
+  }
 
   const handleSaveStaffPermissions = async (staff, { testView = false } = {}) => {
     if (!staff?.id) {
@@ -2366,7 +2381,7 @@ export const MerchantDashboard = () => {
   };
 
   // ==================== AUTOMATION ENGINE HANDLERS ====================
-  const fetchAutomationRules = async () => {
+  async function fetchAutomationRules() {
     try {
       const token = localStorage.getItem('omniva_token');
       const res = await axios.get('/api/automations/rules', {
@@ -2377,9 +2392,9 @@ export const MerchantDashboard = () => {
       console.warn('Could not load automation rules:', err.message);
       setAutomationRules([]);
     }
-  };
+  }
 
-  const fetchAutomationLogs = async () => {
+  async function fetchAutomationLogs() {
     try {
       const token = localStorage.getItem('omniva_token');
       const res = await axios.get('/api/automations/logs', {
@@ -2390,7 +2405,7 @@ export const MerchantDashboard = () => {
       console.warn('Could not load automation logs:', err.message);
       setAutomationLogs([]);
     }
-  };
+  }
 
   const handleToggleRule = async (ruleId, currentStatus) => {
     const updatedStatus = !currentStatus;
@@ -2658,7 +2673,7 @@ export const MerchantDashboard = () => {
         categoryName: enteredCat,
         price: numericPrice,
         stockQuantity: numericStock,
-        images: [finalImg],
+        images: newProductImages.length > 0 ? newProductImages : (finalImg ? [finalImg] : []),
         variants: variantsPayload,
         isAvailable: true,
         tags: [enteredCat.toLowerCase()]
@@ -2686,7 +2701,7 @@ export const MerchantDashboard = () => {
       status: numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
       statusColor: numericStock > 10 ? 'bg-emerald-50 text-emerald-700' : (numericStock > 0 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'),
       vis: savedProductData.isAvailable === false ? 'Unpublished' : 'Published',
-      img: finalImg,
+      img: getImageUrl(newProductImages, 'card') || finalImg,
       jars: activeJars
     };
 
@@ -2696,6 +2711,7 @@ export const MerchantDashboard = () => {
 
     // Reset and close
     setShowAddProductModal(false);
+    setNewProductImages([]);
     setShowCustomCatInput(false);
     setNewProductForm({
       name: '',
@@ -2794,6 +2810,7 @@ export const MerchantDashboard = () => {
       vis: prod.vis || 'Published',
       jars: prodJars
     });
+    setEditProductImages(Array.isArray(prod.images) ? prod.images : []);
     setShowEditCustomCatInput(false);
     setEditNewJarName('');
     setEditNewJarPrice('');
@@ -2904,7 +2921,7 @@ export const MerchantDashboard = () => {
         price: numericPrice,
         compareAtPrice: numericCompare,
         stockQuantity: numericStock,
-        images: [finalImg],
+        images: editProductImages.length > 0 ? editProductImages : (finalImg ? [finalImg] : []),
         variants: variantsPayload,
         isAvailable: editProductForm.vis !== 'Hidden'
       }, { headers: authHeaders });
@@ -2936,7 +2953,7 @@ export const MerchantDashboard = () => {
       status: savedProduct.trackQuantity === false || numericStock > 10 ? 'In stock' : (numericStock > 0 ? 'Low stock' : 'Out of stock'),
       statusColor: savedProduct.trackQuantity === false || numericStock > 10 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : (numericStock > 0 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-rose-50 text-rose-700 border-rose-200'),
       vis: savedProduct.isAvailable === false ? 'Unpublished' : 'Published',
-      img: finalImg,
+      img: getImageUrl(editProductImages, 'card') || finalImg,
       jars: activeJars
     };
 
@@ -2955,6 +2972,7 @@ export const MerchantDashboard = () => {
     });
 
     setShowEditProductModal(false);
+    setEditProductImages([]);
     setActionSuccessToast(`Product "${updatedProd.name}" updated. Price: ${updatedProd.price}, Stock: ${updatedProd.stock}`);
     setTimeout(() => setActionSuccessToast(''), 4500);
   };
@@ -2990,7 +3008,7 @@ export const MerchantDashboard = () => {
   };
 
   // ==================== COUPON & STOREWIDE DISCOUNT HANDLERS ====================
-  const fetchCoupons = async () => {
+  async function fetchCoupons() {
     try {
       const token = localStorage.getItem('omniva_token') || localStorage.getItem('token');
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -2999,7 +3017,7 @@ export const MerchantDashboard = () => {
     } catch (err) {
       console.warn('Could not fetch coupons:', err.message);
     }
-  };
+  }
 
   const handleCreateCoupon = async (e) => {
     e.preventDefault();
@@ -10225,61 +10243,16 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              {/* Product Photo Selection */}
+              {/* Product Photos */}
               <div className="space-y-2 border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-700 font-bold block">Product Photo</label>
-                  {newProductForm.img && (
-                    <button
-                      type="button"
-                      onClick={() => setNewProductForm({ ...newProductForm, img: '' })}
-                      className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      ✕ Remove photo
-                    </button>
-                  )}
-                </div>
-
-                {/* 1. Choose from Device Gallery */}
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
-                  <Upload className="w-4 h-4 shrink-0" />
-                  <span>📁 Choose from Phone / Computer Gallery</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleProductImageUpload}
-                  />
-                </label>
-
-                {/* Optional Web Link Input */}
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Or paste image URL (optional)"
-                    value={newProductForm.img}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, img: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-slate-900 font-mono text-[11px]"
-                  />
-                </div>
-
-                {/* Live Preview Display */}
-                {newProductForm.img ? (
-                  <div className="flex items-center gap-3 p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200">
-                    <img src={newProductForm.img} alt="Preview" className="w-14 h-14 rounded-lg object-cover border border-emerald-300 shadow-xs shrink-0" />
-                    <div className="text-[11px] text-slate-700">
-                      <strong className="text-emerald-800 font-bold block flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Photo Selected Ready
-                      </strong>
-                      This photo will appear on customer storefront cards &amp; invoices.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
-                    No photo selected yet. Upload a real product image.
-                  </div>
-                )}
+                <label className="text-slate-700 font-bold block">Product Photos</label>
+                <ImageUploader value={newProductImages} onChange={setNewProductImages} />
+                <p className="text-[11px] text-slate-500">
+                  Photos are resized and stored for you. The first image is used as the cover on the
+                  storefront.
+                </p>
               </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -10641,60 +10614,14 @@ export const MerchantDashboard = () => {
                 </div>
               </div>
 
-              {/* Product Photo Selection */}
+              {/* Product Photos */}
               <div className="space-y-2 border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-slate-700 font-bold block">Product Photo</label>
-                  {editProductForm.img && (
-                    <button
-                      type="button"
-                      onClick={() => setEditProductForm({ ...editProductForm, img: '' })}
-                      className="text-[11px] text-rose-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      ✕ Remove photo
-                    </button>
-                  )}
-                </div>
-
-                {/* 1. Device Gallery Upload */}
-                <label className="flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/70 text-indigo-600 font-bold text-xs cursor-pointer transition">
-                  <Upload className="w-4 h-4 shrink-0" />
-                  <span>📁 Choose from Phone / Computer Gallery</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleEditProductImageUpload}
-                  />
-                </label>
-
-                {/* Web Link Input */}
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Or paste image URL (optional)"
-                    value={editProductForm.img}
-                    onChange={(e) => setEditProductForm({ ...editProductForm, img: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-slate-900 font-mono text-[11px]"
-                  />
-                </div>
-
-                {/* Live Preview */}
-                {editProductForm.img ? (
-                  <div className="flex items-center gap-3 p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-200">
-                    <img src={editProductForm.img} alt="Preview" className="w-14 h-14 rounded-lg object-cover border border-emerald-300 shadow-xs shrink-0" />
-                    <div className="text-[11px] text-slate-700">
-                      <strong className="text-emerald-800 font-bold block flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Photo Updated
-                      </strong>
-                      Will appear immediately on customer storefront and invoices.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-slate-400 text-xs">
-                    No photo selected
-                  </div>
-                )}
+                <label className="text-slate-700 font-bold block">Product Photos</label>
+                <ImageUploader value={editProductImages} onChange={setEditProductImages} />
+                <p className="text-[11px] text-slate-500">
+                  Photos are resized and stored for you. The first image is used as the cover on the
+                  storefront.
+                </p>
               </div>
 
               <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { NO_IMAGE_PLACEHOLDER } from '../utils/imagePlaceholder';
+import { getImageSrcSet, getImageUrl } from '../utils/productImages';
 import {
   ShoppingBag,
   Plus,
@@ -163,6 +164,15 @@ export const PublicStorefront = () => {
   const [isBookingSubmitting, setIsBookingSubmitting] = useState(false);
   const [placedBooking, setPlacedBooking] = useState(null);
 
+  // Capture attribution from URL query params
+  const attribution = {
+    utmSource: searchParams.get('utm_source') || '',
+    utmMedium: searchParams.get('utm_medium') || '',
+    utmCampaign: searchParams.get('utm_campaign') || '',
+    utmContent: searchParams.get('utm_content') || '',
+    fbclid: searchParams.get('fbclid') || '',
+  };
+
   const handlePlaceBooking = async (e) => {
     e.preventDefault();
     if (!bookingName || !bookingPhone || !bookingDate) {
@@ -199,14 +209,6 @@ export const PublicStorefront = () => {
     }
   };
 
-  // Capture attribution from URL query params
-  const attribution = {
-    utmSource: searchParams.get('utm_source') || '',
-    utmMedium: searchParams.get('utm_medium') || '',
-    utmCampaign: searchParams.get('utm_campaign') || '',
-    utmContent: searchParams.get('utm_content') || '',
-    fbclid: searchParams.get('fbclid') || '',
-  };
 
   // Reset per-tenant UI state when navigating between storefronts.
   useEffect(() => {
@@ -272,7 +274,7 @@ export const PublicStorefront = () => {
       const productImage =
         product.img ||
         product.image ||
-        (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+        getImageUrl(product.images, 'thumb') ||
         NO_IMAGE_PLACEHOLDER;
 
       if (existingIndex > -1) {
@@ -332,7 +334,7 @@ export const PublicStorefront = () => {
         const productImage =
           product.img ||
           product.image ||
-          (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+          getImageUrl(product.images, 'thumb') ||
           NO_IMAGE_PLACEHOLDER;
 
         return [
@@ -488,7 +490,7 @@ export const PublicStorefront = () => {
         const productImage =
           product.img ||
           product.image ||
-          (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+          getImageUrl(product.images, 'thumb') ||
           NO_IMAGE_PLACEHOLDER;
 
         return [
@@ -539,13 +541,13 @@ export const PublicStorefront = () => {
   };
 
   const handleTopWhatsAppOrder = () => {
-    const rawPhone = storeData?.store?.contact?.phone || storeData?.store?.phone || store.phone || '';
+    const rawPhone = storeData?.store?.contact?.phone || storeData?.store?.phone || '';
     const tenantPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
     if (!tenantPhone) {
       alert('This store has not configured a WhatsApp number yet. Please use checkout or the contact options on this page.');
       return;
     }
-    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || store.businessName || 'this store';
+    const storeTitle = storeData?.store?.businessName || storeData?.store?.name || 'this store';
 
     let text = '';
     if (cart.length > 0) {
@@ -2318,7 +2320,7 @@ export const PublicStorefront = () => {
 };
 
 // Reusable Product Card with Image, Badges, Variant Selector & Instant-Cart Stepper
-const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart }) => {
+function ProductCard({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart }) {
   const rawBasePrice = parseMoney(product.price);
   const configuredVariants = (product.jars && product.jars.length > 0)
     ? product.jars
@@ -2364,7 +2366,7 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
   const productImage =
     product.img ||
     product.image ||
-    (Array.isArray(product.images) && product.images.length > 0 && product.images[0] ? product.images[0] : null) ||
+    getImageUrl(product.images, 'card') ||
     NO_IMAGE_PLACEHOLDER;
 
   return (
@@ -2373,6 +2375,8 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
       <div className="relative w-full h-52 bg-slate-100 overflow-hidden">
         <img
           src={productImage}
+          srcSet={getImageSrcSet(product.images)}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           alt={product.name}
           onError={(e) => {
             e.currentTarget.onerror = null;
@@ -2596,4 +2600,4 @@ const ProductCard = ({ product, cart = [], onAddToCart, onUpdateQty, onOpenCart 
       </div>
     </div>
   );
-};
+}

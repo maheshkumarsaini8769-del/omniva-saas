@@ -8,6 +8,7 @@ const Order = require('../models/Order');
 const Lead = require('../models/Lead');
 const Coupon = require('../models/Coupon');
 const { sendCapiEvent } = require('../services/metaCapiService');
+const { getPrimaryImageUrl } = require('../utils/productImages');
 const { triggerAutomation } = require('../services/automationEngine');
 const { buildAppUrl } = require('../utils/appUrl');
 
@@ -398,7 +399,7 @@ const createPublicOrder = async (req, res) => {
         price: unitPrice,
         quantity: qty,
         subtotal: itemSubtotal,
-        image: (product.images && product.images[0]) || '',
+        image: getPrimaryImageUrl(product.images),
         trackQuantity: Boolean(product.trackQuantity),
       });
     }

@@ -24,6 +24,8 @@ const publicStoreRoutes = require('./routes/publicStoreRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const integrationRoutes = require('./routes/integrationRoutes');
 const couponRoutes = require('./routes/couponRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const { getStorageDriver, getLocalStorageDir } = require('./services/storageService');
 const { handleRazorpayWebhook } = require('./controllers/paymentWebhookController');
 const { sanitizeInput } = require('./middlewares/sanitizeMiddleware');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
@@ -82,6 +84,21 @@ app.use('/api/automations', automationRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Local disk storage driver (development / self-hosted without R2). In
+// production the R2 driver serves the files from the bucket's public domain.
+if (getStorageDriver() === 'local') {
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      '[storage] WARNING: media storage is running on the local disk driver in production. ' +
+        'Images will be lost when the container is replaced. Configure Cloudflare R2 ' +
+        '(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL) ' +
+        'or set STORAGE_DRIVER=local only with a persistent volume.'
+    );
+  }
+  app.use('/storage', express.static(getLocalStorageDir(), { maxAge: '1d' }));
+}
 
 // Static assets for production deployment
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');

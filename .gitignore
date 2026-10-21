@@ -27,6 +27,7 @@ build/
 !**/.env.example
 backend/backups/
 backend/uploads/
+backend/storage/
 *.log
 *.swp
 *.tar.gz
