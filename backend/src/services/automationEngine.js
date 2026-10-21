@@ -2,6 +2,16 @@ const AutomationRule = require('../models/AutomationRule');
 const AutomationLog = require('../models/AutomationLog');
 const Tenant = require('../models/Tenant');
 const { assertSafeOutboundUrl } = require('../utils/outboundUrlGuard');
+const {
+  getTemplateDefinition,
+  pickVariableValue,
+} = require('../config/whatsappTemplates');
+const {
+  normalizeTemplateMapping,
+  normalizeWhatsAppPhone,
+  resolveWhatsAppCredentials,
+  sendTemplate,
+} = require('./whatsappTemplateService');
 
 /**
  * Replace tokens in template string e.g. {{customerName}} -> "Aarav Sharma"
@@ -80,6 +90,9 @@ const triggerAutomation = async ({
 
     const rules = await AutomationRule.find(query);
     const results = [];
+    // WhatsApp credentials and the template mapping are the same for every
+    // rule of this tenant, so they are loaded once per trigger.
+    let whatsappTenant = null;
 
     for (const rule of rules) {
       const conditionMatches = evaluateCondition(rule.condition, data);
@@ -134,8 +147,10 @@ const triggerAutomation = async ({
         // Determine human-readable recipient destination
         let skippedReason = '';
         let customerPhone = '';
+        let provider = '';
+        let providerMessageId = '';
 
-        if (actionType === 'SEND_WHATSAPP') {
+        if (actionType === 'SEND_WHATSAPP' || actionType === 'SEND_WHATSAPP_TEMPLATE') {
           customerPhone = String(data.customerPhone || data.phone || '').replace(/\D/g, '');
           const name = data.customerName || data.name || '';
           recipient = customerPhone
@@ -145,68 +160,72 @@ const triggerAutomation = async ({
           if (!customerPhone) {
             skippedReason = 'No customer phone number is available for WhatsApp delivery';
           } else {
-            const tenant = await Tenant.findById(businessId).select('integrations.whatsapp');
-            const wa = tenant?.integrations?.whatsapp || {};
-            // Use only the merchant's own credentials. A platform-level fallback
-            // would send from the wrong number and mask a missing tenant setup.
-            const accessToken = wa.accessToken;
-            const phoneNumberId = wa.phoneNumberId;
-            const templateName = String(rule.action?.whatsappTemplateName || '').trim();
-            const templateLanguage = String(rule.action?.whatsappTemplateLanguage || 'en').trim() || 'en';
-            const templateVariables = Array.isArray(rule.action?.whatsappTemplateVariables)
-              ? rule.action.whatsappTemplateVariables
-              : [];
+            if (!whatsappTenant) {
+              whatsappTenant = await Tenant.findById(businessId).select(
+                'integrations.whatsapp settings.waTemplates settings.waDefaultLanguage'
+              );
+            }
+            const tenant = whatsappTenant;
+            const credentials = resolveWhatsAppCredentials(tenant);
+            const accessToken = credentials.accessToken;
+            const phoneNumberId = credentials.phoneNumberId;
+
+            // Template resolution order:
+            // 1. explicit template name on the rule
+            // 2. tenant mapping for the logical template key
+            const templateKey = String(rule.action?.whatsappTemplateKey || '').trim();
+            const templateDefinition = getTemplateDefinition(templateKey);
+            const mapping = normalizeTemplateMapping(tenant?.settings?.waTemplates);
+            const mappedTemplate = templateKey ? mapping[templateKey] : null;
+            const templateName =
+              String(rule.action?.whatsappTemplateName || '').trim() || mappedTemplate?.name || '';
+            const templateLanguage =
+              String(rule.action?.whatsappTemplateLanguage || '').trim() ||
+              mappedTemplate?.language ||
+              String(tenant?.settings?.waDefaultLanguage || '').trim() ||
+              'en';
+
+            const { phone: normalizedPhone, error: phoneError } =
+              normalizeWhatsAppPhone(customerPhone);
 
             if (!accessToken || !phoneNumberId) {
               skippedReason = 'Merchant has not configured WhatsApp Business API credentials';
             } else if (!templateName) {
-              // Meta rejects free-form text for business-initiated messages
-              // outside the 24-hour customer-service window. Do not make a
-              // request that is guaranteed to fail in production.
-              skippedReason =
-                'Approved WhatsApp template is required for business-initiated messages. Set action.whatsappTemplateName.';
+              skippedReason = templateKey
+                ? `No approved Meta template is mapped for "${templateKey}". Map it under Integrations -> WhatsApp Templates.`
+                : 'Approved WhatsApp template is required for business-initiated messages. Set a template key or an approved template name.';
+            } else if (!normalizedPhone) {
+              skippedReason = phoneError;
             } else {
-              const last10 = customerPhone.slice(-10);
-              const to = customerPhone.startsWith('91') && customerPhone.length === 12
-                ? customerPhone
-                : `91${last10}`;
-              const bodyParameters = templateVariables
-                .map((variable) => String(variable || '').trim())
-                .filter(Boolean)
-                .map((variable) => ({
-                  type: 'text',
-                  text: interpolateTemplate(`{{${variable}}}`, data),
-                }));
-              const template = {
-                name: templateName,
-                language: { code: templateLanguage },
-              };
-              if (bodyParameters.length > 0) {
-                template.components = [{ type: 'body', parameters: bodyParameters }];
-              }
+              // Body parameters always follow the approved template order, so
+              // an empty value can never shift later values into the wrong slot.
+              const ruleVariables = Array.isArray(rule.action?.whatsappTemplateVariables)
+                ? rule.action.whatsappTemplateVariables.map((v) => String(v).trim()).filter(Boolean)
+                : [];
+              const variableKeys =
+                ruleVariables.length > 0
+                  ? ruleVariables
+                  : templateDefinition?.bodyVariables || [];
+              const bodyParameters = variableKeys.map((key) => pickVariableValue(data, key));
 
-              const response = await fetch(
-                `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-                {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    to,
-                    type: 'template',
-                    template,
-                  }),
-                  signal: AbortSignal.timeout(5000),
-                }
+              const requiredVariables = templateDefinition?.requiredVariables || [];
+              const missingVariables = requiredVariables.filter(
+                (key) => !pickVariableValue(data, key)
               );
-              if (!response.ok) {
-                const body = await response.text().catch(() => '');
-                throw new Error(
-                  `WhatsApp Cloud API returned HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`
-                );
+
+              if (missingVariables.length > 0) {
+                skippedReason = `Template "${templateKey || templateName}" needs ${missingVariables.join(', ')} which are not available for this event`;
+              } else {
+                const delivery = await sendTemplate({
+                  businessId,
+                  tenant,
+                  to: normalizedPhone,
+                  templateName,
+                  language: templateLanguage,
+                  bodyParameters,
+                });
+                provider = 'meta_whatsapp';
+                providerMessageId = delivery.messageId || '';
               }
             }
           }
@@ -306,6 +325,8 @@ const triggerAutomation = async ({
           statusCode: 200,
           payloadSummary: interpolatedMessage || `Executed ${actionType}`,
           details: interpolatedMessage || `Executed ${actionType}`,
+          provider,
+          providerMessageId,
         });
 
         // Increment execution stats only for real dispatches.

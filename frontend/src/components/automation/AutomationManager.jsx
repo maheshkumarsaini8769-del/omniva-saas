@@ -45,6 +45,8 @@ export const AutomationManager = () => {
   const [toastError, setToastError] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [testingRuleId, setTestingRuleId] = useState(null);
+  // WhatsApp template catalogue + this tenant's approved-name mapping.
+  const [whatsappTemplates, setWhatsappTemplates] = useState([]);
 
   // New / Edit Rule Form State
   const [form, setForm] = useState({
@@ -53,11 +55,12 @@ export const AutomationManager = () => {
     conditionField: 'always',
     conditionOperator: 'ALWAYS',
     conditionValue: '',
-    actionType: 'SEND_WHATSAPP',
+    actionType: 'SEND_WHATSAPP_TEMPLATE',
     actionTarget: 'customer',
     actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been confirmed. We will dispatch your order shortly. Thank you!',
+    whatsappTemplateKey: '',
     whatsappTemplateName: '',
-    whatsappTemplateLanguage: 'en',
+    whatsappTemplateLanguage: '',
     whatsappTemplateVariables: '',
   });
 
@@ -127,6 +130,31 @@ export const AutomationManager = () => {
   useEffect(() => {
     fetchRulesAndLogs();
   }, []);
+
+  // Load the WhatsApp template catalogue so the rule editor can show which
+  // Omniva templates this merchant has already mapped to an approved Meta
+  // template. A 403 (staff without access) must not break the rules screen.
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch('/api/integrations/whatsapp-templates', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        if (data.success && Array.isArray(data.templates)) {
+          setWhatsappTemplates(data.templates);
+        }
+      } catch {
+        setWhatsappTemplates([]);
+      }
+    };
+    loadTemplates();
+  }, []);
+
+  const getWhatsappTemplate = (key) =>
+    whatsappTemplates.find((template) => template.key === key) || null;
 
   const handleToggleRule = async (rule) => {
     const newStatus = !rule.isActive;
@@ -238,8 +266,13 @@ export const AutomationManager = () => {
       showToast('Please enter a rule name.', true);
       return;
     }
-    if (form.actionType === 'SEND_WHATSAPP' && !form.whatsappTemplateName.trim()) {
-      showToast('WhatsApp rules require an approved Meta template name.', true);
+    const isWhatsappAction =
+      form.actionType === 'SEND_WHATSAPP' || form.actionType === 'SEND_WHATSAPP_TEMPLATE';
+    if (isWhatsappAction && !form.whatsappTemplateName.trim() && !form.whatsappTemplateKey) {
+      showToast(
+        'WhatsApp rules need an approved Meta template. Pick a template or type its approved name.',
+        true
+      );
       return;
     }
 
@@ -255,10 +288,11 @@ export const AutomationManager = () => {
         type: form.actionType,
         target: form.actionTarget,
         template: form.actionTemplate,
-        ...(form.actionType === 'SEND_WHATSAPP'
+        ...(isWhatsappAction
           ? {
+              whatsappTemplateKey: form.whatsappTemplateKey || '',
               whatsappTemplateName: form.whatsappTemplateName.trim(),
-              whatsappTemplateLanguage: form.whatsappTemplateLanguage.trim() || 'en',
+              whatsappTemplateLanguage: form.whatsappTemplateLanguage.trim(),
               whatsappTemplateVariables: form.whatsappTemplateVariables
                 .split(',')
                 .map((value) => value.trim())
@@ -311,8 +345,9 @@ export const AutomationManager = () => {
       actionType: preset.actionType,
       actionTarget: preset.actionTarget,
       actionTemplate: preset.actionTemplate,
+      whatsappTemplateKey: '',
       whatsappTemplateName: '',
-      whatsappTemplateLanguage: 'en',
+      whatsappTemplateLanguage: '',
       whatsappTemplateVariables: '',
     });
     setShowCreateModal(true);
@@ -388,6 +423,8 @@ export const AutomationManager = () => {
     switch (actType) {
       case 'SEND_WHATSAPP':
         return { label: '💬 WhatsApp Message', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
+      case 'SEND_WHATSAPP_TEMPLATE':
+        return { label: '💬 WhatsApp Template', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
       case 'OUTBOUND_WEBHOOK':
         return { label: '🌐 Outbound Webhook', color: 'bg-blue-100 text-blue-900 border-blue-300' };
       case 'IN_APP_ALERT':
@@ -460,11 +497,12 @@ export const AutomationManager = () => {
                 conditionField: 'always',
                 conditionOperator: 'ALWAYS',
                 conditionValue: '',
-                actionType: 'SEND_WHATSAPP',
+                actionType: 'SEND_WHATSAPP_TEMPLATE',
                 actionTarget: 'customer',
                 actionTemplate: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} is confirmed. Thank you!',
+                whatsappTemplateKey: 'order_confirmation',
                 whatsappTemplateName: '',
-                whatsappTemplateLanguage: 'en',
+                whatsappTemplateLanguage: '',
                 whatsappTemplateVariables: '',
               });
               setShowCreateModal(true);
@@ -499,7 +537,7 @@ export const AutomationManager = () => {
             <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp Dispatches
           </div>
           <div className="text-2xl font-black text-emerald-700 mt-1">
-            {rules.filter(r => r.action?.type === 'SEND_WHATSAPP').reduce((a, b) => a + (b.executionCount || 0), 0)}
+            {rules.filter(r => r.action?.type === 'SEND_WHATSAPP' || r.action?.type === 'SEND_WHATSAPP_TEMPLATE').reduce((a, b) => a + (b.executionCount || 0), 0)}
           </div>
           <div className="text-[11px] text-slate-400 mt-0.5">Direct customer alerts</div>
         </div>
@@ -668,11 +706,12 @@ export const AutomationManager = () => {
                               conditionField: rule.condition?.field || 'always',
                               conditionOperator: rule.condition?.operator || 'ALWAYS',
                               conditionValue: rule.condition?.value || '',
-                              actionType: rule.action?.type || 'SEND_WHATSAPP',
+                              actionType: rule.action?.type || 'SEND_WHATSAPP_TEMPLATE',
                               actionTarget: rule.action?.target || 'customer',
                               actionTemplate: rule.action?.template || '',
+                              whatsappTemplateKey: rule.action?.whatsappTemplateKey || '',
                               whatsappTemplateName: rule.action?.whatsappTemplateName || '',
-                              whatsappTemplateLanguage: rule.action?.whatsappTemplateLanguage || 'en',
+                              whatsappTemplateLanguage: rule.action?.whatsappTemplateLanguage || '',
                               whatsappTemplateVariables: Array.isArray(rule.action?.whatsappTemplateVariables)
                                 ? rule.action.whatsappTemplateVariables.join(', ')
                                 : '',
@@ -707,9 +746,19 @@ export const AutomationManager = () => {
                         <span className="text-slate-400 font-semibold mr-1.5">Action Template:</span>
                         {rule.action?.template}
                       </div>
-                      {rule.action?.type === 'SEND_WHATSAPP' && !rule.action?.whatsappTemplateName && (
+                      {(rule.action?.type === 'SEND_WHATSAPP' ||
+                        rule.action?.type === 'SEND_WHATSAPP_TEMPLATE') &&
+                        !rule.action?.whatsappTemplateName && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[10px] font-semibold text-amber-800">
-                          Not sendable yet: configure an approved Meta WhatsApp template on this rule. Omniva will log a skip instead of sending free-form text.
+                          Not sendable yet:{' '}
+                          {rule.action?.whatsappTemplateKey
+                            ? getWhatsappTemplate(rule.action.whatsappTemplateKey)?.configured
+                              ? `the "${rule.action.whatsappTemplateKey}" template is mapped to "${getWhatsappTemplate(
+                                  rule.action.whatsappTemplateKey
+                                )?.templateName}".`
+                              : `the "${rule.action.whatsappTemplateKey}" template is not mapped to an approved Meta template yet. Map it under Integrations → WhatsApp Templates.`
+                            : 'configure an approved Meta WhatsApp template on this rule.'}{' '}
+                          Omniva will log a skip instead of sending free-form text.
                         </div>
                       )}
                     </div>
@@ -851,6 +900,8 @@ export const AutomationManager = () => {
                     <option value="ORDER_CREATED">🛒 Order Placed (New Order Received)</option>
                     <option value="ORDER_CONFIRMED">✅ Order Confirmed (Accepted by Merchant)</option>
                     <option value="ORDER_SHIPPED">🚚 Order Shipped / Dispatched (Handed to Courier)</option>
+                    <option value="ORDER_DELIVERED">📦 Order Delivered</option>
+                    <option value="ORDER_CANCELLED">🚫 Order Cancelled</option>
                     <option value="LEAD_INGESTED">🎯 Meta Ads Lead Ingested (FB/Instagram Lead)</option>
                     <option value="BOOKING_CREATED">📅 Booking Requested</option>
                     <option value="BOOKING_CONFIRMED">✅ Booking Confirmed (Payment Captured)</option>
@@ -865,29 +916,62 @@ export const AutomationManager = () => {
                     onChange={(e) => setForm({ ...form, actionType: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-900 font-medium focus:outline-none focus:border-indigo-500 cursor-pointer"
                   >
-                    <option value="SEND_WHATSAPP">💬 Send WhatsApp Message</option>
+                    <option value="SEND_WHATSAPP_TEMPLATE">💬 Send WhatsApp Template (Approved)</option>
+                    <option value="SEND_WHATSAPP">💬 Send WhatsApp Message (Custom Template)</option>
                     <option value="OUTBOUND_WEBHOOK">🌐 Outbound Webhook (ERP/Zapier)</option>
                     <option value="IN_APP_ALERT">🔔 Dashboard In-App Alert</option>
                   </select>
                 </div>
               </div>
 
-              {form.actionType === 'SEND_WHATSAPP' && (
+              {(form.actionType === 'SEND_WHATSAPP' || form.actionType === 'SEND_WHATSAPP_TEMPLATE') && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-3">
                   <div>
                     <label className="font-bold text-slate-800 block mb-1">
-                      Approved WhatsApp Template Name
+                      Omniva Template (pick one you have mapped)
+                    </label>
+                    <select
+                      value={form.whatsappTemplateKey}
+                      onChange={(e) => {
+                        const key = e.target.value;
+                        const template = getWhatsappTemplate(key);
+                        setForm({
+                          ...form,
+                          whatsappTemplateKey: key,
+                          whatsappTemplateVariables: template
+                            ? template.bodyVariables.join(', ')
+                            : form.whatsappTemplateVariables,
+                          whatsappTemplateLanguage: template?.language || form.whatsappTemplateLanguage,
+                        });
+                      }}
+                      className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="">— None (use a custom approved template name below) —</option>
+                      {whatsappTemplates.map((template) => (
+                        <option key={template.key} value={template.key}>
+                          {template.configured ? '✅' : '⚠️'} {template.label} ({template.key})
+                          {template.configured ? ` → ${template.templateName}` : ' — not mapped yet'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-emerald-800 mt-1">
+                      Map these under Integrations → WhatsApp Templates. A template that is not mapped
+                      is skipped with a reason instead of being sent.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-800 block mb-1">
+                      Approved WhatsApp Template Name (optional override)
                     </label>
                     <input
                       type="text"
-                      required
                       placeholder="e.g. order_confirmation"
                       value={form.whatsappTemplateName}
                       onChange={(e) => setForm({ ...form, whatsappTemplateName: e.target.value })}
                       className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
                     />
                     <p className="text-[10px] text-emerald-800 mt-1">
-                      Meta requires an approved template for business-initiated messages. Free-form text is only valid inside an open 24-hour customer-service window, so Omniva will skip a WhatsApp action that has no template name.
+                      Meta requires an approved template for business-initiated messages. Free-form text is only valid inside an open 24-hour customer-service window, so Omniva will skip a WhatsApp action that has no template.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -897,7 +981,7 @@ export const AutomationManager = () => {
                         type="text"
                         value={form.whatsappTemplateLanguage}
                         onChange={(e) => setForm({ ...form, whatsappTemplateLanguage: e.target.value })}
-                        placeholder="en"
+                        placeholder="inherit (en)"
                         className="w-full bg-white border border-emerald-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
                       />
                     </div>

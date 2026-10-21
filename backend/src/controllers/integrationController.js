@@ -1,5 +1,10 @@
 const Tenant = require('../models/Tenant');
 const { sendCapiEvent } = require('../services/metaCapiService');
+const {
+  WHATSAPP_TEMPLATES,
+  WHATSAPP_TEMPLATE_KEYS,
+} = require('../config/whatsappTemplates');
+const { normalizeTemplateMapping } = require('../services/whatsappTemplateService');
 
 // Status is derived from actual configuration, never hardcoded.
 const deriveStatus = (enabled, hasRequiredFields) => {
@@ -342,8 +347,120 @@ const testIntegration = async (req, res) => {
   }
 };
 
+// @desc    Get the tenant's WhatsApp template catalogue and approved-name mapping
+// @route   GET /api/integrations/whatsapp-templates
+// @access  Private (Owner / Marketing)
+const getWhatsappTemplates = async (req, res) => {
+  try {
+    const tenant = await Tenant.findById(req.businessId).select(
+      'settings.waTemplates settings.waDefaultLanguage'
+    );
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant not found' });
+    }
+
+    const mapping = normalizeTemplateMapping(tenant.settings?.waTemplates);
+    const defaultLanguage = tenant.settings?.waDefaultLanguage || 'en';
+
+    const templates = WHATSAPP_TEMPLATE_KEYS.map((key) => {
+      const definition = WHATSAPP_TEMPLATES[key];
+      const mapped = mapping[key];
+      return {
+        key,
+        label: definition.label,
+        description: definition.description,
+        bodyVariables: definition.bodyVariables,
+        requiredVariables: definition.requiredVariables,
+        hasButtons: Boolean(definition.hasButtons),
+        configured: Boolean(mapped?.name),
+        templateName: mapped?.name || '',
+        language: mapped?.language || defaultLanguage,
+      };
+    });
+
+    res.json({
+      success: true,
+      defaultLanguage,
+      templates,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Map Omniva template keys to the merchant's approved Meta template names
+// @route   PUT /api/integrations/whatsapp-templates
+// @access  Private (Owner)
+const updateWhatsappTemplates = async (req, res) => {
+  try {
+    const { mapping, defaultLanguage } = req.body || {};
+
+    if (mapping !== undefined && (typeof mapping !== 'object' || mapping === null || Array.isArray(mapping))) {
+      return res.status(400).json({ success: false, message: 'mapping must be an object' });
+    }
+
+    if (defaultLanguage !== undefined) {
+      const language = String(defaultLanguage || '').trim();
+      if (language && !/^[a-z]{2,3}([_-][A-Za-z]{2,4})?$/.test(language)) {
+        return res.status(400).json({
+          success: false,
+          message: 'defaultLanguage must be a Meta language code such as en or hi',
+        });
+      }
+    }
+
+    const unsupported = Object.keys(mapping || {}).filter(
+      (key) => !WHATSAPP_TEMPLATE_KEYS.includes(key)
+    );
+    if (unsupported.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported WhatsApp template key(s): ${unsupported.join(', ')}`,
+        supported: WHATSAPP_TEMPLATE_KEYS,
+      });
+    }
+
+    const tenant = await Tenant.findById(req.businessId);
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant not found' });
+    }
+
+    const current = { ...normalizeTemplateMapping(tenant.settings?.waTemplates) };
+
+    for (const key of WHATSAPP_TEMPLATE_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(mapping || {}, key)) continue;
+      const entry = mapping[key];
+      const name = typeof entry === 'string' ? entry.trim() : String(entry?.name || '').trim();
+      if (!name) {
+        delete current[key];
+        continue;
+      }
+      const language = typeof entry === 'string' ? '' : String(entry?.language || '').trim();
+      current[key] = language ? { name, language } : name;
+    }
+
+    tenant.settings.waTemplates = current;
+    if (defaultLanguage !== undefined) {
+      tenant.settings.waDefaultLanguage = String(defaultLanguage || '').trim() || 'en';
+    }
+
+    await tenant.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp template mapping saved successfully',
+      defaultLanguage: tenant.settings.waDefaultLanguage || 'en',
+      mapping: current,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getIntegrations,
   updateIntegrations,
   testIntegration,
+  getWhatsappTemplates,
+  updateWhatsappTemplates,
 };

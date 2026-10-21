@@ -19,6 +19,8 @@ const automationRuleSchema = new mongoose.Schema(
         'ORDER_CREATED',
         'ORDER_CONFIRMED',
         'ORDER_SHIPPED',
+        'ORDER_DELIVERED',
+        'ORDER_CANCELLED',
         'BOOKING_CREATED',
         'BOOKING_CONFIRMED',
         'LEAD_INGESTED',
@@ -36,7 +38,14 @@ const automationRuleSchema = new mongoose.Schema(
     action: {
       type: {
         type: String,
-        enum: ['SEND_WHATSAPP', 'ASSIGN_STAFF', 'OUTBOUND_WEBHOOK', 'IN_APP_ALERT', 'SEND_INTERNAL_ALERT'],
+        enum: [
+          'SEND_WHATSAPP',
+          'SEND_WHATSAPP_TEMPLATE',
+          'ASSIGN_STAFF',
+          'OUTBOUND_WEBHOOK',
+          'IN_APP_ALERT',
+          'SEND_INTERNAL_ALERT',
+        ],
         required: [true, 'Action type is required'],
       },
       target: { type: String, default: '' }, // staff ID, destination phone, or webhook URL
@@ -53,8 +62,18 @@ const automationRuleSchema = new mongoose.Schema(
         trim: true,
       },
       whatsappTemplateLanguage: {
+        // Empty means "inherit": the mapped template language, then the
+        // tenant default, then English.
         type: String,
-        default: 'en',
+        default: '',
+        trim: true,
+      },
+      // Logical template key from the Omniva catalogue, e.g. 'order_confirmation'.
+      // When set, the approved Meta template name is resolved from the
+      // tenant's WhatsApp template mapping.
+      whatsappTemplateKey: {
+        type: String,
+        default: '',
         trim: true,
       },
       // Ordered body variables, e.g. ['customerName', 'orderNumber'].

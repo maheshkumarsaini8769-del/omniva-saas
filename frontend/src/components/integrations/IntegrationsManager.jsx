@@ -38,6 +38,11 @@ export const IntegrationsManager = () => {
   const [showSecrets, setShowSecrets] = useState({});
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
+  // WhatsApp template mapping: Omniva template key -> approved Meta template name.
+  const [whatsappTemplates, setWhatsappTemplates] = useState([]);
+  const [templateMapping, setTemplateMapping] = useState({});
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesSaving, setTemplatesSaving] = useState(false);
   const [testResults, setTestResults] = useState({});
 
   // Essential integrations state
@@ -114,7 +119,73 @@ export const IntegrationsManager = () => {
 
   useEffect(() => {
     fetchIntegrations();
+    fetchWhatsappTemplates();
   }, []);
+
+  // Load the WhatsApp template catalogue and the merchant's approved-name mapping.
+  const fetchWhatsappTemplates = async () => {
+    try {
+      setTemplatesLoading(true);
+      const token = getToken();
+      const res = await fetch('/api/integrations/whatsapp-templates', {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (data.success && Array.isArray(data.templates)) {
+        setWhatsappTemplates(data.templates);
+        const mapping = {};
+        for (const template of data.templates) {
+          mapping[template.key] = {
+            name: template.templateName || '',
+            language: template.language || data.defaultLanguage || 'en',
+          };
+        }
+        setTemplateMapping(mapping);
+      }
+    } catch {
+      setWhatsappTemplates([]);
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleSaveWhatsappTemplates = async () => {
+    try {
+      setTemplatesSaving(true);
+      const token = getToken();
+      const mapping = {};
+      for (const template of whatsappTemplates) {
+        const entry = templateMapping[template.key];
+        if (!entry || !entry.name.trim()) continue;
+        mapping[template.key] = {
+          name: entry.name.trim(),
+          language: (entry.language || 'en').trim(),
+        };
+      }
+      const res = await fetch('/api/integrations/whatsapp-templates', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ mapping }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Save failed with status ${res.status}`);
+      }
+      await fetchWhatsappTemplates();
+      showToast('WhatsApp template mapping saved.');
+    } catch (err) {
+      showToast(err.message || 'Unable to save the WhatsApp template mapping.', true);
+    } finally {
+      setTemplatesSaving(false);
+    }
+  };
 
   // Determine if there are unsaved changes
   const isDirty = useMemo(() => {
@@ -386,10 +457,152 @@ export const IntegrationsManager = () => {
           <Radio className="w-4 h-4" />
           <span>Store Channels &amp; Utilities (Pixel, WhatsApp, Payments)</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('whatsapp-templates')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold transition flex items-center gap-2 cursor-pointer ${
+            activeSubTab === 'whatsapp-templates'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>WhatsApp Templates</span>
+        </button>
       </div>
 
       {activeSubTab === 'meta' && (
         <MetaAdsIntegration />
+      )}
+
+      {activeSubTab === 'whatsapp-templates' && (
+        <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-2xs space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
+                <span>Approved WhatsApp Template Mapping</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-1 max-w-2xl">
+                Meta only allows business-initiated WhatsApp messages through templates that
+                are approved in your own WhatsApp Business Account. Create the template in Meta,
+                get it approved, then paste its exact name here. Omniva fills the body variables
+                in the fixed order shown below.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveWhatsappTemplates}
+              disabled={templatesSaving || templatesLoading}
+              className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed self-start"
+            >
+              <Save className="w-4 h-4" />
+              {templatesSaving ? 'Saving...' : 'Save Mapping'}
+            </button>
+          </div>
+
+          {templatesLoading && (
+            <p className="text-xs text-slate-500">Loading template catalogue...</p>
+          )}
+
+          {!templatesLoading && whatsappTemplates.length === 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              The template catalogue could not be loaded. Only the merchant owner can manage the
+              WhatsApp template mapping.
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {whatsappTemplates.map((template) => {
+              const entry = templateMapping[template.key] || { name: '', language: 'en' };
+              const mapped = Boolean(entry.name.trim());
+              return (
+                <div
+                  key={template.key}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        {template.label}
+                        <span className="text-[10px] font-mono font-bold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                          {template.key}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{template.description}</p>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        mapped
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {mapped ? 'Mapped' : 'Not mapped yet'}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Meta placeholders:{' '}
+                    {template.bodyVariables
+                      .map((variable, index) => `{{${index + 1}}}=${variable}`)
+                      .join('  ')}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                        Approved Meta template name
+                      </label>
+                      <input
+                        type="text"
+                        value={entry.name}
+                        onChange={(e) =>
+                          setTemplateMapping((prev) => ({
+                            ...prev,
+                            [template.key]: { ...entry, name: e.target.value },
+                          }))
+                        }
+                        placeholder="e.g. order_conf_v2"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                        Language
+                      </label>
+                      <input
+                        type="text"
+                        value={entry.language}
+                        onChange={(e) =>
+                          setTemplateMapping((prev) => ({
+                            ...prev,
+                            [template.key]: { ...entry, language: e.target.value },
+                          }))
+                        }
+                        placeholder="en"
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-[11px] text-slate-600 space-y-1">
+            <div className="font-bold text-slate-800 flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-indigo-600" />
+              Before you map a template
+            </div>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Create the template in Meta Business Manager with the placeholders in the order shown above.</li>
+              <li>Wait for Meta to approve it. An unapproved or wrongly ordered template is rejected by Meta.</li>
+              <li>Leave a template unmapped to keep it switched off. Omniva logs a skip instead of sending free-form text.</li>
+            </ul>
+          </div>
+        </div>
       )}
 
       {activeSubTab === 'channels' && (

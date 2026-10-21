@@ -10,9 +10,10 @@ const DEFAULT_SEED_RULES = [
     isActive: true,
     condition: { field: 'always', operator: 'ALWAYS', value: '' },
     action: {
-      type: 'SEND_WHATSAPP',
+      type: 'SEND_WHATSAPP_TEMPLATE',
       target: 'customer',
-      template: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been received. We are preparing your order for dispatch. Thank you for shopping with us!',
+      whatsappTemplateKey: 'order_confirmation',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} for ₹{{totalAmount}} has been received. Track it here: {{trackingUrl}}',
     },
   },
   {
@@ -21,30 +22,61 @@ const DEFAULT_SEED_RULES = [
     isActive: true,
     condition: { field: 'always', operator: 'ALWAYS', value: '' },
     action: {
-      type: 'SEND_WHATSAPP',
+      type: 'SEND_WHATSAPP_TEMPLATE',
       target: 'customer',
-      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}. Tracking link: {{trackingUrl}}',
+      whatsappTemplateKey: 'order_shipped',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been dispatched via {{courierName}}. AWB Tracking: {{trackingNumber}}',
     },
   },
   {
+    name: 'Order Delivered Feedback Request',
+    trigger: 'ORDER_DELIVERED',
+    isActive: true,
+    condition: { field: 'always', operator: 'ALWAYS', value: '' },
+    action: {
+      type: 'SEND_WHATSAPP_TEMPLATE',
+      target: 'customer',
+      whatsappTemplateKey: 'order_delivered',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been delivered. Share your feedback: {{feedbackUrl}}',
+    },
+  },
+  {
+    name: 'Order Cancelled Notification',
+    trigger: 'ORDER_CANCELLED',
+    isActive: true,
+    condition: { field: 'always', operator: 'ALWAYS', value: '' },
+    action: {
+      type: 'SEND_WHATSAPP_TEMPLATE',
+      target: 'customer',
+      whatsappTemplateKey: 'order_cancelled',
+      template: 'Hello {{customerName}}! Your order {{orderNumber}} has been cancelled. {{refundInfo}}',
+    },
+  },
+  {
+    // This message has no catalogue template because Meta does not offer a
+    // pre-approved duplicate-order template. The merchant must point the rule
+    // at one of their own approved templates, otherwise the engine skips it.
     name: 'Duplicate / Double Order Verification Alert',
     trigger: 'ORDER_CREATED',
     isActive: true,
     condition: { field: 'isDuplicate', operator: 'EQUALS', value: 'true' },
     action: {
-      type: 'SEND_WHATSAPP',
+      type: 'SEND_WHATSAPP_TEMPLATE',
       target: 'customer',
+      whatsappTemplateKey: '',
       template: 'Hello {{customerName}}! We noticed duplicate orders placed with your phone number. Could you please confirm if you would like both packages delivered?',
     },
   },
   {
+    // Same as above: a lead greeting needs the merchant's own approved template.
     name: 'Meta Ads Lead Instant WhatsApp Greeting',
     trigger: 'LEAD_INGESTED',
     isActive: true,
     condition: { field: 'always', operator: 'ALWAYS', value: '' },
     action: {
-      type: 'SEND_WHATSAPP',
+      type: 'SEND_WHATSAPP_TEMPLATE',
       target: 'customer',
+      whatsappTemplateKey: '',
       template: 'Hello {{customerName}}! Thank you for your enquiry. Check out our store catalog here: {{menuUrl}}.',
     },
   },

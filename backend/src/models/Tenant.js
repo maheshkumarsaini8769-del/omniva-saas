@@ -96,6 +96,10 @@ const tenantSchema = new mongoose.Schema(
       merchantUpiId: { type: String, default: '' },
       metaPixelId: { type: String, default: '' },
       metaCapiToken: encryptedStringField,
+      // Logical WhatsApp template key -> approved Meta template name.
+      // { order_confirmation: 'order_conf_v2', cod_verification: { name: 'cod_v1', language: 'hi' } }
+      waTemplates: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+      waDefaultLanguage: { type: String, default: 'en' },
     },
     customDomain: {
       type: String,

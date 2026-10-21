@@ -61,6 +61,17 @@ const automationLogSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // Provider that executed the action, e.g. 'meta_whatsapp'.
+    provider: {
+      type: String,
+      default: '',
+    },
+    // Provider message id (Meta wamid). Used to match an inbound reply back
+    // to the order that triggered the message.
+    providerMessageId: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,
@@ -68,5 +79,14 @@ const automationLogSchema = new mongoose.Schema(
 );
 
 automationLogSchema.index({ businessId: 1, createdAt: -1 });
+// Only logs that actually carry a provider message id are indexed, so the
+// index stays small and useful for reply matching.
+automationLogSchema.index(
+  { providerMessageId: 1 },
+  {
+    name: 'provider_message_id_partial',
+    partialFilterExpression: { providerMessageId: { $gt: '' } },
+  }
+);
 
 module.exports = mongoose.model('AutomationLog', automationLogSchema);

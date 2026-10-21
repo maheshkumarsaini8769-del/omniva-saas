@@ -309,6 +309,13 @@ const updateOrderStatus = async (req, res) => {
         courierName: order.courierPartner || courierPartner || 'Courier not specified',
         trackingNumber: order.trackingNumber || trackingNumber || 'Not available',
         trackingUrl,
+        feedbackUrl: req.tenant?.slug
+          ? buildAppUrl(req, `/store/${req.tenant.slug}`)
+          : '',
+        refundInfo:
+          order.paymentMethod === 'COD'
+            ? 'No payment was collected, so there is nothing to refund.'
+            : 'Any paid amount is refunded to the original payment method.',
       };
 
       if (orderStatus === 'CONFIRMED') {
@@ -327,6 +334,22 @@ const updateOrderStatus = async (req, res) => {
           entityId: order._id.toString(),
           data: payloadData,
         }).catch((err) => console.error('[Automation ORDER_SHIPPED Trigger Error]:', err.message));
+      } else if (orderStatus === 'DELIVERED') {
+        triggerAutomation({
+          businessId: req.businessId,
+          trigger: 'ORDER_DELIVERED',
+          entityType: 'ORDER',
+          entityId: order._id.toString(),
+          data: payloadData,
+        }).catch((err) => console.error('[Automation ORDER_DELIVERED Trigger Error]:', err.message));
+      } else if (orderStatus === 'CANCELLED') {
+        triggerAutomation({
+          businessId: req.businessId,
+          trigger: 'ORDER_CANCELLED',
+          entityType: 'ORDER',
+          entityId: order._id.toString(),
+          data: payloadData,
+        }).catch((err) => console.error('[Automation ORDER_CANCELLED Trigger Error]:', err.message));
       }
     }
 

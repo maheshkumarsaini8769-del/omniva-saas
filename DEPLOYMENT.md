@@ -32,6 +32,9 @@ Production startup rejects missing, example, or weak values for the required sec
 | `META_APP_ID` | Meta app ID | For Meta integration |
 | `META_APP_SECRET` | Meta app secret | For Meta integration |
 | `META_REDIRECT_URI` | Meta OAuth callback URL | For Meta integration |
+| `META_GRAPH_API_VERSION` | Graph API version used for Meta calls (default `v21.0`) | Optional |
+| `META_GRAPH_API_BASE_URL` | Graph API base URL; override only for Meta sandbox or tests (default `https://graph.facebook.com`) | Optional |
+| `META_GRAPH_TIMEOUT_MS` | Hard timeout for a single Meta Graph API request in ms (default `10000`) | Optional |
 | `META_ACCESS_TOKEN` | Optional global fallback System User token | Optional |
 | `RAZORPAY_KEY_ID` | Razorpay Key ID | For online payments |
 | `RAZORPAY_KEY_SECRET` | Razorpay Key Secret | For online payments |
@@ -214,6 +217,40 @@ Once deployed, verify the following health checks:
 4. **Super Admin Portal**:
    `GET https://your-domain.com/admin/login`
    Allows platform owners to manage all merchant stores and billing.
+
+### 4.1 WhatsApp Template Setup (required before any WhatsApp automation fires)
+
+Meta only permits business-initiated WhatsApp messages through **templates that the
+merchant has approved in their own WhatsApp Business Account**. Omniva never
+sends free-form text for order or lead messages, and it never uses a
+platform-level WhatsApp number.
+
+1. A Super Admin provisions the merchant's WhatsApp Business credentials
+   (WABA ID, phone number ID, permanent access token) under
+   **Admin → Merchant API Provisioning**. These credentials are encrypted at rest.
+2. The merchant creates each template in Meta Business Manager using the exact
+   placeholder order Omniva expects:
+
+   | Omniva key | Placeholders | Suggested body |
+   | :--- | :--- | :--- |
+   | `order_confirmation` | `{{1}}=name`, `{{2}}=order_number`, `{{3}}=amount`, `{{4}}=track_url` | Order received confirmation |
+   | `order_shipped` | `{{1}}=name`, `{{2}}=order_number`, `{{3}}=courier`, `{{4}}=awb` | Dispatched with AWB |
+   | `order_delivered` | `{{1}}=name`, `{{2}}=order_number`, `{{3}}=feedback_link` | Delivered, ask for feedback |
+   | `order_cancelled` | `{{1}}=name`, `{{2}}=order_number`, `{{3}}=refund_info` | Cancelled and refund status |
+   | `cod_verification` | `{{1}}=name`, `{{2}}=order_number`, `{{3}}=amount` + Yes/No quick-reply buttons | Confirm the COD order |
+   | `cart_recovery` | `{{1}}=name`, `{{2}}=product_name`, `{{3}}=checkout_link` | Left cart reminder |
+
+3. The merchant maps each key to the approved Meta template name under
+   **Merchant → Integrations → WhatsApp Templates**. An unmapped template is
+   never sent; the automation is logged as `SKIPPED` with the reason.
+4. The merchant creates the automation rules under **Merchant → Automations**
+   and picks the Omniva template key. The rule editor shows a warning while a
+   template is unmapped.
+
+Delivery rules that are enforced server-side: body parameters always match the
+approved template count and order, `5xx`/`429` responses are retried three
+times with backoff, `4xx` responses are never retried, and every send is
+recorded in the automation log with the Meta message id.
 
 
 ---
