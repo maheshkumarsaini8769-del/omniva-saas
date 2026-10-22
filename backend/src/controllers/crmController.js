@@ -108,6 +108,7 @@ const createLead = async (req, res) => {
         ? 'Lead created (Duplicate phone detected)'
         : 'Lead created successfully',
       isDuplicate: !!existingDuplicate,
+      data: lead,
       lead,
     });
   } catch (error) {
@@ -139,15 +140,25 @@ const getLeads = async (req, res) => {
       query.source = source;
     }
 
-    if (search) {
-      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const searchRegex = new RegExp(safeSearch, 'i');
-      query.$or = [
-        { name: searchRegex },
-        { phone: searchRegex },
-        { email: searchRegex },
-        { campaignName: searchRegex },
-      ];
+    if (search && String(search).trim()) {
+      const tokens = String(search).trim().split(/\s+/).filter(Boolean);
+      const andClauses = tokens.map((token) => {
+        const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const tokenRegex = new RegExp(safeToken, 'i');
+        return {
+          $or: [
+            { name: tokenRegex },
+            { phone: tokenRegex },
+            { email: tokenRegex },
+            { campaignName: tokenRegex },
+            { source: tokenRegex },
+            { 'notes.note': tokenRegex },
+          ],
+        };
+      });
+      if (andClauses.length > 0) {
+        query.$and = andClauses;
+      }
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -288,6 +299,7 @@ const updateLeadStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `Lead moved to ${status}`,
+      data: lead,
       lead,
     });
   } catch (error) {
@@ -397,7 +409,9 @@ const addNote = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Note added to timeline',
+      data: lead,
       note: newNote,
+      notes: lead.notes,
     });
   } catch (error) {
     res.status(500).json({

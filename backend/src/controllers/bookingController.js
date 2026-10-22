@@ -229,14 +229,26 @@ const getBookings = async (req, res) => {
 
     if (bookingStatus) filter.bookingStatus = bookingStatus;
     if (bookingType) filter.bookingType = bookingType;
-    if (search) {
-      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
-        { bookingNumber: { $regex: safeSearch, $options: 'i' } },
-        { customerName: { $regex: safeSearch, $options: 'i' } },
-        { customerPhone: { $regex: safeSearch, $options: 'i' } },
-        { packageName: { $regex: safeSearch, $options: 'i' } },
-      ];
+    if (search && String(search).trim()) {
+      const tokens = String(search).trim().split(/\s+/).filter(Boolean);
+      const andClauses = tokens.map((token) => {
+        const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return {
+          $or: [
+            { bookingNumber: { $regex: safeToken, $options: 'i' } },
+            { customerName: { $regex: safeToken, $options: 'i' } },
+            { customerPhone: { $regex: safeToken, $options: 'i' } },
+            { customerEmail: { $regex: safeToken, $options: 'i' } },
+            { packageName: { $regex: safeToken, $options: 'i' } },
+            { location: { $regex: safeToken, $options: 'i' } },
+            { assignedStaffName: { $regex: safeToken, $options: 'i' } },
+            { notes: { $regex: safeToken, $options: 'i' } },
+          ],
+        };
+      });
+      if (andClauses.length > 0) {
+        filter.$and = andClauses;
+      }
     }
 
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);

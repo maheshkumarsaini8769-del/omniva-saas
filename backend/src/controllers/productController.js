@@ -120,13 +120,22 @@ const getProducts = async (req, res) => {
 
     if (categoryId) filter.categoryId = categoryId;
     if (isAvailable !== undefined) filter.isAvailable = isAvailable === 'true';
-    if (search) {
-      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
-        { name: { $regex: safeSearch, $options: 'i' } },
-        { description: { $regex: safeSearch, $options: 'i' } },
-        { tags: { $in: [new RegExp(safeSearch, 'i')] } },
-      ];
+    if (search && String(search).trim()) {
+      const tokens = String(search).trim().split(/\s+/).filter(Boolean);
+      const andClauses = tokens.map((token) => {
+        const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return {
+          $or: [
+            { name: { $regex: safeToken, $options: 'i' } },
+            { description: { $regex: safeToken, $options: 'i' } },
+            { tags: { $in: [new RegExp(safeToken, 'i')] } },
+            { 'variants.name': { $regex: safeToken, $options: 'i' } },
+          ],
+        };
+      });
+      if (andClauses.length > 0) {
+        filter.$and = andClauses;
+      }
     }
 
     const products = await Product.find(filter)

@@ -61,13 +61,24 @@ const getOrders = async (req, res) => {
 
     if (orderStatus && orderStatus !== 'ALL') filter.orderStatus = orderStatus;
     if (paymentStatus && paymentStatus !== 'ALL') filter.paymentStatus = paymentStatus;
-    if (search) {
-      const safeSearch = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.$or = [
-        { orderNumber: { $regex: safeSearch, $options: 'i' } },
-        { customerName: { $regex: safeSearch, $options: 'i' } },
-        { customerPhone: { $regex: safeSearch, $options: 'i' } },
-      ];
+    if (search && String(search).trim()) {
+      const tokens = String(search).trim().split(/\s+/).filter(Boolean);
+      const andClauses = tokens.map((token) => {
+        const safeToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return {
+          $or: [
+            { orderNumber: { $regex: safeToken, $options: 'i' } },
+            { customerName: { $regex: safeToken, $options: 'i' } },
+            { customerPhone: { $regex: safeToken, $options: 'i' } },
+            { customerEmail: { $regex: safeToken, $options: 'i' } },
+            { 'shippingAddress.city': { $regex: safeToken, $options: 'i' } },
+            { 'items.productName': { $regex: safeToken, $options: 'i' } },
+          ],
+        };
+      });
+      if (andClauses.length > 0) {
+        filter.$and = andClauses;
+      }
     }
 
     if (startDate || endDate) {
